@@ -1,0 +1,12 @@
+[package]
+name = "zahirscan"
+version = "0.1.0"
+edition = "2021"
+authors = ["Alex Hurowitz <thicclatka@users.noreply.github.com>"]
+description = "A fast and efficient log parser"
+license = "MIT OR Apache-2.0"
+repository = ""
+keywords = ["log", "parser", "logs", "analysis", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
