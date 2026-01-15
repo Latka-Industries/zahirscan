@@ -1,0 +1,38 @@
+[tools]
+rust = "stable"
+
+[tasks.test]
+description = "Run tests"
+run = "cargo test"
+
+[tasks.fmt]
+description = "Format code"
+run = "cargo fmt"
+
+[tasks.clippy]
+description = "Run clippy linter"
+run = "cargo clippy -- -D warnings"
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = "cargo clean"
+
+[tasks.run]
+description = "Run the CLI"
+run = "cargo run"
+
+[tasks.build]
+description = "Build release binary"
+run = "cargo build --release"
+
+[tasks.install]
+description = "Install binary to ~/.cargo/bin"
+run = "cargo install --path ."
+
+[tasks.check]
+description = "Run all checks (format, lint, test)"
+run = ["cargo fmt -- --check", "cargo clippy -- -D warnings", "cargo test"]
+
+[tasks.dev]
+description = "Run in development mode"
+run = "cargo run"
