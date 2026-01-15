@@ -2,11 +2,42 @@
 name = "zahirscan"
 version = "0.1.0"
 edition = "2021"
-authors = ["Alex Hurowitz <thicclatka@users.noreply.github.com>"]
-description = "A fast and efficient log parser"
+authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
+description = "Token-efficient content compression for AI analysis using probabilistic template mining"
 license = "MIT OR Apache-2.0"
-repository = ""
-keywords = ["log", "parser", "logs", "analysis", "cli"]
+repository = "https://github.com/thicclatka/zahirscan"
+keywords = [
+  "log",
+  "parser",
+  "logs",
+  "analysis",
+  "cli",
+  "token-reduction",
+  "ai",
+  "compression",
+  "template-mining",
+]
 categories = ["command-line-utilities", "development-tools"]
 
+[lib]
+name = "zahirscan"
+path = "src/lib.rs"
+
+[[bin]]
+name = "zahirscan"
+path = "src/main.rs"
+
 [dependencies]
+anyhow = "1.0.100"
+chrono = { version = "0.4.43", features = ["serde"] }
+clap = { version = "4.5.54", features = ["derive"] }
+dashmap = "6.1.0"
+memmap2 = "0.9.9"
+rayon = "1.11.0"
+regex = "1.12.2"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+
+[dev-dependencies]
+anyhow = "1.0.100"
+criterion = { version = "0.8.1", features = ["html_reports"] }
