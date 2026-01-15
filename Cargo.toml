@@ -1,7 +1,7 @@
 [package]
 name = "zahirscan"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
 description = "Token-efficient content compression for AI analysis using probabilistic template mining"
 license = "MIT OR Apache-2.0"
