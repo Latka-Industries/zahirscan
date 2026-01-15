@@ -3,7 +3,10 @@
   "ignorePaths": [],
   "dictionaryDefinitions": [],
   "dictionaries": [],
-  "words": ["zahirscan"],
+  "words": [
+    "dtolnay",
+    "zahirscan"
+  ],
   "ignoreWords": [],
   "import": []
 }

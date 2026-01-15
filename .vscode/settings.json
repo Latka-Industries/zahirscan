@@ -1,5 +1,5 @@
 {
-  "workbench.colorTheme": "paddy-genmaicha",
+  "workbench.colorTheme": "paddy-yesterday",
   "files.exclude": {
     "**/target": true,
     "**/.DS_Store": true
@@ -28,8 +28,10 @@
   "explorer.fileNesting.enabled": true,
   "explorer.fileNesting.expand": false,
   "explorer.fileNesting.patterns": {
-    "Cargo.toml": "Cargo.lock, .gitignore",
-    "cargo.toml": "Cargo.lock"
+    ".gitignore": ".pre-commit-config.yaml, cspell.json",
+    "Cargo.toml": "Cargo.lock",
+    "cargo.toml": "Cargo.lock",
+    "README.md": "LICENSE-MIT, LICENSE-APACHE"
   },
 
   // Git settings
@@ -39,12 +41,23 @@
   // File formatting
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,
-  "files.trimFinalNewlines": true
+  "files.trimFinalNewlines": true,
+  "files.encoding": "utf8",
+  "files.eol": "\n",
 
-  // Rust-specific settings
-  // "[rust]": {
-  //   "editor.defaultFormatter": "rust-lang.rust-analyzer",
-  //   "editor.formatOnSave": true,
-  //   "editor.tabSize": 4
-  // }
+  // Editor settings
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 4
+  },
+  "[toml]": {
+    "editor.tabSize": 2
+  },
+  "[yaml]": {
+    "editor.tabSize": 2
+  },
+  "[markdown]": {
+    "files.trimTrailingWhitespace": false
+  }
 }
