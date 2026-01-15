@@ -3,6 +3,8 @@
 ![CI](https://github.com/thicclatka/zahirscan/workflows/CI/badge.svg)
 ![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
 
+> _"Others will dream that I am mad, while I dream of the Zahir."_
+
 A high-performance Rust CLI tool that converts unstructured content (logs, TXT files, Markdown, JSON logs) into compact, human-readable and AI-readable formats, dramatically reducing token usage for LLM prompts while preserving essential information.
 
 ## Overview
