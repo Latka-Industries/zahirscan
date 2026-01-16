@@ -61,9 +61,7 @@ pub fn phase2_mining(
         for chunk in tasks.chunks(config.max_concurrent_files) {
             let chunk_results: Vec<_> = chunk
                 .par_iter()
-                .map(|task| {
-                    process_single_task(task, config)
-                })
+                .map(|task| process_single_task(task, config))
                 .collect();
 
             // Collect results from this batch
@@ -76,9 +74,7 @@ pub fn phase2_mining(
         // Process all files in parallel (original behavior)
         let results: Vec<_> = tasks
             .par_iter()
-            .map(|task| {
-                process_single_task(task, config)
-            })
+            .map(|task| process_single_task(task, config))
             .collect();
 
         // Collect all outputs (or handle errors)
@@ -92,10 +88,7 @@ pub fn phase2_mining(
 }
 
 /// Process a single file task (extracted for reuse)
-fn process_single_task(
-    task: &ProcessingTask,
-    config: &Config,
-) -> Result<crate::results::Output> {
+fn process_single_task(task: &ProcessingTask, config: &Config) -> Result<crate::results::Output> {
     use std::time::Instant;
 
     let start = Instant::now();
