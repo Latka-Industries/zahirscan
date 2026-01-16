@@ -198,7 +198,7 @@ impl Config {
             .unwrap_or_else(|| {
                 // Adaptive default: half of workers, but clamped to reasonable range
                 let adaptive = (max_workers / 2).max(2);
-                adaptive.min(8).max(4) // Clamp to 4-8 for optimal performance
+                adaptive.clamp(4, 8) // Clamp to 4-8 for optimal performance
             });
 
         // Validate static_threshold is in valid range
@@ -247,7 +247,7 @@ impl Config {
         // Adaptive default: half of workers, clamped to 4-8 range
         let max_concurrent_files = {
             let adaptive = (max_workers / 2).max(2);
-            adaptive.min(8).max(4)
+            adaptive.clamp(4, 8)
         };
 
         Self {

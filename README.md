@@ -86,22 +86,29 @@ cargo build --release
 ## Usage
 
 ```bash
-# Extract templates from plain text log file
-zahirscan --path /path/to/logfile.log
+$ zahirscan --help
+Text file and log file parser using probabilistic template mining
 
-# Extract templates from JSON-formatted logs
-zahirscan --path /path/to/logs.json
+Usage: zahirscan [OPTIONS]
 
-# Extract templates from plain text file
-zahirscan --path /path/to/document.txt
+Options:
+  -p, --path <PATH>...
+          Path(s) to the file(s) to parse (can specify multiple)
 
-# Extract templates from Markdown file
-zahirscan --path /path/to/document.md
+  -o, --output <OUTPUT>
+          Output file path or folder (defaults to temp file if not specified)
+          If folder, creates filename.zahirscan.out for each input file
 
-# Specify content type explicitly (optional, auto-detected by default)
-zahirscan --path /path/to/file.txt --content-type log
-zahirscan --path /path/to/file.txt --content-type text
-zahirscan --path /path/to/file.json --content-type log
+      --full
+          Output mode: full metadata (for development/debugging)
+          Default is templates-only mode (minimal JSON for AI consumption)
+
+      --dev
+          Development mode: enables debug logging
+          Default is production mode (info level only)
+
+  -h, --help
+          Print help
 ```
 
 **Output formats:**

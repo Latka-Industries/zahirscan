@@ -162,8 +162,7 @@ pub fn extract_text_templates(
     debug!("Pre-computing tokens for {} sentences", sentences.len());
     let sentence_tokens: Vec<Vec<&str>> = sentences
         .iter()
-        .enumerate()
-        .map(|(_idx, s)| s.split_whitespace().collect::<Vec<&str>>())
+        .map(|s| s.split_whitespace().collect::<Vec<&str>>())
         .collect();
 
     let template_groups: DashMap<String, Vec<String>> = DashMap::new();
