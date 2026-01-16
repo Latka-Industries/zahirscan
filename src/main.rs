@@ -1,6 +1,5 @@
 use clap::Parser;
 use log::{debug, warn};
-use std::path::Path;
 use std::time::Instant;
 use zahirscan::{Config, format_duration, phase1_scan, phase2_mining};
 
@@ -37,14 +36,8 @@ fn process_args(args: &Args) -> anyhow::Result<ProcessedArgs> {
         return Err(anyhow::anyhow!("At least one file path is required"));
     }
 
-    // Determine if output should be treated as a directory
-    let output_is_dir = if let Some(ref output) = args.output {
-        let output_path = Path::new(output);
-        // If it exists and is a directory, or if multiple inputs (treat as folder)
-        output_path.is_dir() || args.path.len() > 1
-    } else {
-        false
-    };
+    // Output path is always treated as a directory
+    let output_is_dir = args.output.is_some();
 
     // If output is a directory, ensure it exists
     if let Some(ref output) = args.output
