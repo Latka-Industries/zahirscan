@@ -9,7 +9,9 @@ max_workers = 0
 # If set to 0, uses adaptive default: max(4, min(8, max_workers / 2))
 # This balances throughput and reduces contention for large batches
 # Set to 0 for automatic optimization, or specify a value (recommended: 4-8)
-max_concurrent_files = 0
+# Lower values (4-6) reduce contention but may be slower overall
+# Higher values (8+) may cause more variation in processing times
+max_concurrent_files = 4
 
 [mining]
 # Static token threshold (0.0-1.0) - percentage of lines that must match for a token to be considered static
