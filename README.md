@@ -1,15 +1,15 @@
-# ZahirScan: Token-Efficient Content Compression for AI Analysis
+# ZahirScan: Template-Based Content Compression
 
 ![CI](https://github.com/thicclatka/zahirscan/workflows/CI/badge.svg)
 ![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
 
 > _"Others will dream that I am mad, while I dream of the Zahir."_
 
-A high-performance Rust CLI tool that converts unstructured content (logs, TXT files, Markdown, JSON logs) into compact, human-readable and AI-readable formats, dramatically reducing token usage for LLM prompts while preserving essential information.
+A high-performance Rust CLI tool that extracts templates and patterns from unstructured content (logs, TXT files, Markdown, JSON logs), converting them into compact structured formats while preserving essential information.
 
 ## Overview
 
-ZahirScan solves a critical problem in AI-powered content analysis: raw files consume massive token budgets, making it expensive and impractical to analyze large content with language models. Whether processing structured logs (plain text, JSON), plain text files, or Markdown documents, ZahirScan uses probabilistic template mining to extract essential structure and patterns, outputting formats optimized for both human review and AI consumption.
+ZahirScan uses probabilistic template mining to extract essential structure and patterns from content. Whether processing structured logs (plain text, JSON), plain text files, or Markdown documents, it identifies repeated patterns and represents them compactly while preserving essential information.
 
 **Supported Formats**:
 
@@ -22,25 +22,27 @@ The tool automatically adapts to different content types:
 - **Long-form Text**: Extracts structural patterns, chapter markers, and repeated phrases
 - **Mixed Content**: Handles complex documents with varying structures
 
-All outputs reduce token counts by 80-95% compared to raw content while preserving essential information.
+All outputs reduce size by 80-95% compared to raw content while preserving essential information.
 
 ## Key Features
 
-- **Token Reduction**: Reduces content token usage by 80-95% while preserving essential information, making AI analysis cost-effective
-- **Multi-Format Support**: Handles structured logs (plain text, JSON), plain text (TXT), and Markdown (MD). Perfect for analyzing your own writing, technical documentation, or any text-based content.
+- **Size Reduction**: Reduces content size by 80-95% while preserving essential information
+- **Multi-Format Support**: Handles structured logs (plain text, JSON), plain text (TXT), and Markdown (MD)
 - **Content-Aware Processing**: Automatically adapts analysis strategies based on detected content type (logs vs. long-form text)
-- **Dual-Format Output**: Generates both human-readable summaries and structured JSON optimized for AI consumption
+- **Writing Footprint Analysis**: For text and markdown files, provides metrics including vocabulary richness, sentence structure, punctuation patterns, and template diversity
+- **Structured Output**: Generates human-readable summaries and structured JSON
 - **Zero-Copy Parsing**: Uses `memmap2` for memory-mapped file access, enabling efficient processing of multi-gigabyte files
 - **Probabilistic Template Mining**: Automatically groups similar patterns into templates by identifying constant vs. dynamic tokens through frequency analysis
-- **Single-File Parallel Processing**: Leverages `rayon` to split large files into chunks for parallel processing
+- **Multi-Level Parallel Processing**: Two-level parallelism with adaptive chunk sizing - files processed in parallel, with sentences/lines within each file also parallelized
+- **Adaptive Performance Tuning**: Automatically optimizes concurrent file processing based on system resources to reduce contention and improve consistency
 - **Zero-Config Operation**: Automatically infers structure without requiring manual schema definitions
 - **Security-First Design**: Implements path sanitization and secure file handling
 
 ## Design Philosophy
 
-### The Token Efficiency Problem
+### Template Extraction
 
-When analyzing content with AI models, raw files consume enormous token budgets. A 1MB log file can easily consume 250,000+ tokens, and a large TXT file can consume 500,000+ tokens, making analysis prohibitively expensive. ZahirScan addresses this by:
+Raw files contain significant redundancy. A 1MB log file may have thousands of similar lines, and long-form text often contains repeated structural patterns. ZahirScan addresses this by:
 
 1. **Template Extraction**: For logs, identifies repeated patterns (e.g., `[TIMESTAMP] ERROR: Process PID failed with code CODE`) and represents them once with placeholders. For text, extracts structural patterns and repeated phrases.
 2. **Schema Inference**: Automatically discovers which elements are static (log levels, separators, common phrases) vs. dynamic (timestamps, IDs, messages, unique content)
@@ -66,10 +68,11 @@ Traditional parsers load entire files into memory, which becomes impractical for
 ZahirScan is designed for both speed and efficiency. Benchmarks show:
 
 - **Processing Speed**: Can analyze 4GB of content (logs or text) in approximately 1.2 seconds on modern hardware
-- **Token Reduction**: Typically reduces token usage by 80-95% while preserving essential information
+- **Batch Processing**: Processes 200+ files in under 1 minute with adaptive parallelization
+- **Size Reduction**: Typically reduces content size by 80-95% while preserving essential information
 - **Memory Efficiency**: Uses memory-mapped files to handle files larger than available RAM
+- **Adaptive Parallelization**: Automatically optimizes chunk sizes and concurrent file processing based on work complexity and system resources
 - **Content-Type Handling**: Efficiently processes both structured logs and unstructured long-form text
-- **Real-Time Ready**: Suitable for integration into real-time analysis pipelines
 
 ## Installation
 
@@ -83,16 +86,16 @@ cargo build --release
 ## Usage
 
 ```bash
-# Compress plain text log file for AI analysis
+# Extract templates from plain text log file
 zahirscan --path /path/to/logfile.log
 
-# Compress JSON-formatted logs for AI analysis
+# Extract templates from JSON-formatted logs
 zahirscan --path /path/to/logs.json
 
-# Compress plain text file for AI analysis
+# Extract templates from plain text file
 zahirscan --path /path/to/document.txt
 
-# Compress Markdown file (great for your own writing, documentation, notes)
+# Extract templates from Markdown file
 zahirscan --path /path/to/document.md
 
 # Specify content type explicitly (optional, auto-detected by default)
@@ -104,16 +107,39 @@ zahirscan --path /path/to/file.json --content-type log
 **Output formats:**
 
 - Human-readable summary with template patterns
-- Structured JSON optimized for AI consumption
-- Token count comparison (before/after)
+- Structured JSON output
+- Size comparison (before/after)
 - Inferred schema with field definitions
 - Data integrity score
+- Writing footprint metrics (for text/markdown files: vocabulary richness, sentence structure, punctuation patterns, template diversity, entropy)
+
+### Configuration
+
+ZahirScan uses `config.toml` for configuration (optional - works out of the box with sensible defaults):
+
+```toml
+[concurrency]
+# Maximum number of parallel workers (defaults to num_cpus - 1 if set to 0)
+max_workers = 0
+
+# Maximum number of files to process concurrently
+# Set to 0 for adaptive default: max(4, min(8, max_workers / 2))
+# This automatically balances throughput and reduces contention
+# Or specify a value (recommended: 4-8 for large batches)
+max_concurrent_files = 0
+```
+
+**Adaptive Defaults:**
+
+- `max_concurrent_files = 0` automatically calculates optimal batch size based on CPU cores
+- Chunk sizes are automatically tuned based on work complexity (light/moderate/heavy operations)
+- No configuration needed for optimal performance on most systems
 
 ### Example Output
 
 #### Log File Example
 
-**Input** (raw log, ~500 tokens):
+**Input** (raw log):
 
 ```
 2024-01-15 10:23:45 ERROR: Process 1234 failed with code 500
@@ -123,7 +149,7 @@ zahirscan --path /path/to/file.json --content-type log
 2024-01-15 10:23:49 ERROR: Process 1238 failed with code 500
 ```
 
-**Output** (compressed, ~50 tokens):
+**Output** (compressed):
 
 ```json
 {
@@ -140,14 +166,14 @@ zahirscan --path /path/to/file.json --content-type log
       "examples": ["2024-01-15 10:23:48", "1237"]
     }
   ],
-  "token_reduction": "90%",
+  "compression": "90%",
   "integrity_score": 1.0
 }
 ```
 
 #### JSON Log Example
 
-**Input** (JSON-formatted logs, ~600 tokens):
+**Input** (JSON-formatted logs):
 
 ```json
 {"timestamp": "2024-01-15T10:23:45Z", "level": "ERROR", "process": 1234, "message": "Process failed with code 500"}
@@ -157,7 +183,7 @@ zahirscan --path /path/to/file.json --content-type log
 {"timestamp": "2024-01-15T10:23:49Z", "level": "ERROR", "process": 1238, "message": "Process failed with code 500"}
 ```
 
-**Output** (compressed, ~60 tokens):
+**Output** (compressed):
 
 ```json
 {
@@ -175,14 +201,14 @@ zahirscan --path /path/to/file.json --content-type log
       "examples": ["2024-01-15T10:23:48Z", "1237"]
     }
   ],
-  "token_reduction": "90%",
+  "compression": "90%",
   "integrity_score": 1.0
 }
 ```
 
-#### Markdown Example (Your Own Writing)
+#### Markdown Example
 
-**Input** (Markdown document, ~1500 tokens):
+**Input** (Markdown document):
 
 ```markdown
 # My Project Notes
@@ -204,7 +230,7 @@ This is a project I'm working on. It involves several components.
 3. Deploy Component C
 ```
 
-**Output** (compressed, ~150 tokens):
+**Output** (compressed):
 
 ```json
 {
@@ -231,14 +257,14 @@ This is a project I'm working on. It involves several components.
       "examples": ["Component A", "X"]
     }
   ],
-  "token_reduction": "90%",
+  "compression": "90%",
   "coherence_score": 0.98
 }
 ```
 
 #### Long-Form Text Example
 
-**Input** (raw text, ~2000 tokens):
+**Input** (raw text):
 
 ```
 Chapter 1: The Beginning
@@ -254,7 +280,7 @@ Sarah found the key under the mat. The door creaked open, revealing a dusty hall
 "It's locked," she thought again, remembering the first door.
 ```
 
-**Output** (compressed, ~200 tokens):
+**Output** (compressed):
 
 ```json
 {
@@ -276,45 +302,53 @@ Sarah found the key under the mat. The door creaked open, revealing a dusty hall
       "examples": ["It's locked"]
     }
   ],
-  "token_reduction": "90%",
+  "compression": "90%",
   "coherence_score": 0.95
 }
 ```
 
 ## Architecture
 
-### Phase 1: CLI Setup and Fast File Reading
+### Phase 1: Initial File Scan
 
 - Secure file path handling with sanitization
 - File format detection and handling:
   - **Plain text (TXT, MD)**: Direct memory-mapped access using `memmap2`
-  - **JSON logs**: JSON parsing to extract log entries, then template mining
-- Efficient extraction of sample lines (first 1,000 lines) for analysis
-- Markdown files are processed as plain text with awareness of markdown structure (headings, lists, etc.)
+  - **JSON logs**: JSON parsing to extract log entries
+- Collects file statistics (line count, byte count, token count)
+- Determines content type (log vs. text/markdown)
+- Prepares tasks for template mining phase
 
-### Phase 2: Probabilistic Schema Inference Engine
+### Phase 2: Template Mining and Output
 
-- Content-type detection (logs vs. long-form text, format detection: plain text, JSON, Markdown)
-- Tokenization with configurable delimiters:
+- **Content-Type Detection**: Identifies logs vs. long-form text, format detection (plain text, JSON, Markdown)
+- **Tokenization**: Configurable delimiters:
   - **Plain text logs**: Whitespace delimiters
   - **JSON logs**: JSON structure parsing, then field-level template mining
   - **Markdown/Text**: Sentence/paragraph delimiters with markdown structure awareness
-- Frequency-based analysis to identify static vs. dynamic fields
-- Automatic categorization of fields:
-  - **Logs (plain text or JSON)**: Timestamp, Category, ProcessID, MessageTemplate
-  - **Text/Markdown**: Chapter markers, heading patterns, list structures, repeated phrases, content organization
-
-### Phase 3: JSON Output & Anomaly Scoring
-
-- Structured JSON output matching inferred schema (adapts to content type)
-- Data integrity scoring (1.0 - unparseable_lines / total_lines for logs, coherence metrics for text)
-- Anomaly detection and reporting (error patterns in logs, structural inconsistencies in text)
-
-### Phase 4: Parallel Processing
-
-- Single-file parallel processing using `rayon`
-- Chunk-based processing for large files
-- Maintains schema consistency across parallel workers
+- **Probabilistic Template Mining**:
+  - Frequency-based analysis to identify static vs. dynamic fields
+  - Automatic categorization of fields:
+    - **Logs (plain text or JSON)**: Timestamp, Category, ProcessID, MessageTemplate
+    - **Text/Markdown**: Chapter markers, heading patterns, list structures, repeated phrases, content organization
+  - Writing footprint calculation for text/markdown files (vocabulary richness, sentence structure, punctuation patterns, template diversity, entropy metrics, SVO analysis)
+- **Output Generation**:
+  - Structured JSON output matching inferred schema (adapts to content type)
+  - Data integrity scoring (1.0 - unparseable_lines / total_lines for logs, coherence metrics for text)
+  - Anomaly detection and reporting (error patterns in logs, structural inconsistencies in text)
+- **Parallel Processing**:
+  - **Two-Level Parallelism**:
+    - **File-level**: Multiple files processed concurrently (configurable via `max_concurrent_files`)
+    - **Within-file**: Sentences/lines processed in parallel using `rayon`
+  - **Adaptive Chunk Sizing**: Automatically optimizes chunk sizes based on:
+    - Collection size (number of sentences/lines)
+    - Work complexity (light/moderate/heavy operations)
+    - Number of available CPU cores
+  - **Batched File Processing**: Processes files in optimal batches to reduce thread contention and improve consistency
+  - **Work Complexity Classification**:
+    - **Light**: Simple tokenization + hash map operations (logs)
+    - **Moderate**: Tokenization + n-gram extraction + pattern matching (text/markdown)
+    - **Heavy**: Complex operations requiring smaller chunks for better load balancing
 
 ## Security
 
@@ -339,21 +373,6 @@ cargo fmt
 # Lint code
 cargo clippy
 ```
-
-## Dependencies
-
-Key dependencies:
-
-- `clap` (v4+): Modern CLI argument parsing
-- `memmap2`: Zero-copy memory-mapped file access
-- `rayon`: Data parallelism for single-file processing
-- `serde` / `serde_json`: JSON serialization and parsing (for JSON-formatted logs)
-- `dashmap`: Concurrent hash maps for frequency tracking
-
-**Format Complexity**:
-
-- **Simple formats (Phase 1)**: TXT, Markdown (MD) - direct text processing, minimal parsing
-- **Structured logs (Phase 1-2)**: JSON logs - requires JSON parsing but straightforward
 
 ## License
 

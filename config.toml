@@ -1,0 +1,69 @@
+binary_name = "zahirscan"
+
+[concurrency]
+# Maximum number of parallel workers (defaults to num_cpus - 1 if not set)
+# Set to 0 to use num_cpus - 1
+max_workers = 0
+
+# Maximum number of files to process concurrently
+# If set to 0, uses adaptive default: max(4, min(8, max_workers / 2))
+# This balances throughput and reduces contention for large batches
+# Set to 0 for automatic optimization, or specify a value (recommended: 4-8)
+max_concurrent_files = 0
+
+[mining]
+# Static token threshold (0.0-1.0) - percentage of lines that must match for a token to be considered static
+static_threshold = 0.8
+
+# Maximum number of lines to sample when extracting examples
+max_sample_lines = 100
+
+# Maximum number of examples to collect per placeholder
+max_examples_per_placeholder = 10
+
+# N-gram settings for text parsing
+min_ngram_size = 2
+max_ngram_size = 4
+
+# Minimum phrase length for text parsing
+min_phrase_length = 3
+
+# Token estimation settings
+bytes_per_token = 4
+json_overhead_tokens = 50
+
+# Entropy calculation settings (for writing footprint analysis)
+# Minimum number of matching sentences required to calculate entropy
+min_entropy_sample_size = 5
+# Minimum entropy value to display (below this, entropy is hidden)
+min_entropy_display = 0.01
+# Maximum entropy value to display (above this, entropy is hidden - likely from small samples)
+max_entropy_display = 0.99
+# Diversity ratio threshold for applying small sample correction
+entropy_diversity_threshold = 0.95
+# Sample size threshold for applying small sample correction
+entropy_small_sample_threshold = 5
+# Discount factor for small samples with high diversity
+entropy_small_sample_discount = 0.85
+
+# Sentence filtering settings (for text parsing)
+# Minimum number of words required for a sentence to be processed
+min_sentence_words = 2
+# Alternative: if sentence has this many words, length requirement is relaxed
+min_sentence_words_alt = 3
+# Minimum character length for a sentence (unless it meets word count alternative)
+min_sentence_length = 8
+# Maximum examples to use for entropy calculation
+max_examples_for_entropy = 10
+# Minimum examples per placeholder (used when calculating example limits)
+min_examples_per_placeholder = 3
+# Short prefix/suffix threshold (words) - below this, include in pattern; above, use placeholder
+short_prefix_threshold = 3
+
+# Pivot point detection settings (for SVO analysis)
+# Minimum variation score (different words following pivot) to be considered a pivot
+min_pivot_variation = 2
+# Maximum variation score - above this, word is too random to be structural
+max_pivot_variation = 50
+
+# Performance optimization settings
