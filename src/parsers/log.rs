@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::parsers::ParseResult;
-use crate::parsers::traits::{WorkComplexity, optimal_chunk_size};
+use crate::parsers::traits::optimal_chunk_size;
 use crate::results::{MiningResult, Template};
 use anyhow::Result;
 use dashmap::DashMap;
@@ -26,7 +26,7 @@ pub fn extract_log_templates(
     let freq_map: DashMap<usize, DashMap<String, usize>> = DashMap::new();
 
     // Process lines in parallel to build frequency map
-    let chunk_size = optimal_chunk_size(total_lines, config.max_workers, WorkComplexity::Light);
+    let chunk_size = optimal_chunk_size(total_lines, config.target_chunks_per_file);
     lines.par_iter().with_min_len(chunk_size).for_each(|line| {
         let tokens: Vec<&str> = line.split_whitespace().collect();
 

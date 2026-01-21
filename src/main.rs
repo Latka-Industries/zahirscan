@@ -1,7 +1,7 @@
 use clap::Parser;
 use log::{debug, warn};
 use std::time::Instant;
-use zahirscan::{Config, format_duration, phase1_scan, phase2_mining};
+use zahirscan::{Config, calculate_adaptive_chunking, format_duration, phase1_scan, phase2_mining};
 
 #[derive(Parser)]
 #[command(name = "zahirscan")]
@@ -78,7 +78,7 @@ fn main() -> anyhow::Result<()> {
 
     let processed = process_args(&args)?;
 
-    // Set up rayon thread pool for parallel processing
+    // Set up rayon thread pool
     rayon::ThreadPoolBuilder::new()
         .num_threads(config.max_workers)
         .build_global()
@@ -94,8 +94,11 @@ fn main() -> anyhow::Result<()> {
         &config,
     );
 
+    // Calculate adaptive chunking based on Phase 1 stats
+    let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, &config);
+
     // Phase 2: Template mining and write output (returns Output objects)
-    let _outputs = phase2_mining(tasks, &config)?;
+    let _outputs = phase2_mining(tasks, &config, &adaptive, config.max_workers)?;
 
     let total_duration = start.elapsed();
     debug!("Total time: {}", format_duration(total_duration));

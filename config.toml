@@ -1,17 +1,17 @@
 binary_name = "zahirscan"
 
 [concurrency]
-# Maximum number of parallel workers (defaults to num_cpus - 1 if not set)
-# Set to 0 to use num_cpus - 1
+# Maximum number of parallel workers
+# Defaults to num_cpus - 1 if not set or set to 0
+# Chunking is now fully adaptive based on Phase 1 stats
 max_workers = 0
 
-# Maximum number of files to process concurrently
-# If set to 0, uses adaptive default: max(4, min(8, max_workers / 2))
-# This balances throughput and reduces contention for large batches
-# Set to 0 for automatic optimization, or specify a value (recommended: 4-8)
-# Lower values (4-6) reduce contention but may be slower overall
-# Higher values (8+) may cause more variation in processing times
-max_concurrent_files = 4
+# Byte thresholds for adaptive chunking multipliers
+# Files below small_file_threshold_bytes use multiplier=1 (13 chunks for 13 workers)
+# Files between thresholds use multiplier=2 (26 chunks)
+# Files above large_file_threshold_bytes use multiplier=3 (39 chunks)
+small_file_threshold_bytes = 100000  # 100 KB
+large_file_threshold_bytes = 1000000 # 1 MB
 
 [mining]
 # Static token threshold (0.0-1.0) - percentage of lines that must match for a token to be considered static

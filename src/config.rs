@@ -33,8 +33,20 @@ fn default_binary_name() -> String {
 #[derive(Debug, Deserialize, Default)]
 struct ConcurrencyConfig {
     max_workers: Option<u64>,
-    /// Maximum number of files to process concurrently (0 = unlimited, use all workers)
-    max_concurrent_files: Option<u64>,
+    // Chunking is now fully adaptive (calculated from Phase 1 stats)
+    // Byte thresholds for adaptive chunking multipliers
+    #[serde(default = "default_small_file_threshold")]
+    small_file_threshold_bytes: u64,
+    #[serde(default = "default_large_file_threshold_bytes")]
+    large_file_threshold_bytes: u64,
+}
+
+fn default_small_file_threshold() -> u64 {
+    100_000 // 100 KB
+}
+
+fn default_large_file_threshold_bytes() -> u64 {
+    1_000_000 // 1 MB
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,8 +119,8 @@ pub struct Config {
     pub binary_name: String,
     /// Maximum number of parallel workers
     pub max_workers: usize,
-    /// Maximum number of files to process concurrently (0 = unlimited)
-    pub max_concurrent_files: usize,
+    /// Target number of chunks per file (calculated adaptively, neat multiple of max_workers)
+    pub target_chunks_per_file: usize,
     /// Output mode (templates only or full metadata)
     pub output_mode: crate::results::OutputMode,
     /// Static token threshold (0.0-1.0) - percentage of lines that must match for a token to be considered static
@@ -157,6 +169,10 @@ pub struct Config {
     pub min_pivot_variation: usize,
     /// Maximum variation score - above this, word is too random to be structural
     pub max_pivot_variation: usize,
+    /// Small file threshold (bytes) - files below this use multiplier=1
+    pub small_file_threshold_bytes: usize,
+    /// Large file threshold (bytes) - files above this use multiplier=3
+    pub large_file_threshold_bytes: usize,
 }
 
 impl Config {
@@ -180,6 +196,7 @@ impl Config {
             .unwrap_or(0);
 
         let mining = toml_config.mining;
+        let concurrency = toml_config.concurrency;
 
         // Calculate actual max_workers (num_cpus - 1, or use configured value if > 0)
         let max_workers = if max_workers == 0 {
@@ -188,18 +205,9 @@ impl Config {
             max_workers
         };
 
-        // Calculate optimal max_concurrent_files if not specified
-        // Default: 4-8 files concurrently to balance throughput and reduce contention
-        // Adaptive: Use max_workers / 2, clamped to 4-8 range for optimal performance
-        let max_concurrent_files = toml_config
-            .concurrency
-            .max_concurrent_files
-            .map(|f| f as usize)
-            .unwrap_or_else(|| {
-                // Adaptive default: half of workers, but clamped to reasonable range
-                let adaptive = (max_workers / 2).max(2);
-                adaptive.clamp(4, 8) // Clamp to 4-8 for optimal performance
-            });
+        // Chunking is now fully adaptive (calculated from Phase 1 stats)
+        // This default is not used - adaptive calculation overrides it
+        let target_chunks_per_file = 0; // Will be calculated adaptively
 
         // Validate static_threshold is in valid range
         let static_threshold = mining.static_threshold.clamp(0.0, 1.0);
@@ -213,7 +221,7 @@ impl Config {
         Ok(Self {
             binary_name,
             max_workers,
-            max_concurrent_files,
+            target_chunks_per_file,
             output_mode: crate::results::OutputMode::Templates,
             static_threshold,
             text_threshold: mining.text_threshold.clamp(0.0, 1.0),
@@ -238,22 +246,21 @@ impl Config {
             short_prefix_threshold: mining.short_prefix_threshold.max(1) as usize,
             min_pivot_variation: mining.min_pivot_variation.max(1) as usize,
             max_pivot_variation: mining.max_pivot_variation.max(1) as usize,
+            small_file_threshold_bytes: concurrency.small_file_threshold_bytes as usize,
+            large_file_threshold_bytes: concurrency.large_file_threshold_bytes as usize,
         })
     }
 
     /// Create a new default configuration
     pub fn new() -> Self {
         let max_workers = num_cpus::get().saturating_sub(1).max(1);
-        // Adaptive default: half of workers, clamped to 4-8 range
-        let max_concurrent_files = {
-            let adaptive = (max_workers / 2).max(2);
-            adaptive.clamp(4, 8)
-        };
+        // Chunking is now fully adaptive (calculated from Phase 1 stats)
+        let target_chunks_per_file = 0; // Will be calculated adaptively
 
         Self {
             binary_name: "zahirscan".to_string(),
             max_workers,
-            max_concurrent_files,
+            target_chunks_per_file,
             output_mode: crate::results::OutputMode::Templates,
             static_threshold: 0.8,
             text_threshold: 0.01,
@@ -278,6 +285,8 @@ impl Config {
             short_prefix_threshold: 3,
             min_pivot_variation: 2,
             max_pivot_variation: 50,
+            small_file_threshold_bytes: 100_000,
+            large_file_threshold_bytes: 1_000_000,
         }
     }
 

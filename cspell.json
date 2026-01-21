@@ -5,9 +5,13 @@
   "dictionaries": [],
   "words": [
     "dtolnay",
+    "ffprobe",
+    "flac",
     "Interner",
     "memchr",
     "Mmap",
+    "Subsamp",
+    "subsampling",
     "Zahir",
     "zahirscan"
   ],

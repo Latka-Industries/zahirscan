@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use crate::config::Config;
 use crate::parsers::FileType;
+use anyhow::Result;
 
 /// Detect file type from extension
 pub fn detect_file_type(path: &str) -> FileType {
@@ -16,6 +18,15 @@ pub fn detect_file_type(path: &str) -> FileType {
         "json" => FileType::Json,
         "txt" => FileType::Text,
         "md" | "markdown" => FileType::Markdown,
+        "jpg" | "jpeg" | "png" | "gif" | "bmp" | "tiff" | "tif" | "webp" | "ico" | "svg" => {
+            FileType::Image
+        }
+        "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" | "3gp" | "ogv" => {
+            FileType::Video
+        }
+        "mp3" | "flac" | "wav" | "m4a" | "aac" | "ogg" | "opus" | "wma" | "ape" | "dsd" | "dsf" => {
+            FileType::Audio
+        }
         _ => FileType::Unknown,
     }
 }
@@ -58,10 +69,15 @@ pub fn format_bytes(bytes: usize) -> String {
     }
 }
 
-/// Sanitize filename by removing whitespace, apostrophes & other problematic characters
+/// Sanitize filename by removing whitespace, apostrophes, commas & replacing brackets/parentheses with underscores
 pub fn sanitize_filename(name: &str) -> String {
     name.chars()
-        .filter(|c| !c.is_whitespace() && *c != '\'')
+        .filter_map(|c| match c {
+            ' ' | '\t' | '\n' | '\r' => None,               // Remove whitespace
+            '\'' | ',' => None,                             // Remove apostrophes and commas
+            '{' | '}' | '[' | ']' | '(' | ')' => Some('_'), // Replace brackets/parentheses with underscore
+            _ => Some(c),                                   // Keep all other characters
+        })
         .collect()
 }
 
@@ -113,5 +129,25 @@ pub fn determine_output_path(
     } else {
         // No output specified, use temp file
         get_temp_output_path(input_path, config)
+    }
+}
+
+/// Check if ffprobe is available on the system
+///
+/// Returns Ok(()) if ffprobe is available, Err with a warning logged if not.
+/// This is used by video and audio parsers to check for ffprobe before attempting metadata extraction.
+pub fn check_ffprobe_available() -> Result<()> {
+    match Command::new("ffprobe").arg("-version").output() {
+        Ok(output) if output.status.success() => Ok(()),
+        _ => {
+            log::warn!(
+                "ffprobe not found. Media metadata extraction will be limited.\n\
+                 Install ffmpeg for full metadata support:\n\
+                 - macOS: brew install ffmpeg\n\
+                 - Ubuntu/Debian: sudo apt-get install ffmpeg\n\
+                 - Fedora: sudo dnf install ffmpeg"
+            );
+            Err(anyhow::anyhow!("ffprobe not available"))
+        }
     }
 }

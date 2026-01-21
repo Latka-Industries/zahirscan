@@ -2,9 +2,7 @@
 
 use crate::config::Config;
 use crate::parsers::ParseResult;
-use crate::parsers::traits::{
-    DefaultSentenceAnalyzer, SentenceAnalyzer, WorkComplexity, optimal_chunk_size,
-};
+use crate::parsers::traits::{DefaultSentenceAnalyzer, SentenceAnalyzer, optimal_chunk_size};
 use crate::parsers::writing_analysis::{
     analyze_svo_structure, calculate_template_entropy, calculate_writing_footprint,
     extract_pivot_points,
@@ -84,11 +82,7 @@ pub fn extract_text_templates(
         "Starting n-gram extraction from {} sentences",
         sentences.len()
     );
-    let chunk_size = optimal_chunk_size(
-        sentences.len(),
-        config.max_workers,
-        WorkComplexity::Moderate,
-    );
+    let chunk_size = optimal_chunk_size(sentences.len(), config.target_chunks_per_file);
     sentences
         .par_iter()
         .with_min_len(chunk_size)
@@ -168,11 +162,7 @@ pub fn extract_text_templates(
     let template_groups: DashMap<String, Vec<String>> = DashMap::new();
 
     // Process in parallel for better performance
-    let chunk_size = optimal_chunk_size(
-        sentences.len(),
-        config.max_workers,
-        WorkComplexity::Moderate,
-    );
+    let chunk_size = optimal_chunk_size(sentences.len(), config.target_chunks_per_file);
     sentences
         .par_iter()
         .with_min_len(chunk_size)

@@ -2,7 +2,7 @@
 //! Shared analysis functions for text and markdown parsers
 
 use crate::config::Config;
-use crate::parsers::traits::{WorkComplexity, optimal_chunk_size};
+use crate::parsers::traits::optimal_chunk_size;
 use crate::results::{PunctuationMetrics, SVOAnalysis, Template, WritingFootprint};
 use dashmap::DashMap;
 use log::debug;
@@ -126,11 +126,7 @@ pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<St
 
     // Calculate optimal chunk size for parallel processing
     // Moderate work: tokenization + position tracking + hash map operations
-    let chunk_size = optimal_chunk_size(
-        sentences_to_process.len(),
-        config.max_workers,
-        WorkComplexity::Moderate,
-    );
+    let chunk_size = optimal_chunk_size(sentences_to_process.len(), config.target_chunks_per_file);
     sentences_to_process
         .par_iter()
         .with_min_len(chunk_size)

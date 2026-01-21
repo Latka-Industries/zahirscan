@@ -1,11 +1,13 @@
-# ZahirScan: Template-Based Content Compression
+# ZahirScan: Template-Based Content Compression & Media Metadata Extraction
 
 ![CI](https://github.com/thicclatka/zahirscan/workflows/CI/badge.svg)
 ![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
 
 > _"Others will dream that I am mad, while I dream of the Zahir."_
 
-A high-performance Rust CLI tool that extracts templates and patterns from unstructured content (logs, TXT files, Markdown, JSON logs), converting them into compact structured formats while preserving essential information.
+A high-performance Rust CLI tool that extracts templates and patterns from unstructured content (logs, TXT files, Markdown, JSON logs), converting them into compact structured formats while preserving essential information. Additionally provides comprehensive metadata extraction for media files (images, videos, audio).
+
+> **Note**: This project is currently a work in progress and is almost ready for primetime. After a bit more refinement, it will be made publicly available.
 
 ## Overview
 
@@ -15,6 +17,9 @@ ZahirScan uses probabilistic template mining to extract essential structure and 
 
 - **Logs**: Plain text logs, JSON-formatted logs, structured log files
 - **Text Documents**: TXT, Markdown (MD), plain text content
+- **Images**: JPEG, PNG, GIF, WebP, BMP, TIFF (extracts dimensions, format, compression, chroma subsampling, aspect ratio)
+- **Videos**: MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, 3GP, OGV (extracts comprehensive MediaInfo-like metadata: codec, resolution, bitrate, frame rate, audio tracks, etc.)
+- **Audio**: MP3, FLAC, WAV, M4A, AAC, OGG, Opus, WMA, APE, DSD, DSF (extracts codec, bitrate, sample rate, channels, duration, etc.)
 
 The tool automatically adapts to different content types:
 
@@ -26,15 +31,27 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 
 ## Key Features
 
+### Content Analysis
+
 - **Size Reduction**: Reduces content size by 80-95% while preserving essential information
 - **Multi-Format Support**: Handles structured logs (plain text, JSON), plain text (TXT), and Markdown (MD)
 - **Content-Aware Processing**: Automatically adapts analysis strategies based on detected content type (logs vs. long-form text)
 - **Writing Footprint Analysis**: For text and markdown files, provides metrics including vocabulary richness, sentence structure, punctuation patterns, and template diversity
-- **Structured Output**: Generates human-readable summaries and structured JSON
-- **Zero-Copy Parsing**: Uses `memmap2` for memory-mapped file access, enabling efficient processing of multi-gigabyte files
 - **Probabilistic Template Mining**: Automatically groups similar patterns into templates by identifying constant vs. dynamic tokens through frequency analysis
-- **Multi-Level Parallel Processing**: Two-level parallelism with adaptive chunk sizing - files processed in parallel, with sentences/lines within each file also parallelized
-- **Adaptive Performance Tuning**: Automatically optimizes concurrent file processing based on system resources to reduce contention and improve consistency
+
+### Media Metadata Extraction
+
+- **Image Metadata**: Extracts dimensions, format, compression info, chroma subsampling, aspect ratio, and color information
+- **Video Metadata**: Comprehensive MediaInfo-like extraction including codec (profile/level), resolution, bitrate, frame rate, audio tracks, color space, scan type, and more
+- **Audio Metadata**: Extracts codec, bitrate, sample rate, channels, duration, container format, and stream information
+- **Universal Media Support**: Uses `ffprobe` for video/audio and native Rust crates for images, providing consistent metadata extraction across formats
+
+### Performance & Architecture
+
+- **Zero-Copy Parsing**: Uses `memmap2` for memory-mapped file access, enabling efficient processing of multi-gigabyte files
+- **Parallel Processing**: Uses a single Rayon thread pool sized by `max_workers`, with adaptive chunk sizing in Phase 2 to keep all workers busy
+- **Adaptive Performance Tuning**: Automatically tunes chunk sizes based on Phase 1 file statistics to reduce contention and improve consistency
+- **Structured Output**: Generates human-readable summaries and structured JSON
 - **Zero-Config Operation**: Automatically infers structure without requiring manual schema definitions
 - **Security-First Design**: Implements path sanitization and secure file handling
 
@@ -71,10 +88,22 @@ ZahirScan is designed for both speed and efficiency. Benchmarks show:
 - **Batch Processing**: Processes 200+ files in under 1 minute with adaptive parallelization
 - **Size Reduction**: Typically reduces content size by 80-95% while preserving essential information
 - **Memory Efficiency**: Uses memory-mapped files to handle files larger than available RAM
-- **Adaptive Parallelization**: Automatically optimizes chunk sizes and concurrent file processing based on work complexity and system resources
+- **Adaptive Parallelization**: Automatically optimizes chunk sizes based on Phase 1 file statistics and available CPU resources
 - **Content-Type Handling**: Efficiently processes both structured logs and unstructured long-form text
 
 ## Installation
+
+### Prerequisites
+
+- **Rust** (stable toolchain)
+- **ffprobe** (optional, for video/audio metadata extraction): Required only if you want to extract metadata from video or audio files. Install via your system package manager:
+  - macOS: `brew install ffmpeg`
+  - Ubuntu/Debian: `sudo apt-get install ffmpeg`
+  - Fedora: `sudo dnf install ffmpeg`
+
+  > **Note**: If `ffprobe` is not installed, ZahirScan will still work for text, log, and image files. Video and audio files will be processed but metadata extraction will be skipped.
+
+### Build
 
 ```bash
 # Build from source
@@ -113,12 +142,14 @@ Options:
 
 **Output formats:**
 
-- Human-readable summary with template patterns
-- Structured JSON output
-- Size comparison (before/after)
-- Inferred schema with field definitions
+- **Mode 1 (Templates)**: Minimal JSON with templates and writing footprint (optimized for AI consumption)
+- **Mode 2 (Full)**: Complete metadata including:
+  - Template patterns and inferred schema
+  - File statistics (size, line count, processing time)
+  - Writing footprint metrics (for text/markdown: vocabulary richness, sentence structure, punctuation patterns, template diversity, entropy)
+  - Media metadata (for images/videos/audio: comprehensive technical metadata)
+- Size comparison (before/after) for text files
 - Data integrity score
-- Writing footprint metrics (for text/markdown files: vocabulary richness, sentence structure, punctuation patterns, template diversity, entropy)
 
 ### Configuration
 
@@ -126,21 +157,20 @@ ZahirScan uses `config.toml` for configuration (optional - works out of the box 
 
 ```toml
 [concurrency]
-# Maximum number of parallel workers (defaults to num_cpus - 1 if set to 0)
+# Maximum number of parallel workers (defaults to a sensible value if set to 0)
 max_workers = 0
 
-# Maximum number of files to process concurrently
-# Set to 0 for adaptive default: max(4, min(8, max_workers / 2))
-# This automatically balances throughput and reduces contention
-# Or specify a value (recommended: 4-8 for large batches)
-max_concurrent_files = 0
+[adaptive_chunking]
+# File size thresholds used by adaptive chunking heuristics
+small_file_threshold_bytes = 262144     # 256KB
+large_file_threshold_bytes = 1048576    # 1MB
 ```
 
 **Adaptive Defaults:**
 
-- `max_concurrent_files = 0` automatically calculates optimal batch size based on CPU cores
-- Chunk sizes are automatically tuned based on work complexity (light/moderate/heavy operations)
-- No configuration needed for optimal performance on most systems
+- `max_workers = 0` uses a sensible default based on CPU cores
+- Phase 2 uses **adaptive chunking** based on Phase 1 file statistics (count/bytes/variance) and targets a neat multiple of `max_workers`
+- No manual batching configuration is required for typical workloads
 
 ## Architecture
 
@@ -150,13 +180,19 @@ max_concurrent_files = 0
 - File format detection and handling:
   - **Plain text (TXT, MD)**: Direct memory-mapped access using `memmap2`
   - **JSON logs**: JSON parsing to extract log entries
+  - **Images**: Fast format detection (metadata extraction in Phase 2)
+  - **Videos/Audio**: Format detection (metadata extraction in Phase 2 via `ffprobe`)
 - Collects file statistics (line count, byte count, token count)
-- Determines content type (log vs. text/markdown)
-- Prepares tasks for template mining phase
+- Determines content type (log vs. text/markdown vs. media)
+- Prepares tasks for template mining/metadata extraction phase
 
-### Phase 2: Template Mining and Output
+### Phase 2: Template Mining and Metadata Extraction
 
-- **Content-Type Detection**: Identifies logs vs. long-form text, format detection (plain text, JSON, Markdown)
+- **Content-Type Detection**: Identifies logs vs. long-form text vs. media files, format detection (plain text, JSON, Markdown, image formats, video/audio containers)
+- **Media Metadata Extraction**:
+  - **Images**: Extracts metadata using native Rust `image` crate (dimensions, format, compression, chroma subsampling)
+  - **Videos**: Comprehensive metadata via `ffprobe` (codec info, resolution, bitrate, frame rate, audio tracks, color space, etc.)
+  - **Audio**: Metadata extraction via `ffprobe` (codec, bitrate, sample rate, channels, duration, container format)
 - **Tokenization**: Configurable delimiters:
   - **Plain text logs**: Whitespace delimiters
   - **JSON logs**: JSON structure parsing, then field-level template mining
@@ -172,18 +208,12 @@ max_concurrent_files = 0
   - Data integrity scoring (1.0 - unparseable_lines / total_lines for logs, coherence metrics for text)
   - Anomaly detection and reporting (error patterns in logs, structural inconsistencies in text)
 - **Parallel Processing**:
-  - **Two-Level Parallelism**:
-    - **File-level**: Multiple files processed concurrently (configurable via `max_concurrent_files`)
-    - **Within-file**: Sentences/lines processed in parallel using `rayon`
-  - **Adaptive Chunk Sizing**: Automatically optimizes chunk sizes based on:
-    - Collection size (number of sentences/lines)
-    - Work complexity (light/moderate/heavy operations)
-    - Number of available CPU cores
-  - **Batched File Processing**: Processes files in optimal batches to reduce thread contention and improve consistency
-  - **Work Complexity Classification**:
-    - **Light**: Simple tokenization + hash map operations (logs)
-    - **Moderate**: Tokenization + n-gram extraction + pattern matching (text/markdown)
-    - **Heavy**: Complex operations requiring smaller chunks for better load balancing
+  - **Single Rayon thread pool** sized by `max_workers`
+  - **Adaptive Chunk Sizing (Phase 2)**:
+    - Uses Phase 1 stats (file count, total bytes, mean, variance) to pick a target number of chunks
+    - Targets a **neat multiple** of `max_workers` to keep all workers busy while minimizing overhead
+    - Chunk sizing is based on byte distribution (aiming for roughly equal work per chunk)
+  - **Within-file parallelism**: For large text-like files, lines/sentences may be processed in parallel
 
 ## Security
 

@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Phase 2: Template mining (if not binary)
     if !stats.is_binary {
-        match extract_templates(&stats, &config) {
+        match extract_templates(&mut stats, &config) {
             Ok(mining_result) => {
                 stats.mining_result = Some(mining_result);
                 println!(

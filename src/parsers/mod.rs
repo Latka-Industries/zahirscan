@@ -1,11 +1,14 @@
 //! Probabilistic template mining and parsing
 //! Main handler that routes to log or text parsers
 
+mod audio;
+mod image;
 mod json;
 mod log;
 mod markdown;
 mod text;
 pub mod traits;
+mod video;
 pub mod writing_analysis;
 
 use crate::config::Config;
@@ -24,6 +27,9 @@ pub enum FileType {
     Json,
     Text,
     Markdown,
+    Image,
+    Video,
+    Audio,
     Unknown,
 }
 
@@ -41,6 +47,12 @@ pub struct ParseResult {
     pub is_binary: bool,
     /// Template mining results (if extracted)
     pub mining_result: Option<MiningResult>,
+    /// Image metadata (for image files)
+    pub image_metadata: Option<crate::results::ImageMetadata>,
+    /// Video metadata (for video files)
+    pub video_metadata: Option<crate::results::VideoMetadata>,
+    /// Audio metadata (for audio files)
+    pub audio_metadata: Option<crate::results::AudioMetadata>,
 }
 
 impl ParseResult {
@@ -74,6 +86,12 @@ impl ParseResult {
                     let mut output = Output::full(mining.templates.clone(), metadata, compression);
                     // Include writing footprint if available
                     output.writing_footprint = mining.writing_footprint.clone();
+                    // Include image metadata if available
+                    output.image_metadata = self.image_metadata.clone();
+                    // Include video metadata if available
+                    output.video_metadata = self.video_metadata.clone();
+                    // Include audio metadata if available
+                    output.audio_metadata = self.audio_metadata.clone();
                     output
                 }
             }
@@ -98,6 +116,12 @@ impl ParseResult {
                     };
                     let mut output = Output::full(vec![], metadata, compression);
                     output.writing_footprint = None;
+                    // Include image metadata if available
+                    output.image_metadata = self.image_metadata.clone();
+                    // Include video metadata if available
+                    output.video_metadata = self.video_metadata.clone();
+                    // Include audio metadata if available
+                    output.audio_metadata = self.audio_metadata.clone();
                     output
                 }
             }
@@ -162,34 +186,87 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
         duration: std::time::Duration::ZERO, // Will be set in Phase 2
         is_binary,
         mining_result: None,
+        image_metadata: None, // Will be extracted in Phase 2
+        video_metadata: None, // Will be extracted in Phase 2
+        audio_metadata: None, // Will be extracted in Phase 2
     })
 }
 
 /// Extract templates from a file using probabilistic template mining
 /// Main handler that routes to log or text parsers
-pub fn extract_templates(stats: &ParseResult, config: &Config) -> Result<MiningResult> {
-    // Skip binary files
-    if stats.is_binary {
-        return Ok(traits::empty_mining_result(stats));
-    }
-
-    // Re-open and memory-map the file for template mining
+/// For images, also extracts image metadata
+pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<MiningResult> {
+    // Re-open and memory-map the file
     let mmap = open_mmap(&stats.file_path)?;
-    let content = std::str::from_utf8(&mmap)?;
 
     match stats.file_type {
-        FileType::Log => log::extract_log_templates(content, stats, config),
-        FileType::Json => json::extract_json_templates(content, stats, config),
-        FileType::Markdown => markdown::extract_markdown_templates(content, stats, config),
-        FileType::Text => text::extract_text_templates(content, stats, config),
-        FileType::Unknown => {
-            // Try JSON first (most structured), then log, then text
-            if serde_json::from_str::<serde_json::Value>(content.lines().next().unwrap_or(""))
-                .is_ok()
-            {
-                json::extract_json_templates(content, stats, config)
-            } else {
-                log::extract_log_templates(content, stats, config)
+        FileType::Image => {
+            // Extract image metadata in Phase 2
+            // extract_image_metadata always returns Ok, so this should always be Some
+            stats.image_metadata = match image::extract_image_metadata(&mmap, stats, config) {
+                Ok(metadata) => Some(metadata),
+                Err(_) => {
+                    // Fallback: create minimal metadata if extraction fails unexpectedly
+                    Some(crate::results::ImageMetadata::minimal_fallback(
+                        stats.byte_count,
+                    ))
+                }
+            };
+            image::extract_image_templates(&mmap, stats, config)
+        }
+        FileType::Video => {
+            // Extract video metadata in Phase 2
+            stats.video_metadata = match video::extract_video_metadata(&mmap, stats, config) {
+                Ok(metadata) => Some(metadata),
+                Err(_) => {
+                    // Fallback: create minimal metadata if extraction fails unexpectedly
+                    Some(crate::results::VideoMetadata::minimal_fallback(
+                        stats.byte_count,
+                    ))
+                }
+            };
+            video::extract_video_templates(&mmap, stats, config)
+        }
+        FileType::Audio => {
+            // Extract audio metadata in Phase 2
+            stats.audio_metadata = match audio::extract_audio_metadata(&mmap, stats, config) {
+                Ok(metadata) => Some(metadata),
+                Err(_) => {
+                    // Fallback: create minimal metadata if extraction fails unexpectedly
+                    Some(crate::results::AudioMetadata::minimal_fallback(
+                        stats.byte_count,
+                    ))
+                }
+            };
+            audio::extract_audio_templates(&mmap, stats, config)
+        }
+        _ => {
+            // Skip binary files (non-images, non-videos, non-audio)
+            if stats.is_binary {
+                return Ok(traits::empty_mining_result(stats));
+            }
+
+            let content = std::str::from_utf8(&mmap)?;
+            match stats.file_type {
+                FileType::Log => log::extract_log_templates(content, stats, config),
+                FileType::Json => json::extract_json_templates(content, stats, config),
+                FileType::Markdown => markdown::extract_markdown_templates(content, stats, config),
+                FileType::Text => text::extract_text_templates(content, stats, config),
+                FileType::Unknown => {
+                    // Try JSON first (most structured), then log, then text
+                    if serde_json::from_str::<serde_json::Value>(
+                        content.lines().next().unwrap_or(""),
+                    )
+                    .is_ok()
+                    {
+                        json::extract_json_templates(content, stats, config)
+                    } else {
+                        log::extract_log_templates(content, stats, config)
+                    }
+                }
+                FileType::Image => unreachable!(), // Handled above
+                FileType::Video => unreachable!(), // Handled above
+                FileType::Audio => unreachable!(), // Handled above
             }
         }
     }

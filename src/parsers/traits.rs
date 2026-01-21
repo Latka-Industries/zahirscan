@@ -105,57 +105,25 @@ pub fn sort_templates_by_count(templates: &mut [Template]) {
 // Parallel Processing Utilities
 // ============================================================================
 
-/// Work complexity classification for chunk sizing
-#[derive(Debug, Clone, Copy)]
-pub enum WorkComplexity {
-    /// Light work: simple tokenization + hash map insert (logs)
-    Light,
-    /// Moderate work: tokenization + n-gram extraction + pattern matching (text/markdown)
-    Moderate,
-    /// Heavy work: complex operations, multiple passes, deep analysis (smaller chunks for better load balancing)
-    Heavy,
-}
-
-/// Calculate optimal chunk size for parallel processing based on collection size and work complexity.
+/// Calculate optimal chunk size for parallel processing based on collection size and target number of chunks.
 ///
-/// Strategy:
-/// - Small collections (< 1000): No chunking (return 1)
-/// - Light work (log lines): Large chunks (1000-10000)
-/// - Moderate work (text/markdown sentences): Medium chunks (100-1000)
-/// - Heavy work (complex operations): Small chunks (10-100) for better load balancing
-///
-/// This reduces overhead from chunk scheduling and improves cache locality.
-pub fn optimal_chunk_size(
-    collection_size: usize,
-    max_workers: usize,
-    work_complexity: WorkComplexity,
-) -> usize {
-    if collection_size < 1000 {
-        // Small collections: no chunking needed
+/// Creates chunks that approximate `target_chunks` chunks (neat multiple of workers).
+/// Uses integer division, so the last chunk may be smaller if there's a remainder.
+/// This ensures neat multiples of workers for optimal load balancing.
+/// The adaptive chunking calculation already accounts for work complexity, so we respect the target.
+pub fn optimal_chunk_size(collection_size: usize, target_chunks: usize) -> usize {
+    if collection_size < 1000 || target_chunks == 0 {
+        // Small collections or no chunks: no chunking needed
         return 1;
     }
 
-    match work_complexity {
-        WorkComplexity::Light => {
-            // Log lines: large chunks to minimize overhead
-            // Target: ~4-8 chunks per worker for good load balancing
-            let target = collection_size / (max_workers * 4).max(1);
-            target.clamp(1000, 10000)
-        }
-        WorkComplexity::Moderate => {
-            // Text/markdown sentences: medium chunks
-            // Target: ~2-4 chunks per worker
-            let target = collection_size / (max_workers * 2).max(1);
-            target.clamp(100, 1000)
-        }
-        WorkComplexity::Heavy => {
-            // Complex operations: small chunks for better load balancing
-            // Since each item takes longer, smaller chunks allow more frequent work-stealing
-            // Target: ~8-16 chunks per worker
-            let target = collection_size / (max_workers * 8).max(1);
-            target.clamp(10, 100)
-        }
-    }
+    // Calculate chunk size to approximate target_chunks chunks
+    // Integer division: remainder goes to the last chunk (which is fine)
+    // Example: 10,000 items / 26 chunks = 384 per chunk, last chunk gets remainder (16 items)
+    let chunk_size = collection_size / target_chunks.max(1);
+
+    // Ensure minimum chunk size of 1 (shouldn't happen, but safety check)
+    chunk_size.max(1)
 }
 
 // ============================================================================
