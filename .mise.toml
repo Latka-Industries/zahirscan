@@ -1,5 +1,5 @@
 [tools]
-rust = "stable"
+rust = "1.92"
 
 [tasks.clippy]
 description = "Run clippy linter"
