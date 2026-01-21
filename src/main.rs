@@ -6,21 +6,25 @@ use zahirscan::{Config, calculate_adaptive_chunking, format_duration, phase1_sca
 #[derive(Parser)]
 #[command(name = "zahirscan")]
 #[command(about = "Text file and log file parser using probabilistic template mining")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 struct Args {
     /// Path(s) to the file(s) to parse (can specify multiple)
-    #[arg(short, long, num_args = 1..)]
+    #[arg(short = 'p', long, num_args = 1..)]
     path: Vec<String>,
-    /// Output file path or folder (defaults to temp file if not specified)
-    /// If folder, creates filename.zahirscan.out for each input file
-    #[arg(short, long)]
+
+    /// Output folder path (defaults to temp file if not specified)
+    /// Creates filename.zahirscan.out in the folder for each input file
+    #[arg(short = 'o', long)]
     output: Option<String>,
+
     /// Output mode: full metadata (for development/debugging)
     /// Default is templates-only mode (minimal JSON for AI consumption)
-    #[arg(long)]
+    #[arg(short = 'f', long)]
     full: bool,
+
     /// Development mode: enables debug logging
     /// Default is production mode (info level only)
-    #[arg(long)]
+    #[arg(short = 'd', long)]
     dev: bool,
 }
 

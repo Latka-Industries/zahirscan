@@ -3,13 +3,9 @@
 
 mod audio;
 mod image;
-mod json;
-mod log;
-mod markdown;
-mod text;
+pub mod text;
 pub mod traits;
 mod video;
-pub mod writing_analysis;
 
 use crate::config::Config;
 use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
@@ -207,9 +203,9 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 Ok(metadata) => Some(metadata),
                 Err(_) => {
                     // Fallback: create minimal metadata if extraction fails unexpectedly
-                    Some(crate::results::ImageMetadata::minimal_fallback(
-                        stats.byte_count,
-                    ))
+                    Some(crate::results::create_minimal_fallback::<
+                        crate::results::ImageMetadata,
+                    >(stats.byte_count))
                 }
             };
             image::extract_image_templates(&mmap, stats, config)
@@ -220,9 +216,9 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 Ok(metadata) => Some(metadata),
                 Err(_) => {
                     // Fallback: create minimal metadata if extraction fails unexpectedly
-                    Some(crate::results::VideoMetadata::minimal_fallback(
-                        stats.byte_count,
-                    ))
+                    Some(crate::results::create_minimal_fallback::<
+                        crate::results::VideoMetadata,
+                    >(stats.byte_count))
                 }
             };
             video::extract_video_templates(&mmap, stats, config)
@@ -233,9 +229,9 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 Ok(metadata) => Some(metadata),
                 Err(_) => {
                     // Fallback: create minimal metadata if extraction fails unexpectedly
-                    Some(crate::results::AudioMetadata::minimal_fallback(
-                        stats.byte_count,
-                    ))
+                    Some(crate::results::create_minimal_fallback::<
+                        crate::results::AudioMetadata,
+                    >(stats.byte_count))
                 }
             };
             audio::extract_audio_templates(&mmap, stats, config)
@@ -248,10 +244,12 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
 
             let content = std::str::from_utf8(&mmap)?;
             match stats.file_type {
-                FileType::Log => log::extract_log_templates(content, stats, config),
-                FileType::Json => json::extract_json_templates(content, stats, config),
-                FileType::Markdown => markdown::extract_markdown_templates(content, stats, config),
-                FileType::Text => text::extract_text_templates(content, stats, config),
+                FileType::Log => text::log::extract_log_templates(content, stats, config),
+                FileType::Json => text::json::extract_json_templates(content, stats, config),
+                FileType::Markdown => {
+                    text::markdown::extract_markdown_templates(content, stats, config)
+                }
+                FileType::Text => text::text::extract_text_templates(content, stats, config),
                 FileType::Unknown => {
                     // Try JSON first (most structured), then log, then text
                     if serde_json::from_str::<serde_json::Value>(
@@ -259,9 +257,9 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                     )
                     .is_ok()
                     {
-                        json::extract_json_templates(content, stats, config)
+                        text::json::extract_json_templates(content, stats, config)
                     } else {
-                        log::extract_log_templates(content, stats, config)
+                        text::log::extract_log_templates(content, stats, config)
                     }
                 }
                 FileType::Image => unreachable!(), // Handled above

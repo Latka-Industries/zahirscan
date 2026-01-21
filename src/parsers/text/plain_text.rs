@@ -2,11 +2,11 @@
 
 use crate::config::Config;
 use crate::parsers::ParseResult;
-use crate::parsers::traits::{DefaultSentenceAnalyzer, SentenceAnalyzer, optimal_chunk_size};
-use crate::parsers::writing_analysis::{
+use crate::parsers::text::writing_analysis::{
     analyze_svo_structure, calculate_template_entropy, calculate_writing_footprint,
     extract_pivot_points,
 };
+use crate::parsers::traits::{DefaultSentenceAnalyzer, SentenceAnalyzer, optimal_chunk_size};
 use crate::results::{MiningResult, Template};
 use anyhow::Result;
 use dashmap::DashMap;

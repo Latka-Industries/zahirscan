@@ -6,6 +6,7 @@ authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
 description = "Token-efficient content compression for AI analysis using probabilistic template mining"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/thicclatka/zahirscan"
+readme = "README.md"
 keywords = [
   "log",
   "parser",
@@ -16,8 +17,16 @@ keywords = [
   "ai",
   "compression",
   "template-mining",
+  "metadata",
+  "media",
 ]
-categories = ["command-line-utilities", "development-tools"]
+categories = [
+  "command-line-utilities",
+  "development-tools",
+  "parsing",
+  "text-processing",
+  "multimedia",
+]
 
 [lib]
 name = "zahirscan"
@@ -47,6 +56,7 @@ image = "0.25"
 png = "0.18.0"
 tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread"] }
 ffprobe = "0.4.0"
+lofty = "0.22.4"
 
 [dev-dependencies]
 anyhow = "1.0.100"

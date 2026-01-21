@@ -39,20 +39,21 @@ pub fn extract_image_metadata(
                     // Extract format-specific metadata based on detected format
                     // Format string from Debug representation (e.g., "Jpeg", "Png")
                     // format_from_string already handles case-insensitive matching
-                    let (chroma_subsampling, compression) =
+                    let (chroma_subsampling, compression, bit_depth) =
                         if let Some(format_str) = format.as_deref() {
                             if let Some(image_format) = format_from_string(format_str) {
                                 (
                                     image_format.extract_chroma_subsampling(content),
                                     image_format.extract_compression(content),
+                                    image_format.extract_bit_depth(content),
                                 )
                             } else {
                                 // Format not recognized by our parser, but we still have dimensions
-                                (None, None)
+                                (None, None, None)
                             }
                         } else {
                             // Format detection failed, but we still have dimensions
-                            (None, None)
+                            (None, None, None)
                         };
 
                     Ok(ImageMetadata {
@@ -64,6 +65,7 @@ pub fn extract_image_metadata(
                         format,
                         chroma_subsampling,
                         compression,
+                        bit_depth,
                     })
                 }
                 Err(_) => {
@@ -77,6 +79,7 @@ pub fn extract_image_metadata(
                         format,
                         chroma_subsampling: None,
                         compression: None,
+                        bit_depth: None,
                     })
                 }
             }
@@ -92,6 +95,7 @@ pub fn extract_image_metadata(
                 format: None,
                 chroma_subsampling: None,
                 compression: None,
+                bit_depth: None,
             })
         }
     }

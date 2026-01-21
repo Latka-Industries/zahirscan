@@ -2,8 +2,8 @@
 
 use crate::config::Config;
 use crate::parsers::ParseResult;
+use crate::parsers::text::writing_analysis::calculate_writing_footprint;
 use crate::parsers::traits::{DefaultSentenceAnalyzer, SentenceAnalyzer};
-use crate::parsers::writing_analysis::calculate_writing_footprint;
 use crate::results::{MiningResult, Template};
 use anyhow::Result;
 use dashmap::DashMap;

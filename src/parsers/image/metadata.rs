@@ -22,6 +22,11 @@ pub trait FormatMetadata {
     fn extract_chroma_subsampling(&self, _data: &[u8]) -> Option<String> {
         None // Most formats don't use chroma subsampling
     }
+
+    /// Extract bit depth (bits per sample/channel)
+    fn extract_bit_depth(&self, _data: &[u8]) -> Option<u32> {
+        None // Default: no bit depth extraction
+    }
 }
 
 impl FormatMetadata for ImageFormat {
@@ -42,6 +47,17 @@ impl FormatMetadata for ImageFormat {
             _ => None, // Only JPEG uses chroma subsampling
         }
     }
+
+    fn extract_bit_depth(&self, data: &[u8]) -> Option<u32> {
+        match self {
+            ImageFormat::Jpeg => extract_jpeg_bit_depth(data),
+            ImageFormat::Png => extract_png_bit_depth(data),
+            ImageFormat::Bmp => extract_bmp_bit_depth(data),
+            ImageFormat::Tiff => extract_tiff_bit_depth(data),
+            ImageFormat::Gif => Some(8),  // GIF is always 8-bit
+            ImageFormat::WebP => Some(8), // WebP is typically 8-bit
+        }
+    }
 }
 
 // JPEG metadata extraction
@@ -55,6 +71,75 @@ fn extract_jpeg_compression(_jpeg_data: &[u8]) -> Option<String> {
     Some("JPEG".to_string())
 }
 
+fn extract_jpeg_bit_depth(jpeg_data: &[u8]) -> Option<u32> {
+    // JPEG is typically 8-bit per channel, but can be 12-bit for some variants
+    // Check SOF marker precision field (byte after marker in SOF segment)
+    if jpeg_data.len() < 4 || jpeg_data[0] != 0xFF || jpeg_data[1] != 0xD8 {
+        return None;
+    }
+
+    let mut i = 2usize;
+    while i + 4 <= jpeg_data.len() {
+        if jpeg_data[i] != 0xFF {
+            i += 1;
+            continue;
+        }
+
+        while i < jpeg_data.len() && jpeg_data[i] == 0xFF {
+            i += 1;
+        }
+        if i >= jpeg_data.len() {
+            break;
+        }
+
+        let marker = jpeg_data[i];
+        i += 1;
+
+        match marker {
+            0xD9 => break,           // EOI
+            0xD0..=0xD7 => continue, // RSTn
+            0x01 => continue,        // TEM
+            _ => {}
+        }
+
+        if i + 2 > jpeg_data.len() {
+            break;
+        }
+        let seg_len = u16::from_be_bytes([jpeg_data[i], jpeg_data[i + 1]]) as usize;
+        i += 2;
+
+        // SOF markers
+        let is_sof = matches!(
+            marker,
+            0xC0 | 0xC1
+                | 0xC2
+                | 0xC3
+                | 0xC5
+                | 0xC6
+                | 0xC7
+                | 0xC9
+                | 0xCA
+                | 0xCB
+                | 0xCD
+                | 0xCE
+                | 0xCF
+        );
+        if is_sof && seg_len >= 3 && i < jpeg_data.len() {
+            // Precision is the first byte of the SOF segment
+            let precision = jpeg_data[i];
+            return Some(precision as u32);
+        }
+
+        if seg_len < 2 || i + (seg_len - 2) > jpeg_data.len() {
+            break;
+        }
+        i += seg_len - 2;
+    }
+
+    // Default: JPEG is usually 8-bit
+    Some(8)
+}
+
 // PNG metadata extraction
 fn extract_png_compression(png_data: &[u8]) -> Option<String> {
     // Check PNG signature (first 8 bytes)
@@ -65,6 +150,29 @@ fn extract_png_compression(png_data: &[u8]) -> Option<String> {
     } else {
         None
     }
+}
+
+fn extract_png_bit_depth(png_data: &[u8]) -> Option<u32> {
+    // PNG signature is 8 bytes, then IHDR chunk starts at byte 8
+    // IHDR chunk: 4 bytes length, 4 bytes "IHDR", then 13 bytes of data
+    // Bit depth is at offset 8 + 4 + 4 = 16 (first byte of IHDR data)
+    if png_data.len() < 17 {
+        return None;
+    }
+
+    // Check PNG signature
+    if png_data[0..8] != [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] {
+        return None;
+    }
+
+    // Check IHDR chunk signature (bytes 8-11 should be "IHDR")
+    if &png_data[8..12] != b"IHDR" {
+        return None;
+    }
+
+    // Bit depth is at byte 16 (first byte of IHDR data)
+    let bit_depth = png_data[16];
+    Some(bit_depth as u32)
 }
 
 // GIF metadata extraction
@@ -138,6 +246,20 @@ fn extract_bmp_compression(bmp_data: &[u8]) -> Option<String> {
     }
 }
 
+fn extract_bmp_bit_depth(bmp_data: &[u8]) -> Option<u32> {
+    // BMP bit depth is at offset 28 (2 bytes, little-endian)
+    if bmp_data.len() < 30 {
+        return None;
+    }
+
+    if &bmp_data[0..2] != b"BM" {
+        return None;
+    }
+
+    let bit_depth = u16::from_le_bytes([bmp_data[28], bmp_data[29]]);
+    Some(bit_depth as u32)
+}
+
 // TIFF metadata extraction
 fn extract_tiff_compression(tiff_data: &[u8]) -> Option<String> {
     if tiff_data.len() < 8 {
@@ -170,6 +292,79 @@ fn extract_tiff_compression(tiff_data: &[u8]) -> Option<String> {
     // This is complex, so for now we just note it's TIFF
     // Full implementation would require parsing the IFD structure
     Some("TIFF".to_string())
+}
+
+fn extract_tiff_bit_depth(tiff_data: &[u8]) -> Option<u32> {
+    // TIFF bit depth is stored in IFD entries (tag 258/0x0102: BitsPerSample)
+    // This requires parsing the IFD structure, which is complex
+    // For now, we'll try a simple approach: read the first IFD offset and check common values
+    if tiff_data.len() < 8 {
+        return None;
+    }
+
+    let is_little_endian = &tiff_data[0..2] == b"II";
+    let is_big_endian = &tiff_data[0..2] == b"MM";
+
+    if !is_little_endian && !is_big_endian {
+        return None;
+    }
+
+    // Read IFD offset (bytes 4-7)
+    let ifd_offset = if is_little_endian {
+        u32::from_le_bytes([tiff_data[4], tiff_data[5], tiff_data[6], tiff_data[7]])
+    } else {
+        u32::from_be_bytes([tiff_data[4], tiff_data[5], tiff_data[6], tiff_data[7]])
+    } as usize;
+
+    // Try to read IFD entry count and look for BitsPerSample tag (258)
+    if ifd_offset + 2 > tiff_data.len() {
+        return None;
+    }
+
+    let entry_count = if is_little_endian {
+        u16::from_le_bytes([tiff_data[ifd_offset], tiff_data[ifd_offset + 1]])
+    } else {
+        u16::from_be_bytes([tiff_data[ifd_offset], tiff_data[ifd_offset + 1]])
+    } as usize;
+
+    // Each IFD entry is 12 bytes: 2 bytes tag, 2 bytes type, 4 bytes count, 4 bytes value/offset
+    let entry_start = ifd_offset + 2;
+    for i in 0..entry_count.min(20) {
+        // Limit search to first 20 entries to avoid excessive parsing
+        let entry_offset = entry_start + i * 12;
+        if entry_offset + 12 > tiff_data.len() {
+            break;
+        }
+
+        let tag = if is_little_endian {
+            u16::from_le_bytes([tiff_data[entry_offset], tiff_data[entry_offset + 1]])
+        } else {
+            u16::from_be_bytes([tiff_data[entry_offset], tiff_data[entry_offset + 1]])
+        };
+
+        // Tag 258 = BitsPerSample
+        if tag == 258 {
+            let value = if is_little_endian {
+                u32::from_le_bytes([
+                    tiff_data[entry_offset + 8],
+                    tiff_data[entry_offset + 9],
+                    tiff_data[entry_offset + 10],
+                    tiff_data[entry_offset + 11],
+                ])
+            } else {
+                u32::from_be_bytes([
+                    tiff_data[entry_offset + 8],
+                    tiff_data[entry_offset + 9],
+                    tiff_data[entry_offset + 10],
+                    tiff_data[entry_offset + 11],
+                ])
+            };
+            return Some(value);
+        }
+    }
+
+    // Default: assume 8-bit if we can't find it
+    None
 }
 
 /// Parse JPEG SOF marker and infer chroma subsampling from sampling factors.
