@@ -95,7 +95,7 @@ pub fn phase2_mining(
     let mean_time_per_file = phase2_duration.as_secs_f64() / tasks.len() as f64;
     let mean_size_per_file = (total_bytes as f64 / tasks.len() as f64) as usize;
     debug!(
-        "Phase 2: Completed in {:.2}s. (workers: {}, files: {}, size: {}, size/file: {}, time/file: {:.2}s)",
+        "Phase 2: Completed in {:.2}s. (workers: {}, files: {}, size: {}, size/file: {}, time/file: {:.4}s)",
         phase2_duration.as_secs_f64(),
         max_workers,
         tasks.len(),

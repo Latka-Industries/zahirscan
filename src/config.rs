@@ -110,6 +110,8 @@ struct MiningConfig {
     max_common_pivots: u64,
     // Markdown parsing settings
     markdown_preview_length: u64,
+    // CSV parsing settings
+    max_csv_sample_rows: u64,
     // Performance optimization settings (reserved for future use)
 }
 
@@ -143,6 +145,7 @@ impl Default for MiningConfig {
             max_pivot_variation: 50,
             max_common_pivots: 10,
             markdown_preview_length: 100,
+            max_csv_sample_rows: 200,
         }
     }
 }
@@ -212,6 +215,8 @@ pub struct Config {
     pub max_common_pivots: usize,
     /// Maximum length of paragraph text preview in examples (characters)
     pub markdown_preview_length: usize,
+    /// Maximum number of rows to sample for CSV type inference
+    pub max_csv_sample_rows: usize,
     /// Small file threshold (bytes) - files below this use multiplier=1
     pub small_file_threshold_bytes: usize,
     /// Large file threshold (bytes) - files above this use multiplier=3
@@ -297,6 +302,7 @@ impl Config {
             max_pivot_variation: u64_to_usize_min(mining.max_pivot_variation, 1),
             max_common_pivots: u64_to_usize_min(mining.max_common_pivots, 1),
             markdown_preview_length: u64_to_usize_min(mining.markdown_preview_length, 1),
+            max_csv_sample_rows: u64_to_usize_min(mining.max_csv_sample_rows, 1),
             small_file_threshold_bytes: u64_to_usize(concurrency.small_file_threshold_bytes),
             large_file_threshold_bytes: u64_to_usize(concurrency.large_file_threshold_bytes),
             threshold_multiplier: u64_to_usize(concurrency.threshold_multiplier),

@@ -2,6 +2,7 @@
 //! Main handler that routes to log or text parsers
 
 mod audio;
+mod csv;
 pub mod image;
 mod media_helpers;
 pub mod text;
@@ -27,6 +28,7 @@ pub enum FileType {
     Image,
     Video,
     Audio,
+    Csv,
     Unknown,
 }
 
@@ -50,6 +52,8 @@ pub struct ParseResult {
     pub video_metadata: Option<crate::results::VideoMetadata>,
     /// Audio metadata (for audio files)
     pub audio_metadata: Option<crate::results::AudioMetadata>,
+    /// CSV metadata (for CSV files)
+    pub csv_metadata: Option<crate::results::CsvMetadata>,
 }
 
 impl ParseResult {
@@ -63,10 +67,11 @@ impl ParseResult {
                     let mut output = Output::templates_only(mining.templates.clone());
                     // Include writing footprint if available (text/markdown files only)
                     output.writing_footprint = mining.writing_footprint.clone();
-                    // Include media metadata if available (images, videos, audio)
+                    // Include media metadata if available (images, videos, audio, CSV)
                     output.image_metadata = self.image_metadata.clone();
                     output.video_metadata = self.video_metadata.clone();
                     output.audio_metadata = self.audio_metadata.clone();
+                    output.csv_metadata = self.csv_metadata.clone();
                     output
                 }
                 OutputMode::Full => {
@@ -99,6 +104,8 @@ impl ParseResult {
                     output.video_metadata = self.video_metadata.clone();
                     // Include audio metadata if available
                     output.audio_metadata = self.audio_metadata.clone();
+                    // Include CSV metadata if available
+                    output.csv_metadata = self.csv_metadata.clone();
                     output
                 }
             }
@@ -111,6 +118,7 @@ impl ParseResult {
                     output.image_metadata = self.image_metadata.clone();
                     output.video_metadata = self.video_metadata.clone();
                     output.audio_metadata = self.audio_metadata.clone();
+                    output.csv_metadata = self.csv_metadata.clone();
                     output
                 }
                 OutputMode::Full => {
@@ -141,6 +149,8 @@ impl ParseResult {
                     output.video_metadata = self.video_metadata.clone();
                     // Include audio metadata if available
                     output.audio_metadata = self.audio_metadata.clone();
+                    // Include CSV metadata if available
+                    output.csv_metadata = self.csv_metadata.clone();
                     output
                 }
             }
@@ -213,6 +223,7 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
         image_metadata: None, // Will be extracted in Phase 2
         video_metadata: None, // Will be extracted in Phase 2
         audio_metadata: None, // Will be extracted in Phase 2
+        csv_metadata: None,   // Will be extracted in Phase 2
     })
 }
 
@@ -270,6 +281,21 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
             }
             audio::extract_audio_templates(&mmap, stats, config)
         }
+        FileType::Csv => {
+            // Extract CSV metadata in Phase 2 (unless skipped)
+            if !config.skip_media_metadata {
+                stats.csv_metadata = match csv::extract_csv_metadata(&mmap, stats, config) {
+                    Ok(metadata) => Some(metadata),
+                    Err(_) => {
+                        // Fallback: create minimal metadata if extraction fails unexpectedly
+                        Some(crate::results::create_minimal_fallback::<
+                            crate::results::CsvMetadata,
+                        >(stats.byte_count))
+                    }
+                };
+            }
+            csv::extract_csv_templates(&mmap, stats, config)
+        }
         _ => {
             // Skip binary files (non-images, non-videos, non-audio)
             if stats.is_binary {
@@ -299,6 +325,7 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 FileType::Image => unreachable!(), // Handled above
                 FileType::Video => unreachable!(), // Handled above
                 FileType::Audio => unreachable!(), // Handled above
+                FileType::Csv => unreachable!(),   // Handled above
             }
         }
     }

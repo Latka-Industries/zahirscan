@@ -90,3 +90,7 @@ max_common_pivots = 10
 # Markdown parsing settings
 # Maximum length of paragraph text preview in examples (characters)
 markdown_preview_length = 100
+
+# CSV parsing settings
+# Maximum number of rows to sample for data type inference (200 rows is usually sufficient)
+max_csv_sample_rows = 200

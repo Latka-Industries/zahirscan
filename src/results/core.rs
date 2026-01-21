@@ -71,6 +71,8 @@ pub struct Output {
     pub video_metadata: Option<VideoMetadata>,
     /// Audio metadata (Mode 2 only, for audio files)
     pub audio_metadata: Option<AudioMetadata>,
+    /// CSV metadata (Mode 2 only, for CSV files)
+    pub csv_metadata: Option<super::metadata::CsvMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -90,8 +92,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 12 fields: 1 required (templates) + 11 optional fields
-        let mut state = serializer.serialize_struct("Output", 12)?;
+        // Maximum 13 fields: 1 required (templates) + 12 optional fields
+        let mut state = serializer.serialize_struct("Output", 13)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -109,6 +111,7 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.image_metadata, "image_metadata");
         crate::serialize_optional!(state, self.video_metadata, "video_metadata");
         crate::serialize_optional!(state, self.audio_metadata, "audio_metadata");
+        crate::serialize_optional!(state, self.csv_metadata, "csv_metadata");
 
         state.end()
     }
@@ -133,6 +136,7 @@ impl Output {
             image_metadata: None,
             video_metadata: None,
             audio_metadata: None,
+            csv_metadata: None,
         }
     }
 
@@ -158,6 +162,7 @@ impl Output {
             image_metadata: None,
             video_metadata: None,
             audio_metadata: None,
+            csv_metadata: None,
         }
     }
 }

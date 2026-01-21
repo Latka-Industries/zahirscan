@@ -3,7 +3,7 @@
 ![Build](https://github.com/thicclatka/zahirscan/workflows/Build/badge.svg)
 ![Rust](https://img.shields.io/badge/rust-1.92.0-orange.svg)
 
-> _"Others will dream that I am mad, while I dream of the Zahir."_
+> _"Others will dream that I am mad, while I dream of the Zahir."_ — [JL Borges, Labyrinths](https://bookshop.org/p/books/labyrinths-jorge-luis-borges/f14b472a366ed106?ean=9780811216999&next=t&)
 
 A high-performance Rust CLI tool that extracts templates and patterns from unstructured content, converting them into compact structured formats while preserving essential information. Additionally provides comprehensive metadata extraction for media files.
 
@@ -20,6 +20,7 @@ ZahirScan uses probabilistic template mining to extract essential structure and 
 
 - **Logs**: Plain text logs, JSON-formatted logs, structured log files
 - **Text Documents**: TXT, Markdown (MD), plain text content
+- **CSV Files**: CSV (extracts row/column counts, column names, data types, delimiter, quote/escape characters, null percentages, unique counts, type-specific statistics)
 - **Images**: JPEG, PNG, GIF, WebP, BMP, TIFF (extracts dimensions, format, compression, chroma subsampling, aspect ratio)
 - **Videos**: MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, 3GP, OGV (extracts comprehensive MediaInfo-like metadata: codec, resolution, bitrate, frame rate, audio tracks, etc.)
 - **Audio**: MP3, FLAC, WAV, M4A, AAC, OGG, Opus, WMA, APE, DSD, DSF (extracts codec, bitrate, sample rate, channels, duration, etc.)
@@ -49,8 +50,6 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 ```bash
 # Build from source
 cargo build --release
-
-# The binary will be available at target/release/zahirscan
 ```
 
 ## Usage
@@ -76,8 +75,11 @@ zahirscan -i videos/*.mp4 -o output/ -f
 # Extract audio metadata (codec, bitrate, sample_rate, channels, bit_rate_mode for MP3)
 zahirscan -i audio/*.mp3 -o output/ -f
 
+# Extract CSV metadata (row/column counts, data types, statistics)
+zahirscan -i data/*.csv -o output/ -f
+
 # Process multiple file types at once
-zahirscan -i logs/*.log docs/*.md images/*.jpg -o output/ -f
+zahirscan -i logs/*.log docs/*.md images/*.jpg data/*.csv -o output/ -f
 
 # Skip media metadata for faster processing
 zahirscan -i logs/*.log -o output/ -n
@@ -166,7 +168,8 @@ ZahirScan implements non-invasive file operations:
 
 ## TODO
 
-- [ ] CSV metadata extraction (row/column counts, data types, delimiter detection)
+- [ ] Publish to crates.io
+- [x] CSV metadata extraction (row/column counts, data types, delimiter detection, quote/escape characters, type-specific statistics)
 - [ ] PDF metadata extraction (page count, document properties, PDF version)
 - [ ] DOCX & Pages text extraction (plain text without formatting)
 
