@@ -7,7 +7,7 @@
 
 A high-performance Rust CLI tool that extracts templates and patterns from unstructured content (logs, TXT files, Markdown, JSON logs), converting them into compact structured formats while preserving essential information. Additionally provides comprehensive metadata extraction for media files (images, videos, audio).
 
-> **Note**: This project is currently a work in progress and is almost ready for primetime. After a bit more refinement, it will be made publicly available.
+> **Note**: This project is currently a work in progress, so use with caution.
 
 ## Overview
 
@@ -82,10 +82,10 @@ Traditional parsers load entire files into memory, which becomes impractical for
 
 ## Performance
 
-ZahirScan is designed for both speed and efficiency. Benchmarks show:
+ZahirScan is designed for both speed and efficiency. Performance depends heavily on file types, file sizes, and your machine, but the general goals are:
 
-- **Processing Speed**: Can analyze 4GB of content (logs or text) in approximately 1.2 seconds on modern hardware
-- **Batch Processing**: Processes 200+ files in under 1 minute with adaptive parallelization
+- **High throughput** on large batches via adaptive chunking
+- **Consistent runtimes** by avoiding thread contention and targeting neat multiples of `max_workers`
 - **Size Reduction**: Typically reduces content size by 80-95% while preserving essential information
 - **Memory Efficiency**: Uses memory-mapped files to handle files larger than available RAM
 - **Adaptive Parallelization**: Automatically optimizes chunk sizes based on Phase 1 file statistics and available CPU resources
@@ -96,10 +96,7 @@ ZahirScan is designed for both speed and efficiency. Benchmarks show:
 ### Prerequisites
 
 - **Rust** (stable toolchain)
-- **ffprobe** (optional, for video/audio metadata extraction): Required only if you want to extract metadata from video or audio files. Install via your system package manager:
-  - macOS: `brew install ffmpeg`
-  - Ubuntu/Debian: `sudo apt-get install ffmpeg`
-  - Fedora: `sudo dnf install ffmpeg`
+- **ffprobe** (optional, for video/audio metadata extraction): `ffprobe` is distributed with FFmpeg. Install FFmpeg: `https://ffmpeg.org/download.html`
 
   > **Note**: If `ffprobe` is not installed, ZahirScan will still work for text, log, and image files. Video and audio files will be processed but metadata extraction will be skipped.
 

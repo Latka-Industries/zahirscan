@@ -141,11 +141,9 @@ pub fn check_ffprobe_available() -> Result<()> {
         Ok(output) if output.status.success() => Ok(()),
         _ => {
             log::warn!(
-                "ffprobe not found. Media metadata extraction will be limited.\n\
-                 Install ffmpeg for full metadata support:\n\
-                 - macOS: brew install ffmpeg\n\
-                 - Ubuntu/Debian: sudo apt-get install ffmpeg\n\
-                 - Fedora: sudo dnf install ffmpeg"
+                "ffprobe not found. Skipping video/audio metadata extraction.\n\
+                 Install FFmpeg (includes ffprobe) for full media metadata support:\n\
+                 https://ffmpeg.org/download.html"
             );
             Err(anyhow::anyhow!("ffprobe not available"))
         }

@@ -1,7 +1,6 @@
 //! Format-specific image metadata extraction
 
 use log::warn;
-use turbojpeg::{Subsamp, read_header};
 
 /// Image format types for metadata extraction
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,35 +46,7 @@ impl FormatMetadata for ImageFormat {
 
 // JPEG metadata extraction
 fn extract_jpeg_subsampling(jpeg_data: &[u8]) -> Option<String> {
-    match read_header(jpeg_data) {
-        Ok(header) => {
-            let subsamp_str = match header.subsamp {
-                Subsamp::None => "4:4:4",
-                Subsamp::Sub2x1 => "4:2:2",
-                Subsamp::Sub2x2 => "4:2:0",
-                Subsamp::Sub4x1 => "4:1:1",
-                Subsamp::Sub1x2 => "4:4:0",
-                Subsamp::Sub1x4 => "4:4:1",
-                Subsamp::Gray => "Grayscale",
-                Subsamp::Unknown => "Unknown",
-                // Handle any future variants that might be added
-                _ => {
-                    // Log if we encounter an unrecognized variant (for debugging)
-                    warn!(
-                        "Unrecognized JPEG subsampling variant: {:?}",
-                        header.subsamp
-                    );
-                    return None;
-                }
-            };
-            Some(subsamp_str.to_string())
-        }
-        Err(e) => {
-            // Log the error for debugging (turbojpeg might fail on some JPEGs)
-            warn!("Failed to read JPEG header for subsampling: {}", e);
-            None
-        }
-    }
+    jpeg_chroma_subsampling(jpeg_data)
 }
 
 fn extract_jpeg_compression(_jpeg_data: &[u8]) -> Option<String> {
@@ -199,6 +170,140 @@ fn extract_tiff_compression(tiff_data: &[u8]) -> Option<String> {
     // This is complex, so for now we just note it's TIFF
     // Full implementation would require parsing the IFD structure
     Some("TIFF".to_string())
+}
+
+/// Parse JPEG SOF marker and infer chroma subsampling from sampling factors.
+///
+/// We look for a Start Of Frame marker (SOF0/SOF1/SOF2/etc), then read the
+/// per-component sampling factors. This avoids requiring libjpeg-turbo / NASM
+/// in CI (pure Rust, header-only parsing).
+fn jpeg_chroma_subsampling(jpeg_data: &[u8]) -> Option<String> {
+    // Must start with SOI (FF D8)
+    if jpeg_data.len() < 4 || jpeg_data[0] != 0xFF || jpeg_data[1] != 0xD8 {
+        return None;
+    }
+
+    let mut i = 2usize;
+    while i + 4 <= jpeg_data.len() {
+        // Find next marker (0xFF ...)
+        if jpeg_data[i] != 0xFF {
+            i += 1;
+            continue;
+        }
+
+        // Skip fill bytes (FF FF...)
+        while i < jpeg_data.len() && jpeg_data[i] == 0xFF {
+            i += 1;
+        }
+        if i >= jpeg_data.len() {
+            break;
+        }
+
+        let marker = jpeg_data[i];
+        i += 1;
+
+        // Markers without length field (standalone)
+        match marker {
+            0xD9 => break,           // EOI
+            0xD0..=0xD7 => continue, // RSTn
+            0x01 => continue,        // TEM
+            _ => {}
+        }
+
+        if i + 2 > jpeg_data.len() {
+            break;
+        }
+        let seg_len = u16::from_be_bytes([jpeg_data[i], jpeg_data[i + 1]]) as usize;
+        i += 2;
+        if seg_len < 2 || i + (seg_len - 2) > jpeg_data.len() {
+            break;
+        }
+
+        // SOF markers (baseline/progressive/etc). Exclude DHT/DAC/DRI/etc.
+        let is_sof = matches!(
+            marker,
+            0xC0 | 0xC1
+                | 0xC2
+                | 0xC3
+                | 0xC5
+                | 0xC6
+                | 0xC7
+                | 0xC9
+                | 0xCA
+                | 0xCB
+                | 0xCD
+                | 0xCE
+                | 0xCF
+        );
+        if is_sof {
+            // SOF segment layout:
+            // [P][Yhi][Ylo][Xhi][Xlo][Nf] then Nf * ([Ci][HiVi][Tqi])
+            let seg = &jpeg_data[i..i + (seg_len - 2)];
+            if seg.len() < 6 {
+                return None;
+            }
+            let nf = seg[5] as usize;
+            if nf == 0 {
+                return None;
+            }
+            if nf == 1 {
+                return Some("Grayscale".to_string());
+            }
+            if seg.len() < 6 + nf * 3 {
+                return None;
+            }
+
+            // Extract sampling factors for Y(1), Cb(2), Cr(3) when present.
+            let mut y: Option<(u8, u8)> = None;
+            let mut cb: Option<(u8, u8)> = None;
+            let mut cr: Option<(u8, u8)> = None;
+
+            for c in 0..nf {
+                let base = 6 + c * 3;
+                let cid = seg[base];
+                let hv = seg[base + 1];
+                let h = hv >> 4;
+                let v = hv & 0x0F;
+                match cid {
+                    1 => y = Some((h, v)),
+                    2 => cb = Some((h, v)),
+                    3 => cr = Some((h, v)),
+                    _ => {}
+                }
+            }
+
+            let (yh, yv) = y?;
+            // If we don't have chroma components, best effort.
+            let cb = cb.or(cr);
+            let (ch, cv) = cb?;
+
+            // Common subsampling patterns:
+            // 4:4:4 => Y 1x1, C 1x1
+            // 4:2:2 => Y 2x1, C 1x1
+            // 4:2:0 => Y 2x2, C 1x1
+            // 4:1:1 => Y 4x1, C 1x1
+            let out = match (yh, yv, ch, cv) {
+                (1, 1, 1, 1) => "4:4:4",
+                (2, 1, 1, 1) => "4:2:2",
+                (2, 2, 1, 1) => "4:2:0",
+                (4, 1, 1, 1) => "4:1:1",
+                // Less common / ambiguous
+                _ => {
+                    warn!(
+                        "Unknown JPEG sampling factors: Y={}x{}, C={}x{}",
+                        yh, yv, ch, cv
+                    );
+                    return Some("Unknown".to_string());
+                }
+            };
+            return Some(out.to_string());
+        }
+
+        // Skip segment payload
+        i += seg_len - 2;
+    }
+
+    None
 }
 
 /// Convert format string to ImageFormat enum
