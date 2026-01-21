@@ -59,9 +59,14 @@ impl ParseResult {
             match mode {
                 OutputMode::Templates => {
                     // Mode 1: Templates + Writing Footprint (for text/markdown files)
+                    // Also include media metadata (images, videos, audio) even in templates mode
                     let mut output = Output::templates_only(mining.templates.clone());
                     // Include writing footprint if available (text/markdown files only)
                     output.writing_footprint = mining.writing_footprint.clone();
+                    // Include media metadata if available (images, videos, audio)
+                    output.image_metadata = self.image_metadata.clone();
+                    output.video_metadata = self.video_metadata.clone();
+                    output.audio_metadata = self.audio_metadata.clone();
                     output
                 }
                 OutputMode::Full => {
@@ -100,7 +105,14 @@ impl ParseResult {
         } else {
             // No mining results (binary file or error)
             match mode {
-                OutputMode::Templates => Output::templates_only(vec![]),
+                OutputMode::Templates => {
+                    // Include media metadata even when there are no templates (e.g., pure media files)
+                    let mut output = Output::templates_only(vec![]);
+                    output.image_metadata = self.image_metadata.clone();
+                    output.video_metadata = self.video_metadata.clone();
+                    output.audio_metadata = self.audio_metadata.clone();
+                    output
+                }
                 OutputMode::Full => {
                     // Redact path if configured
                     let source_path = match config.redact_paths {
