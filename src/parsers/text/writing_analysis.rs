@@ -2,12 +2,13 @@
 //! Shared analysis functions for text and markdown parsers
 
 use crate::config::Config;
-use crate::parsers::traits::optimal_chunk_size;
+use crate::parsers::traits::AdaptiveParallel;
 use crate::results::{PunctuationMetrics, SVOAnalysis, Template, WritingFootprint};
 use dashmap::DashMap;
 use log::debug;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Calculate entropy (variation) for a template
 /// Higher entropy = more variation in word choice (more creative/diverse writing)
@@ -126,10 +127,8 @@ pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<St
 
     // Calculate optimal chunk size for parallel processing
     // Moderate work: tokenization + position tracking + hash map operations
-    let chunk_size = optimal_chunk_size(sentences_to_process.len(), config.target_chunks_per_file);
     sentences_to_process
-        .par_iter()
-        .with_min_len(chunk_size)
+        .par_iter_adaptive(config)
         .enumerate()
         .for_each(|(idx, sentence)| {
             if idx > 0 && idx % 10_000 == 0 {
@@ -231,7 +230,7 @@ pub fn calculate_writing_footprint(
     sentences: &[String],
     templates: &[Template],
     content: &str,
-    _config: &Config,
+    config: &Config,
 ) -> WritingFootprint {
     // Vocabulary richness: unique words / total words
     // Use split_whitespace for vocabulary calculation - it's simpler and more reliable for very large strings
@@ -252,19 +251,14 @@ pub fn calculate_writing_footprint(
     };
 
     // Average sentence length
+    // Process in parallel with adaptive chunking
     debug!(
         "Calculating average sentence length from {} sentences",
         sentences.len()
     );
     let total_words: usize = sentences
-        .iter()
-        .enumerate()
-        .map(|(idx, s)| {
-            if idx > 0 && idx % 10_000 == 0 {
-                debug!("Processed {} sentences for length calculation", idx);
-            }
-            s.split_whitespace().count()
-        })
+        .par_iter_adaptive(config)
+        .map(|s| s.split_whitespace().count())
         .sum();
     let avg_sentence_length = if !sentences.is_empty() {
         total_words as f64 / sentences.len() as f64
@@ -356,66 +350,92 @@ pub fn calculate_writing_footprint(
 }
 
 /// Analyze SVO structure from templates (language-agnostic)
+/// Normalizes a token for pattern matching (alphanumeric, lowercase)
+fn normalize_token(token: &str) -> String {
+    token
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>()
+        .to_lowercase()
+}
+
+/// Finds the first pivot position in a sentence, if any
+fn find_pivot_position(
+    tokens: &[&str],
+    pivot_patterns: &DashMap<String, usize>,
+) -> Option<(usize, String)> {
+    tokens.iter().enumerate().find_map(|(pos, token)| {
+        let token_clean = normalize_token(token);
+        if token_clean.is_empty() {
+            return None;
+        }
+        let pattern_key = format!("P_{}_{}", pos, token_clean);
+        if pivot_patterns.contains_key(&pattern_key) {
+            Some((pos, token_clean))
+        } else {
+            None
+        }
+    })
+}
+
 /// Uses pivot points to infer subject-verb-object relationships
 /// Analyzes sentences directly to find pivot positions and infer SVO structure
 pub fn analyze_svo_structure(
     _templates: &[Template],
     sentences: &[String],
     pivot_patterns: &DashMap<String, usize>,
-    _config: &Config,
+    config: &Config,
 ) -> SVOAnalysis {
-    let mut sentences_with_pivots = 0;
-    let mut total_subject_length = 0;
-    let mut total_object_length = 0;
-    let mut subject_count = 0;
-    let mut object_count = 0;
-    let mut pivot_words: HashMap<String, usize> = HashMap::new();
+    // Use atomic counters for thread-safe parallel updates
+    let sentences_with_pivots = AtomicUsize::new(0);
+    let total_subject_length = AtomicUsize::new(0);
+    let total_object_length = AtomicUsize::new(0);
+    let subject_count = AtomicUsize::new(0);
+    let object_count = AtomicUsize::new(0);
+    let pivot_words: DashMap<String, usize> = DashMap::new();
 
     // Analyze sentences directly for pivot points (which act as verbs in SVO)
+    // Process in parallel with adaptive chunking
     debug!("Starting SVO analysis from {} sentences", sentences.len());
-    for (idx, sentence) in sentences.iter().enumerate() {
-        if idx > 0 && idx % 10_000 == 0 {
-            debug!("Processed {} sentences for SVO analysis", idx);
-        }
+    sentences.par_iter_adaptive(config).for_each(|sentence| {
         let tokens: Vec<&str> = sentence.split_whitespace().collect();
 
-        // Find pivot in sentence (likely verb/structural element)
-        for (pos, token) in tokens.iter().enumerate() {
-            // Normalize token for lookup
-            let token_clean: String = token
-                .chars()
-                .filter(|c| c.is_alphanumeric())
-                .collect::<String>()
-                .to_lowercase();
+        // Find first pivot in sentence (likely verb/structural element)
+        if let Some((pivot_pos, pivot_word)) = find_pivot_position(&tokens, pivot_patterns) {
+            // Found a pivot - this sentence has SVO-like structure
+            sentences_with_pivots.fetch_add(1, Ordering::Relaxed);
 
-            if !token_clean.is_empty() {
-                let pattern_key = format!("P_{}_{}", pos, token_clean);
-                if pivot_patterns.contains_key(&pattern_key) {
-                    // Found a pivot - this sentence has SVO-like structure
-                    sentences_with_pivots += 1;
+            // Count pivot word frequency
+            pivot_words
+                .entry(pivot_word.clone())
+                .and_modify(|c| *c += 1)
+                .or_insert(1);
 
-                    // Count pivot word frequency
-                    *pivot_words.entry(token_clean.clone()).or_insert(0) += 1;
+            // Subject length (words before pivot)
+            if pivot_pos > 0 {
+                total_subject_length.fetch_add(pivot_pos, Ordering::Relaxed);
+                subject_count.fetch_add(1, Ordering::Relaxed);
+            }
 
-                    // Subject length (words before pivot)
-                    if pos > 0 {
-                        total_subject_length += pos;
-                        subject_count += 1;
-                    }
-
-                    // Object length (words after pivot)
-                    if pos + 1 < tokens.len() {
-                        let obj_length = tokens.len() - pos - 1;
-                        total_object_length += obj_length;
-                        object_count += 1;
-                    }
-
-                    // Only count first pivot per sentence
-                    break;
-                }
+            // Object length (words after pivot)
+            let words_after_pivot = tokens.len().saturating_sub(pivot_pos + 1);
+            if words_after_pivot > 0 {
+                total_object_length.fetch_add(words_after_pivot, Ordering::Relaxed);
+                object_count.fetch_add(1, Ordering::Relaxed);
             }
         }
-    }
+    });
+
+    // Extract final values from atomics
+    let sentences_with_pivots = sentences_with_pivots.load(Ordering::Relaxed);
+    let total_subject_length = total_subject_length.load(Ordering::Relaxed);
+    let total_object_length = total_object_length.load(Ordering::Relaxed);
+    let subject_count = subject_count.load(Ordering::Relaxed);
+    let object_count = object_count.load(Ordering::Relaxed);
+    let pivot_words: HashMap<String, usize> = pivot_words
+        .iter()
+        .map(|e| (e.key().clone(), *e.value()))
+        .collect();
 
     let total_sentences = sentences.len();
     let svo_structure_percent = if total_sentences > 0 {
@@ -441,7 +461,7 @@ pub fn analyze_svo_structure(
     pivot_vec.sort_by(|a, b| b.1.cmp(&a.1));
     let common_pivots: Vec<String> = pivot_vec
         .into_iter()
-        .take(10) // Top 10 most common pivots
+        .take(config.max_common_pivots) // Top N most common pivots
         .map(|(word, _)| word)
         .collect();
 

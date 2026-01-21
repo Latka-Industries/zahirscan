@@ -2,8 +2,9 @@
 
 use crate::config::Config;
 use crate::parsers::ParseResult;
-use crate::parsers::traits::optimal_chunk_size;
+use crate::parsers::traits::AdaptiveParallel;
 use crate::results::{MiningResult, Template};
+use crate::tools::{PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed};
 use anyhow::Result;
 use dashmap::DashMap;
 use rayon::prelude::*;
@@ -26,8 +27,7 @@ pub fn extract_log_templates(
     let freq_map: DashMap<usize, DashMap<String, usize>> = DashMap::new();
 
     // Process lines in parallel to build frequency map
-    let chunk_size = optimal_chunk_size(total_lines, config.target_chunks_per_file);
-    lines.par_iter().with_min_len(chunk_size).for_each(|line| {
+    lines.as_slice().par_iter_adaptive(config).for_each(|line| {
         let tokens: Vec<&str> = line.split_whitespace().collect();
 
         for (pos, token) in tokens.iter().enumerate() {
@@ -68,13 +68,13 @@ pub fn extract_log_templates(
     }
 
     // Group lines into templates based on static positions
+    // Process in parallel with adaptive chunking
     let template_groups: DashMap<String, Vec<&str>> = DashMap::new();
-
-    for line in &lines {
+    lines.as_slice().par_iter_adaptive(config).for_each(|line| {
         let tokens: Vec<&str> = line.split_whitespace().collect();
         let pattern = build_pattern(&tokens, &classifications);
         template_groups.entry(pattern).or_default().push(line);
-    }
+    });
 
     // Convert groups to Template structs
     let templates: Vec<Template> = template_groups
@@ -94,7 +94,7 @@ pub fn extract_log_templates(
                     if let Some((_, is_static, _)) = classifications.get(pos)
                         && !is_static
                     {
-                        let placeholder = format!("POS_{}", pos);
+                        let placeholder = format_placeholder_typed(PlaceholderType::Position, pos);
                         let entry = examples.entry(placeholder).or_insert_with(|| {
                             Vec::with_capacity(config.max_examples_per_placeholder.min(10))
                         });
@@ -138,11 +138,14 @@ fn build_pattern(tokens: &[&str], classifications: &[(usize, bool, Option<String
                 pattern_parts.push(static_token.clone().unwrap_or_else(|| token.to_string()));
             } else {
                 // Dynamic token - use placeholder
-                pattern_parts.push(format!("[POS_{}]", pos));
+                pattern_parts.push(format_placeholder_bracketed_typed(
+                    PlaceholderType::Position,
+                    pos,
+                ));
             }
         } else {
             // Position not in classifications - treat as dynamic
-            pattern_parts.push(format!("[POS_{}]", pos));
+            pattern_parts.push(crate::tools::format_placeholder_bracketed("POS", pos));
         }
     }
 

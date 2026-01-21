@@ -6,8 +6,9 @@ use crate::parsers::text::writing_analysis::{
     analyze_svo_structure, calculate_template_entropy, calculate_writing_footprint,
     extract_pivot_points,
 };
-use crate::parsers::traits::{DefaultSentenceAnalyzer, SentenceAnalyzer, optimal_chunk_size};
+use crate::parsers::traits::{AdaptiveParallel, DefaultSentenceAnalyzer, SentenceAnalyzer};
 use crate::results::{MiningResult, Template};
+use crate::tools::{PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed};
 use anyhow::Result;
 use dashmap::DashMap;
 use log::debug;
@@ -82,10 +83,9 @@ pub fn extract_text_templates(
         "Starting n-gram extraction from {} sentences",
         sentences.len()
     );
-    let chunk_size = optimal_chunk_size(sentences.len(), config.target_chunks_per_file);
     sentences
-        .par_iter()
-        .with_min_len(chunk_size)
+        .as_slice()
+        .par_iter_adaptive(config)
         .enumerate()
         .for_each(|(idx, sentence)| {
             if idx > 0 && idx % 10_000 == 0 {
@@ -153,37 +153,44 @@ pub fn extract_text_templates(
         sentences.len()
     );
     // Pre-compute tokens for sentences to avoid repeated splitting
+    // Process in parallel with adaptive chunking
     debug!("Pre-computing tokens for {} sentences", sentences.len());
-    let sentence_tokens: Vec<Vec<&str>> = sentences
-        .iter()
-        .map(|s| s.split_whitespace().collect::<Vec<&str>>())
+    let sentence_tokens: Vec<Vec<String>> = sentences
+        .as_slice()
+        .par_iter_adaptive(config)
+        .map(|s| {
+            s.split_whitespace()
+                .map(|t| t.to_string())
+                .collect::<Vec<String>>()
+        })
         .collect();
 
     let template_groups: DashMap<String, Vec<String>> = DashMap::new();
 
     // Process in parallel for better performance
-    let chunk_size = optimal_chunk_size(sentences.len(), config.target_chunks_per_file);
     sentences
-        .par_iter()
-        .with_min_len(chunk_size)
-        .zip(sentence_tokens.par_iter().with_min_len(chunk_size))
+        .as_slice()
+        .par_iter_adaptive(config)
+        .zip(sentence_tokens.par_iter_adaptive(config))
         .for_each(|(sentence, tokens)| {
+            // Convert Vec<String> to Vec<&str> for pattern building
+            let token_refs: Vec<&str> = tokens.iter().map(|s| s.as_str()).collect();
             // First try structural pattern (pivot-based) enriched with n-grams, then fall back
             let pattern = build_enriched_structural_pattern(
-                tokens,
+                &token_refs,
                 &pivot_patterns,
                 &frequent_ngrams,
                 &frequent_phrases,
                 config,
             )
             .unwrap_or_else(|| {
-                build_text_pattern(tokens, &frequent_ngrams, &frequent_phrases, config)
+                build_text_pattern(&token_refs, &frequent_ngrams, &frequent_phrases, config)
             });
 
             template_groups
                 .entry(pattern)
                 .or_default()
-                .push((*sentence).clone());
+                .push(sentence.to_string());
         });
 
     // Convert groups to Template structs
@@ -191,9 +198,11 @@ pub fn extract_text_templates(
     let min_template_count = (total_sentences as f64 * config.text_threshold).max(2.0) as usize;
 
     // Calculate average sentence length for compression check
+    // Process in parallel with adaptive chunking
     let avg_sentence_length: usize = if !sentences.is_empty() {
         sentences
-            .iter()
+            .as_slice()
+            .par_iter_adaptive(config)
             .map(|s| s.split_whitespace().count())
             .sum::<usize>()
             / sentences.len()
@@ -453,7 +462,7 @@ fn build_text_pattern(
 
         if !matched {
             // Single token - mark as dynamic (zero-padded for proper sorting)
-            pattern_parts.push(format!("[WORD_{:02}]", i));
+            pattern_parts.push(format_placeholder_bracketed_typed(PlaceholderType::Word, i));
             i += 1;
         }
     }
@@ -500,7 +509,7 @@ fn extract_text_examples(
 
         if !matched {
             // This is a dynamic word (zero-padded for proper sorting)
-            let placeholder = format!("WORD_{:02}", placeholder_idx);
+            let placeholder = format_placeholder_typed(PlaceholderType::Word, placeholder_idx);
             let entry = examples
                 .entry(placeholder)
                 .or_insert_with(|| Vec::with_capacity(config.max_examples_per_placeholder.min(10)));

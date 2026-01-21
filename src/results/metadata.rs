@@ -180,10 +180,8 @@ pub struct AudioMetadata {
     pub audio_codec: Option<String>,
     /// Audio codec profile (e.g., "LC", "HE-AAC")
     pub audio_codec_profile: Option<String>,
-    /// Audio bitrate in bits per second
+    /// Audio stream bitrate in bits per second (audio data only)
     pub audio_bitrate: Option<u64>,
-    /// Overall bitrate in bits per second
-    pub bitrate: Option<u64>,
     /// Audio channels (e.g., 2 for stereo, 6 for 5.1)
     pub audio_channels: Option<u32>,
     /// Audio channel layout (e.g., "stereo", "5.1")
@@ -196,8 +194,6 @@ pub struct AudioMetadata {
     pub container_format: Option<String>,
     /// Audio stream size in bytes
     pub audio_stream_size: Option<u64>,
-    /// File size in bytes (total)
-    pub stream_size: Option<usize>,
     /// Creation/encoded date (ISO 8601 format)
     pub creation_time: Option<String>,
     /// Track title
@@ -222,8 +218,6 @@ pub struct AudioMetadata {
     pub compression_mode: Option<String>,
     /// Encoding library/software (e.g., "LAME", "libopus", "libvorbis")
     pub encoded_library: Option<String>,
-    /// Encoding settings/parameters
-    pub encode_settings: Option<String>,
     /// Bit rate mode (e.g., "CBR", "VBR", "ABR")
     pub bit_rate_mode: Option<String>,
     /// Comments/notes
@@ -237,19 +231,17 @@ impl Serialize for AudioMetadata {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("AudioMetadata", 25)?;
+        let mut state = serializer.serialize_struct("AudioMetadata", 22)?;
         crate::serialize_optional!(state, self.duration_seconds, "duration_seconds");
         crate::serialize_optional!(state, self.audio_codec, "audio_codec");
         crate::serialize_optional!(state, self.audio_codec_profile, "audio_codec_profile");
         crate::serialize_optional!(state, self.audio_bitrate, "audio_bitrate");
-        crate::serialize_optional!(state, self.bitrate, "bitrate");
         crate::serialize_optional!(state, self.audio_channels, "audio_channels");
         crate::serialize_optional!(state, self.audio_channel_layout, "audio_channel_layout");
         crate::serialize_optional!(state, self.audio_sample_rate, "audio_sample_rate");
         crate::serialize_optional!(state, self.audio_language, "audio_language");
         crate::serialize_optional!(state, self.container_format, "container_format");
         crate::serialize_optional!(state, self.audio_stream_size, "audio_stream_size");
-        crate::serialize_optional!(state, self.stream_size, "stream_size");
         crate::serialize_optional!(state, self.creation_time, "creation_time");
         crate::serialize_optional!(state, self.title, "title");
         crate::serialize_optional!(state, self.artist, "artist");
@@ -262,7 +254,6 @@ impl Serialize for AudioMetadata {
         crate::serialize_optional!(state, self.bit_depth, "bit_depth");
         crate::serialize_optional!(state, self.compression_mode, "compression_mode");
         crate::serialize_optional!(state, self.encoded_library, "encoded_library");
-        crate::serialize_optional!(state, self.encode_settings, "encode_settings");
         crate::serialize_optional!(state, self.bit_rate_mode, "bit_rate_mode");
         crate::serialize_optional!(state, self.comments, "comments");
         crate::serialize_optional!(state, self.artwork, "artwork");
@@ -270,4 +261,8 @@ impl Serialize for AudioMetadata {
     }
 }
 
-crate::impl_minimal_fallback!(AudioMetadata);
+impl MinimalFallback for AudioMetadata {
+    fn minimal_fallback(_file_size_bytes: usize) -> Self {
+        Self::default()
+    }
+}

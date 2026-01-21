@@ -3,10 +3,12 @@
 use crate::config::Config;
 use crate::parsers::ParseResult;
 use crate::parsers::text::writing_analysis::calculate_writing_footprint;
-use crate::parsers::traits::{DefaultSentenceAnalyzer, SentenceAnalyzer};
+use crate::parsers::traits::{AdaptiveParallel, DefaultSentenceAnalyzer, SentenceAnalyzer};
 use crate::results::{MiningResult, Template};
+use crate::tools::{PlaceholderType, format_placeholder_bracketed_typed};
 use anyhow::Result;
 use dashmap::DashMap;
+use rayon::prelude::*;
 use regex::Regex;
 use std::collections::BTreeMap;
 
@@ -78,8 +80,10 @@ pub fn extract_markdown_templates(
     let total_items = elements.len();
 
     // Extract sentences from paragraphs for writing footprint
+    // Parallelize sentence extraction for better performance
     let sentences: Vec<String> = elements
-        .iter()
+        .as_slice()
+        .par_iter_adaptive(config)
         .filter_map(|elem| match elem {
             MarkdownElement::Paragraph { text } => Some(text.clone()),
             MarkdownElement::BlockQuote { text } => Some(text.clone()),
@@ -108,66 +112,91 @@ fn parse_markdown_structure(content: &str) -> Vec<MarkdownElement> {
     let mut elements = Vec::new();
     let lines: Vec<&str> = content.lines().collect();
     let horizontal_rule_re = Regex::new(r"^[-*_]{3,}$").unwrap();
+    let list_re = Regex::new(r"^(\s*)([-*+]|\d+\.)\s+").unwrap();
     let mut i = 0;
 
     while i < lines.len() {
         let line = lines[i].trim();
 
+        // Skip empty lines
         if line.is_empty() {
             i += 1;
             continue;
         }
 
-        // Headers (# ## ### etc.)
-        if let Some(header) = parse_header(line) {
-            elements.push(header);
-            i += 1;
-            continue;
+        // Try parsing each element type in priority order
+        match try_parse_element(&lines, i, line, &horizontal_rule_re, &list_re) {
+            ElementParseResult::Single(elem, next_idx) => {
+                elements.push(elem);
+                i = next_idx;
+            }
+            ElementParseResult::Multiple(elems, next_idx) => {
+                elements.extend(elems);
+                i = next_idx;
+            }
+            ElementParseResult::None => {
+                i += 1;
+            }
         }
-
-        // Horizontal rule
-        if horizontal_rule_re.is_match(line) {
-            elements.push(MarkdownElement::HorizontalRule);
-            i += 1;
-            continue;
-        }
-
-        // Code blocks (```)
-        if line.starts_with("```")
-            && let Some((code_block, next_idx)) = parse_code_block(&lines, i)
-        {
-            elements.push(code_block);
-            i = next_idx;
-            continue;
-        }
-
-        // Block quotes (>)
-        if line.starts_with('>')
-            && let Some((block_quote, next_idx)) = parse_block_quote(&lines, i)
-        {
-            elements.push(block_quote);
-            i = next_idx;
-            continue;
-        }
-
-        // Lists (-, *, +, or numbered)
-        if let Some((list_items, next_idx)) = parse_list(&lines, i) {
-            elements.extend(list_items);
-            i = next_idx;
-            continue;
-        }
-
-        // Paragraph (collect consecutive non-special lines)
-        if let Some((paragraph, next_idx)) = parse_paragraph(&lines, i) {
-            elements.push(paragraph);
-            i = next_idx;
-            continue;
-        }
-
-        i += 1;
     }
 
     elements
+}
+
+/// Result of attempting to parse a markdown element
+enum ElementParseResult {
+    /// Single element parsed, advance to next_idx
+    Single(MarkdownElement, usize),
+    /// Multiple elements parsed (e.g., list items), advance to next_idx
+    Multiple(Vec<MarkdownElement>, usize),
+    /// No element matched, advance by 1
+    None,
+}
+
+/// Try to parse a markdown element at the given index
+fn try_parse_element(
+    lines: &[&str],
+    idx: usize,
+    line: &str,
+    horizontal_rule_re: &Regex,
+    list_re: &Regex,
+) -> ElementParseResult {
+    // Headers (# ## ### etc.) - highest priority
+    if let Some(header) = parse_header(line) {
+        return ElementParseResult::Single(header, idx + 1);
+    }
+
+    // Horizontal rule
+    if horizontal_rule_re.is_match(line) {
+        return ElementParseResult::Single(MarkdownElement::HorizontalRule, idx + 1);
+    }
+
+    // Code blocks (```) - multi-line
+    if line.starts_with("```")
+        && let Some((code_block, next_idx)) = parse_code_block(lines, idx)
+    {
+        return ElementParseResult::Single(code_block, next_idx);
+    }
+
+    // Block quotes (>) - multi-line
+    if line.starts_with('>')
+        && let Some((block_quote, next_idx)) =
+            parse_block_quote(lines, idx, horizontal_rule_re, list_re)
+    {
+        return ElementParseResult::Single(block_quote, next_idx);
+    }
+
+    // Lists (-, *, +, or numbered) - multi-line, can produce multiple elements
+    if let Some((list_items, next_idx)) = parse_list(lines, idx) {
+        return ElementParseResult::Multiple(list_items, next_idx);
+    }
+
+    // Paragraph (collect consecutive non-special lines) - multi-line
+    if let Some((paragraph, next_idx)) = parse_paragraph(lines, idx, horizontal_rule_re, list_re) {
+        return ElementParseResult::Single(paragraph, next_idx);
+    }
+
+    ElementParseResult::None
 }
 
 /// Parse markdown header (# ## ### etc.)
@@ -214,7 +243,12 @@ fn parse_code_block(lines: &[&str], start_idx: usize) -> Option<(MarkdownElement
 }
 
 /// Parse block quote (>)
-fn parse_block_quote(lines: &[&str], start_idx: usize) -> Option<(MarkdownElement, usize)> {
+fn parse_block_quote(
+    lines: &[&str],
+    start_idx: usize,
+    _horizontal_rule_re: &Regex,
+    _list_re: &Regex,
+) -> Option<(MarkdownElement, usize)> {
     let mut text_parts = Vec::new();
     let mut i = start_idx;
 
@@ -275,12 +309,14 @@ fn parse_list(lines: &[&str], start_idx: usize) -> Option<(Vec<MarkdownElement>,
 }
 
 /// Parse paragraph (consecutive non-special lines)
-fn parse_paragraph(lines: &[&str], start_idx: usize) -> Option<(MarkdownElement, usize)> {
+fn parse_paragraph(
+    lines: &[&str],
+    start_idx: usize,
+    horizontal_rule_re: &Regex,
+    list_re: &Regex,
+) -> Option<(MarkdownElement, usize)> {
     let mut text_parts = Vec::new();
     let mut i = start_idx;
-
-    let horizontal_rule_re = Regex::new(r"^[-*_]{3,}$").unwrap();
-    let list_re = Regex::new(r"^(\s*)([-*+]|\d+\.)\s+").unwrap();
 
     while i < lines.len() {
         let line = lines[i].trim();
@@ -315,6 +351,38 @@ fn parse_paragraph(lines: &[&str], start_idx: usize) -> Option<(MarkdownElement,
     }
 }
 
+/// Increment frequency counter for a pattern in DashMap
+#[inline]
+fn increment_pattern_freq(pattern_freq: &DashMap<String, usize>, pattern: String) {
+    pattern_freq
+        .entry(pattern)
+        .and_modify(|c| *c += 1)
+        .or_insert(1);
+}
+
+/// Generate pattern string for a markdown element
+fn element_to_pattern(elem: &MarkdownElement) -> Option<String> {
+    match elem {
+        MarkdownElement::Header { level, .. } => Some(format_placeholder_bracketed_typed(
+            PlaceholderType::Header,
+            *level,
+        )),
+        MarkdownElement::ListItem { ordered, text } => {
+            let word_count = text.split_whitespace().count();
+            let list_type = if *ordered { "ordered" } else { "unordered" };
+            let base_pattern =
+                format_placeholder_bracketed_typed(PlaceholderType::List, word_count);
+            Some(format!("{}:type={}", base_pattern, list_type))
+        }
+        MarkdownElement::CodeBlock { language, .. } => {
+            let lang_str = language.as_deref().unwrap_or("unknown");
+            let base_pattern = format_placeholder_bracketed_typed(PlaceholderType::CodeBlock, 0);
+            Some(format!("{}:lang={}", base_pattern, lang_str))
+        }
+        _ => None,
+    }
+}
+
 /// Extract patterns from markdown structure (headers, lists, etc.)
 fn extract_structure_patterns(
     elements: &[MarkdownElement],
@@ -322,36 +390,12 @@ fn extract_structure_patterns(
 ) -> Vec<(String, usize)> {
     let pattern_freq: DashMap<String, usize> = DashMap::new();
 
-    for elem in elements {
-        match elem {
-            MarkdownElement::Header { level, .. } => {
-                // Pattern: just header level for frequency tracking
-                let pattern = format!("[HEADER_{}]", level);
-                pattern_freq
-                    .entry(pattern)
-                    .and_modify(|c| *c += 1)
-                    .or_insert(1);
-            }
-            MarkdownElement::ListItem { ordered, text } => {
-                let word_count = text.split_whitespace().count();
-                let list_type = if *ordered { "ordered" } else { "unordered" };
-                let pattern = format!("[LIST_{}:words={}]", list_type, word_count);
-                pattern_freq
-                    .entry(pattern)
-                    .and_modify(|c| *c += 1)
-                    .or_insert(1);
-            }
-            MarkdownElement::CodeBlock { language, .. } => {
-                let lang_str = language.as_deref().unwrap_or("unknown");
-                let pattern = format!("[CODE_BLOCK:lang={}]", lang_str);
-                pattern_freq
-                    .entry(pattern)
-                    .and_modify(|c| *c += 1)
-                    .or_insert(1);
-            }
-            _ => {}
+    // Process elements in parallel to build frequency map
+    elements.par_iter_adaptive(config).for_each(|elem| {
+        if let Some(pattern) = element_to_pattern(elem) {
+            increment_pattern_freq(&pattern_freq, pattern);
         }
-    }
+    });
 
     let threshold = (elements.len() as f64 * config.text_threshold) as usize;
     pattern_freq
@@ -370,34 +414,43 @@ fn build_markdown_templates(
     let mut templates = Vec::new();
 
     // Group elements by structure pattern
+    // Process in parallel with adaptive chunking
     let element_groups: DashMap<String, Vec<&MarkdownElement>> = DashMap::new();
 
-    for elem in elements {
-        match elem {
+    elements.par_iter_adaptive(config).for_each(|elem| {
+        let pattern = match elem {
             MarkdownElement::Header { level, .. } => {
                 // Group headers by level - all H1 together, all H2 together, etc.
                 // This makes header hierarchy more visible in templates
-                let pattern = format!("[HEADER_{}]", level);
-                element_groups.entry(pattern).or_default().push(elem);
+                Some(format_placeholder_bracketed_typed(
+                    PlaceholderType::Header,
+                    *level,
+                ))
             }
             MarkdownElement::ListItem { ordered, text } => {
                 let word_count = text.split_whitespace().count();
                 let list_type = if *ordered { "ordered" } else { "unordered" };
-                let pattern = format!("[LIST_{}:words={}]", list_type, word_count);
-                element_groups.entry(pattern).or_default().push(elem);
+                // Use type-safe placeholder for list, with metadata suffix
+                let base_pattern =
+                    format_placeholder_bracketed_typed(PlaceholderType::List, word_count);
+                Some(format!("{}:type={}", base_pattern, list_type))
             }
             MarkdownElement::Paragraph { text } => {
                 // Use sentence patterns for paragraphs
                 let stats = DefaultSentenceAnalyzer::analyze_sentence_structure(text);
-                let pattern = format!(
-                    "[PARAGRAPH:words={},quotes={}]",
-                    stats.word_count, stats.has_quotes
+                // Use type-safe placeholder for paragraph, with metadata suffix
+                let base_pattern = format_placeholder_bracketed_typed(
+                    PlaceholderType::Paragraph,
+                    stats.word_count,
                 );
-                element_groups.entry(pattern).or_default().push(elem);
+                Some(format!("{}:quotes={}", base_pattern, stats.has_quotes))
             }
-            _ => {}
+            _ => None,
+        };
+        if let Some(pattern) = pattern {
+            element_groups.entry(pattern).or_default().push(elem);
         }
-    }
+    });
 
     // Convert groups to templates
     for entry in element_groups.iter() {
@@ -422,7 +475,10 @@ fn build_markdown_templates(
                 }
                 MarkdownElement::Paragraph { text } => {
                     let entry = examples.entry("paragraph_text".to_string()).or_default();
-                    let preview = text.chars().take(100).collect::<String>();
+                    let preview = text
+                        .chars()
+                        .take(config.markdown_preview_length)
+                        .collect::<String>();
                     if !entry.contains(&preview)
                         && entry.len() < config.max_examples_per_placeholder
                     {

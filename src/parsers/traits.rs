@@ -3,6 +3,7 @@
 use crate::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::{MiningResult, Template};
+use rayon::prelude::*;
 
 /// Create an empty MiningResult (no templates found)
 /// This is shared across all parsers for empty content cases
@@ -105,26 +106,33 @@ pub fn sort_templates_by_count(templates: &mut [Template]) {
 // Parallel Processing Utilities
 // ============================================================================
 
-/// Calculate optimal chunk size for parallel processing based on collection size and target number of chunks.
-///
-/// Creates chunks that approximate `target_chunks` chunks (neat multiple of workers).
-/// Uses integer division, so the last chunk may be smaller if there's a remainder.
-/// This ensures neat multiples of workers for optimal load balancing.
-/// The adaptive chunking calculation already accounts for work complexity, so we respect the target.
-pub fn optimal_chunk_size(collection_size: usize, target_chunks: usize) -> usize {
-    if collection_size < 1000 || target_chunks == 0 {
-        // Small collections or no chunks: no chunking needed
-        return 1;
+// Re-export optimal_chunk_size from chunking module for convenience
+pub use crate::chunking::optimal_chunk_size;
+
+/// Extension trait for collections to enable adaptive parallel iteration
+/// Combines chunk size calculation with parallel iteration setup
+pub trait AdaptiveParallel:
+    IntoParallelIterator<Iter: rayon::iter::IndexedParallelIterator>
+{
+    /// Returns a parallel iterator configured with adaptive chunking based on config
+    fn par_iter_adaptive(self, config: &Config) -> rayon::iter::MinLen<Self::Iter>
+    where
+        Self: Sized,
+    {
+        let iter = self.into_par_iter();
+        let collection_size = iter.len();
+        let chunk_size = optimal_chunk_size(
+            collection_size,
+            config.target_chunks_per_file,
+            config.min_collection_size_for_chunking,
+        );
+        iter.with_min_len(chunk_size)
     }
-
-    // Calculate chunk size to approximate target_chunks chunks
-    // Integer division: remainder goes to the last chunk (which is fine)
-    // Example: 10,000 items / 26 chunks = 384 per chunk, last chunk gets remainder (16 items)
-    let chunk_size = collection_size / target_chunks.max(1);
-
-    // Ensure minimum chunk size of 1 (shouldn't happen, but safety check)
-    chunk_size.max(1)
 }
+
+// Implement for common collection types
+impl<T> AdaptiveParallel for &[T] where T: Send + Sync {}
+impl<T> AdaptiveParallel for Vec<T> where T: Send + Sync {}
 
 // ============================================================================
 // Sentence Analysis Trait and Utilities

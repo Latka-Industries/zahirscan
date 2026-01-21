@@ -1,0 +1,19 @@
+//! Unit tests for ZahirScan core functionality
+
+#[path = "unit_tests/jpeg_subsampling.rs"]
+mod jpeg_subsampling;
+
+#[path = "unit_tests/filename_sanitization.rs"]
+mod filename_sanitization;
+
+#[path = "unit_tests/adaptive_chunking.rs"]
+mod adaptive_chunking;
+
+#[path = "unit_tests/minimal_fallback.rs"]
+mod minimal_fallback;
+
+#[path = "unit_tests/serialization.rs"]
+mod serialization;
+
+#[path = "unit_tests/placeholder_formatting.rs"]
+mod placeholder_formatting;

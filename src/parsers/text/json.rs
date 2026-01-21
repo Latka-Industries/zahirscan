@@ -2,10 +2,13 @@
 
 use crate::config::Config;
 use crate::parsers::ParseResult;
+use crate::parsers::traits::AdaptiveParallel;
 use crate::results::MiningResult;
 use crate::results::Template;
+use crate::tools::{PlaceholderType, format_placeholder_typed};
 use anyhow::Result;
 use dashmap::DashMap;
+use rayon::prelude::*;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -22,19 +25,28 @@ pub fn extract_json_templates(
         return Ok(crate::parsers::traits::empty_mining_result(stats));
     }
 
-    // First pass: collect frequencies
-    for value in &parsed_objects {
-        collect_json_frequencies(value, &key_value_freq, &headers);
-    }
-
+    // First pass: collect frequencies in parallel with adaptive chunking
     let total_lines = parsed_objects.len();
+    parsed_objects
+        .as_slice()
+        .par_iter_adaptive(config)
+        .for_each(|value| {
+            collect_json_frequencies(value, &key_value_freq, &headers);
+        });
 
-    // Second pass: extract patterns using frequency data
+    // Second pass: extract patterns using frequency data in parallel with adaptive chunking
     let template_groups: DashMap<String, Vec<Value>> = DashMap::new();
-    for value in parsed_objects {
-        let pattern = extract_json_pattern(&value, &key_value_freq, total_lines, config, &headers);
-        template_groups.entry(pattern).or_default().push(value);
-    }
+    parsed_objects
+        .as_slice()
+        .par_iter_adaptive(config)
+        .for_each(|value| {
+            let pattern =
+                extract_json_pattern(value, &key_value_freq, total_lines, config, &headers);
+            template_groups
+                .entry(pattern)
+                .or_default()
+                .push(value.clone());
+        });
 
     // Convert groups to Template structs
     let templates: Vec<Template> = template_groups
@@ -137,10 +149,10 @@ fn get_array_key(idx: usize, headers: &Option<Vec<String>>) -> String {
         if idx < header_vec.len() {
             header_vec[idx].clone()
         } else {
-            format!("col_{}", idx)
+            format_placeholder_typed(PlaceholderType::Col, idx)
         }
     } else {
-        format!("pos_{}", idx)
+        format_placeholder_typed(PlaceholderType::Pos, idx)
     }
 }
 

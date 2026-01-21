@@ -1,11 +1,12 @@
 //! Audio file metadata extraction
 
+mod mp3;
+
 use crate::config::Config;
-use crate::parsers::{FileType, ParseResult, image};
+use crate::parsers::{FileType, ParseResult, image, media_helpers};
 use crate::results::{AudioMetadata as OutputAudioMetadata, ImageMetadata, MiningResult};
-use crate::tools::check_ffprobe_available;
+use crate::tools::{check_ffprobe_available, run_ffprobe_safe};
 use anyhow::Result;
-use ffprobe::ffprobe;
 use lofty::{
     file::TaggedFileExt,
     picture::PictureType,
@@ -27,6 +28,19 @@ struct RichTags {
     artwork: Option<ImageMetadata>,
 }
 
+fn extract_compression_mode(codec: &str) -> String {
+    let codec_lower = codec.to_lowercase();
+    if codec_lower.contains("flac")
+        || codec_lower.contains("alac")
+        || codec_lower.contains("wavpack")
+        || codec_lower.contains("ape")
+    {
+        "lossless".to_string()
+    } else {
+        "lossy".to_string()
+    }
+}
+
 /// Extract audio metadata using ffprobe
 pub fn extract_audio_metadata(
     _content: &[u8],
@@ -37,105 +51,67 @@ pub fn extract_audio_metadata(
     check_ffprobe_available()?;
 
     // Run ffprobe to get comprehensive metadata
-    let probe_result = ffprobe(&stats.file_path)?;
-    let format = &probe_result.format;
+    // Uses safe, hardcoded arguments via run_ffprobe_safe()
+    let probe_result = run_ffprobe_safe(&stats.file_path)?;
 
     // ============================================================================
     // Format-level metadata (container information)
     // ============================================================================
-    let container_format = Some(format.format_name.clone());
-    let duration_seconds = format.duration.as_ref().and_then(|d| d.parse::<f64>().ok());
-    let bitrate = format.bit_rate.as_ref().and_then(|b| b.parse::<u64>().ok());
+    let (container_format, duration_seconds, _bitrate) =
+        media_helpers::extract_format_metadata(&probe_result);
 
     // ============================================================================
     // Find audio stream
     // ============================================================================
-    let audio_stream = probe_result
-        .streams
-        .iter()
-        .find(|s| s.codec_type.as_deref() == Some("audio"));
+    let audio_stream = media_helpers::find_stream_by_type(&probe_result, "audio");
 
     // ============================================================================
     // Audio stream metadata extraction
     // ============================================================================
-    let audio_codec = audio_stream.and_then(|s| s.codec_name.clone());
-    let audio_codec_profile = audio_stream.and_then(|s| s.profile.clone());
-    let audio_channels = audio_stream.and_then(|s| s.channels).map(|c| c as u32);
-    let audio_channel_layout = audio_stream.and_then(|s| s.channel_layout.clone());
-    let audio_sample_rate = audio_stream
-        .and_then(|s| s.sample_rate.as_ref())
-        .and_then(|sr| sr.parse::<u32>().ok());
-    let audio_bitrate = audio_stream
-        .and_then(|s| s.bit_rate.as_ref())
-        .and_then(|b| b.parse::<u64>().ok());
-    let audio_stream_size = audio_bitrate
-        .zip(duration_seconds)
-        .map(|(ab, dur)| (ab as f64 * dur / 8.0) as u64); // Convert bits to bytes
-
-    // Bit depth (bits per sample)
-    let bit_depth = audio_stream
-        .and_then(|s| s.bits_per_sample)
-        .map(|b| b as u32);
+    let audio_metadata = media_helpers::extract_audio_stream_metadata(audio_stream);
+    let audio_codec = audio_metadata.codec;
+    let audio_channels = audio_metadata.channels;
+    let audio_channel_layout = audio_metadata.channel_layout;
+    let audio_sample_rate = audio_metadata.sample_rate;
+    let audio_bitrate = audio_metadata.bitrate;
+    let audio_codec_profile = media_helpers::extract_codec_profile(audio_stream);
+    let audio_stream_size = media_helpers::calculate_stream_size(audio_bitrate, duration_seconds);
 
     // Compression mode - infer from codec (lossless: flac, alac, etc.; lossy: mp3, aac, etc.)
-    let compression_mode = audio_codec.as_ref().map(|codec| {
-        let codec_lower = codec.to_lowercase();
-        if codec_lower.contains("flac")
-            || codec_lower.contains("alac")
-            || codec_lower.contains("wavpack")
-            || codec_lower.contains("ape")
-        {
-            "lossless".to_string()
-        } else {
-            "lossy".to_string()
-        }
-    });
+    let compression_mode = audio_codec
+        .as_ref()
+        .map(|codec| extract_compression_mode(codec));
 
-    // Encoded library and encode settings (from stream tags)
+    // Bit depth (bits per sample) - only meaningful for lossless formats
+    // Lossy formats (MP3, AAC, Opus, etc.) don't have meaningful bit depth
+    // as they use perceptual coding, not direct sample representation
+    let bit_depth = if compression_mode.as_deref() == Some("lossless") {
+        media_helpers::extract_stream_bit_depth(audio_stream)
+    } else {
+        None
+    };
+
+    // Encoded library (from stream tags)
     // Note: ffprobe crate 0.4.0 has limited tag access, so we check encoder field
-    let encoded_library = audio_stream
-        .and_then(|s| s.tags.as_ref())
-        .and_then(|tags| tags.encoder.clone())
-        .or_else(|| {
-            // Also check format-level tags
-            probe_result
-                .format
-                .tags
-                .as_ref()
-                .and_then(|tags| tags.encoder.clone())
-        });
+    let encoded_library = media_helpers::extract_encoded_library(audio_stream, &probe_result);
 
-    // Encode settings - same as encoded_library for now (ffprobe doesn't expose separate settings)
-    let encode_settings = encoded_library.clone();
-
-    // Bit rate mode (CBR/VBR/ABR) - infer from codec or leave None
-    // Most codecs don't expose this directly in ffprobe 0.4.0
-    // Could be inferred: FLAC/ALAC = lossless, MP3/AAC = usually VBR/CBR
-    let bit_rate_mode: Option<String> = audio_codec.as_ref().and_then(|codec| {
-        let codec_lower = codec.to_lowercase();
-        if codec_lower.contains("flac") || codec_lower.contains("alac") {
-            Some("lossless".to_string())
-        } else {
-            // For lossy codecs, we can't determine CBR/VBR without additional metadata
-            None
-        }
-    });
+    // Bit rate mode (CBR/VBR/ABR) - try LAME tag first, then encoder string or codec heuristics
+    let bit_rate_mode = if let Some(codec_str) = audio_codec.as_ref()
+        && codec_str.to_lowercase() == "mp3"
+        && let Some(mode) = mp3::read_lame_tag_bitrate_mode(&stats.file_path)
+    {
+        Some(mode)
+    } else {
+        media_helpers::extract_bitrate_mode(
+            audio_codec.as_ref(),
+            encoded_library.as_ref(),
+            None, // Not MP3, so no file path needed
+        )
+    };
 
     // Language and creation time (from tags)
-    let audio_language = audio_stream
-        .and_then(|s| s.tags.as_ref())
-        .and_then(|tags| tags.language.clone());
-    let creation_time = audio_stream
-        .and_then(|s| s.tags.as_ref())
-        .and_then(|tags| tags.creation_time.clone())
-        .or_else(|| {
-            // Also check format-level tags
-            probe_result
-                .format
-                .tags
-                .as_ref()
-                .and_then(|tags| tags.creation_time.clone())
-        });
+    let audio_language = media_helpers::extract_language(audio_stream);
+    let creation_time = media_helpers::extract_creation_time(audio_stream, &probe_result);
 
     // ============================================================================
     // Rich tag metadata using lofty (title, artist, album, track, track_total, year, genre, artwork)
@@ -153,7 +129,6 @@ pub fn extract_audio_metadata(
         audio_language,
         container_format,
         audio_stream_size,
-        stream_size: Some(stats.byte_count),
         creation_time,
         title: rich_tags.title,
         artist: rich_tags.artist,
@@ -167,10 +142,8 @@ pub fn extract_audio_metadata(
         bit_depth,
         compression_mode,
         encoded_library,
-        encode_settings,
         bit_rate_mode,
         artwork: rich_tags.artwork,
-        bitrate,
     })
 }
 

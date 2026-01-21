@@ -1,17 +1,20 @@
 # ZahirScan: Template-Based Content Compression & Media Metadata Extraction
 
-![CI](https://github.com/thicclatka/zahirscan/workflows/CI/badge.svg)
-![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
+![Build](https://github.com/thicclatka/zahirscan/workflows/CI/badge.svg)
+![Rust](https://img.shields.io/badge/rust-1.92.0-orange.svg)
 
 > _"Others will dream that I am mad, while I dream of the Zahir."_
 
-A high-performance Rust CLI tool that extracts templates and patterns from unstructured content (logs, TXT files, Markdown, JSON logs), converting them into compact structured formats while preserving essential information. Additionally provides comprehensive metadata extraction for media files (images, videos, audio).
+A high-performance Rust CLI tool that extracts templates and patterns from unstructured content, converting them into compact structured formats while preserving essential information. Additionally provides comprehensive metadata extraction for media files.
 
 > **Note**: This project is currently a work in progress, so use with caution.
 
 ## Overview
 
-ZahirScan uses probabilistic template mining to extract essential structure and patterns from content. Whether processing structured logs (plain text, JSON), plain text files, or Markdown documents, it identifies repeated patterns and represents them compactly while preserving essential information.
+ZahirScan uses probabilistic template mining to extract essential structure and patterns from content. The tool automatically adapts to different content types:
+
+- **Logs & Text**: Identifies static vs. dynamic tokens, groups similar log lines into templates, extracts structural patterns and repeated phrases
+- **Media Files**: Automatically detects and extracts comprehensive metadata for images, videos, and audio
 
 **Supported Formats**:
 
@@ -20,12 +23,6 @@ ZahirScan uses probabilistic template mining to extract essential structure and 
 - **Images**: JPEG, PNG, GIF, WebP, BMP, TIFF (extracts dimensions, format, compression, chroma subsampling, aspect ratio)
 - **Videos**: MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, 3GP, OGV (extracts comprehensive MediaInfo-like metadata: codec, resolution, bitrate, frame rate, audio tracks, etc.)
 - **Audio**: MP3, FLAC, WAV, M4A, AAC, OGG, Opus, WMA, APE, DSD, DSF (extracts codec, bitrate, sample rate, channels, duration, etc.)
-
-The tool automatically adapts to different content types:
-
-- **Logs**: Identifies static vs. dynamic tokens, groups similar log lines into templates
-- **Long-form Text**: Extracts structural patterns, chapter markers, and repeated phrases
-- **Mixed Content**: Handles complex documents with varying structures
 
 All outputs reduce size by 80-95% compared to raw content while preserving essential information.
 
@@ -111,6 +108,39 @@ cargo build --release
 
 ## Usage
 
+### Quickstart Examples
+
+```bash
+# Process log files
+zahirscan -i app.log -o output/
+zahirscan -i logs/*.log -o output/
+zahirscan -i app.log -o output/ -f  # Full metadata mode
+
+# Process text/markdown files (extracts templates and writing footprint)
+zahirscan -i document.md -o output/
+zahirscan -i docs/*.txt docs/*.md -o output/
+
+# Extract image metadata (dimensions, format, compression, chroma subsampling)
+zahirscan -i images/*.jpg images/*.png -o output/ -f
+
+# Extract video metadata (requires ffprobe: codec, resolution, bitrate, frame_rate, etc.)
+zahirscan -i videos/*.mp4 -o output/ -f
+
+# Extract audio metadata (codec, bitrate, sample_rate, channels, bit_rate_mode for MP3)
+zahirscan -i audio/*.mp3 -o output/ -f
+
+# Process multiple file types at once
+zahirscan -i logs/*.log docs/*.md images/*.jpg -o output/ -f
+
+# Skip media metadata for faster processing
+zahirscan -i logs/*.log -o output/ -n
+
+# Redact file paths in output (privacy)
+zahirscan -i sensitive.log -o output/ -f -r
+```
+
+### Command-Line Options
+
 ```bash
 $ zahirscan --help
 Text file and log file parser using probabilistic template mining
@@ -118,20 +148,28 @@ Text file and log file parser using probabilistic template mining
 Usage: zahirscan [OPTIONS]
 
 Options:
-  -p, --path <PATH>...
-          Path(s) to the file(s) to parse (can specify multiple)
+  -i, --input <INPUT>...
+          Input file(s) to parse (can specify multiple)
 
   -o, --output <OUTPUT>
-          Output file path or folder (defaults to temp file if not specified)
-          If folder, creates filename.zahirscan.out for each input file
+          Output folder path (defaults to temp file if not specified).
+          Creates filename.zahirscan.out in the folder for each input file
 
-      --full
-          Output mode: full metadata (for development/debugging)
-          Default is templates-only mode (minimal JSON for AI consumption)
+  -f, --full
+          Output mode: full metadata (for development/debugging).
+          Default is templates-only mode (minimal JSON with templates & writing footprint)
 
-      --dev
-          Development mode: enables debug logging
+  -d, --dev
+          Development mode: enables debug logging.
           Default is production mode (info level only)
+
+  -r, --redact
+          Redact file paths in output (show only filename as ***/filename.ext).
+          Useful for privacy when sharing output JSON
+
+  -n, --no-media
+          Skip media metadata extraction (audio, video, image).
+          Faster processing when metadata is not needed
 
   -h, --help
           Print help
@@ -235,6 +273,12 @@ cargo fmt
 # Lint code
 cargo clippy
 ```
+
+## TODO
+
+- [ ] CSV metadata extraction (row/column counts, data types, delimiter detection)
+- [ ] PDF metadata extraction (page count, document properties, PDF version)
+- [ ] DOCX & Pages text extraction (plain text without formatting)
 
 ## License
 

@@ -1,11 +1,11 @@
 //! Video file metadata extraction
 
 use crate::config::Config;
-use crate::parsers::ParseResult;
+use crate::parsers::{ParseResult, media_helpers};
 use crate::results::{MiningResult, VideoMetadata as OutputVideoMetadata};
-use crate::tools::check_ffprobe_available;
+use crate::tools::{check_ffprobe_available, run_ffprobe_safe};
 use anyhow::Result;
-use ffprobe::{Stream, ffprobe};
+use ffprobe::Stream;
 
 /// Extract video metadata using ffprobe
 pub fn extract_video_metadata(
@@ -17,27 +17,20 @@ pub fn extract_video_metadata(
     check_ffprobe_available()?;
 
     // Run ffprobe to get comprehensive metadata
-    let probe_result = ffprobe(&stats.file_path)?;
-    let format = &probe_result.format;
+    // Uses safe, hardcoded arguments via run_ffprobe_safe()
+    let probe_result = run_ffprobe_safe(&stats.file_path)?;
 
     // ============================================================================
     // Format-level metadata (container information)
     // ============================================================================
-    let container_format = Some(format.format_name.clone());
-    let duration_seconds = format.duration.as_ref().and_then(|d| d.parse::<f64>().ok());
-    let bitrate = format.bit_rate.as_ref().and_then(|b| b.parse::<u64>().ok());
+    let (container_format, duration_seconds, bitrate) =
+        media_helpers::extract_format_metadata(&probe_result);
 
     // ============================================================================
     // Find video and audio streams
     // ============================================================================
-    let video_stream = probe_result
-        .streams
-        .iter()
-        .find(|s| s.codec_type.as_deref() == Some("video"));
-    let audio_stream = probe_result
-        .streams
-        .iter()
-        .find(|s| s.codec_type.as_deref() == Some("audio"));
+    let video_stream = media_helpers::find_stream_by_type(&probe_result, "video");
+    let audio_stream = media_helpers::find_stream_by_type(&probe_result, "audio");
 
     // ============================================================================
     // Video stream metadata extraction
@@ -56,7 +49,7 @@ pub fn extract_video_metadata(
 
     // Codec information
     let video_codec = video_stream.and_then(|s| s.codec_name.clone());
-    let video_codec_profile = video_stream.and_then(|s| s.profile.clone());
+    let video_codec_profile = media_helpers::extract_codec_profile(video_stream);
     let video_codec_level = video_stream
         .and_then(|s| s.level)
         .map(|level| format!("{}.{}", level / 10, level % 10)); // Convert 40 -> "4.0", 41 -> "4.1"
@@ -72,20 +65,8 @@ pub fn extract_video_metadata(
     let sample_aspect_ratio = video_stream.and_then(|s| s.sample_aspect_ratio.clone());
 
     // Language and creation time (from tags)
-    let video_language = video_stream
-        .and_then(|s| s.tags.as_ref())
-        .and_then(|tags| tags.language.clone());
-    let creation_time = video_stream
-        .and_then(|s| s.tags.as_ref())
-        .and_then(|tags| tags.creation_time.clone())
-        .or_else(|| {
-            // Also check format-level tags
-            probe_result
-                .format
-                .tags
-                .as_ref()
-                .and_then(|tags| tags.creation_time.clone())
-        });
+    let video_language = media_helpers::extract_language(video_stream);
+    let creation_time = media_helpers::extract_creation_time(video_stream, &probe_result);
 
     // Scan type (progressive vs interlaced)
     let scan_type = video_stream
@@ -102,36 +83,31 @@ pub fn extract_video_metadata(
         .and_then(|f| f.parse::<u64>().ok());
 
     // Bitrate and stream size
-    let video_bitrate = video_stream
-        .and_then(|s| s.bit_rate.as_ref())
-        .and_then(|b| b.parse::<u64>().ok());
-    let video_stream_size = video_bitrate
-        .zip(duration_seconds)
-        .map(|(vb, dur)| (vb as f64 * dur / 8.0) as u64); // Convert bits to bytes
+    let video_bitrate = media_helpers::extract_stream_bitrate(video_stream);
+    let video_stream_size = media_helpers::calculate_stream_size(video_bitrate, duration_seconds);
 
     // Encoding information
-    let encoded_library = video_stream
-        .and_then(|s| s.tags.as_ref())
-        .and_then(|tags| tags.encoder.clone());
+    let encoded_library = media_helpers::extract_encoded_library(video_stream, &probe_result);
+
+    // Bitrate mode (CBR/VBR/ABR) - check encoder string or infer from codec
+    // Note: LAME tag parsing is MP3-specific, so pass None for video files
+    let bitrate_mode = media_helpers::extract_bitrate_mode(
+        video_codec.as_ref(),
+        encoded_library.as_ref(),
+        None, // Video files don't have LAME tags
+    );
 
     // ============================================================================
     // Audio stream metadata extraction
     // ============================================================================
-    let audio_codec = audio_stream.and_then(|s| s.codec_name.clone());
-    let audio_channels = audio_stream.and_then(|s| s.channels).map(|c| c as u32);
-    let audio_channel_layout = audio_stream.and_then(|s| s.channel_layout.clone());
-    let audio_sample_rate = audio_stream
-        .and_then(|s| s.sample_rate.as_ref())
-        .and_then(|sr| sr.parse::<u32>().ok());
-    let audio_bitrate = audio_stream
-        .and_then(|s| s.bit_rate.as_ref())
-        .and_then(|b| b.parse::<u64>().ok());
-    let audio_stream_size = audio_bitrate
-        .zip(duration_seconds)
-        .map(|(ab, dur)| (ab as f64 * dur / 8.0) as u64); // Convert bits to bytes
-    let audio_language = audio_stream
-        .and_then(|s| s.tags.as_ref())
-        .and_then(|tags| tags.language.clone());
+    let audio_metadata = media_helpers::extract_audio_stream_metadata(audio_stream);
+    let audio_codec = audio_metadata.codec;
+    let audio_channels = audio_metadata.channels;
+    let audio_channel_layout = audio_metadata.channel_layout;
+    let audio_sample_rate = audio_metadata.sample_rate;
+    let audio_bitrate = audio_metadata.bitrate;
+    let audio_stream_size = media_helpers::calculate_stream_size(audio_bitrate, duration_seconds);
+    let audio_language = media_helpers::extract_language(audio_stream);
 
     // ============================================================================
     // Derived metadata
@@ -162,7 +138,7 @@ pub fn extract_video_metadata(
         frame_count,
         bitrate,
         video_bitrate,
-        bitrate_mode: None, // Not directly available from ffprobe Format struct
+        bitrate_mode,
         audio_codec,
         audio_bitrate,
         audio_channels,

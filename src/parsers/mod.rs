@@ -2,7 +2,8 @@
 //! Main handler that routes to log or text parsers
 
 mod audio;
-mod image;
+pub mod image;
+mod media_helpers;
 pub mod text;
 pub mod traits;
 mod video;
@@ -53,7 +54,7 @@ pub struct ParseResult {
 
 impl ParseResult {
     /// Convert parse result to Output object
-    pub fn to_output(&self, mode: OutputMode) -> Output {
+    pub fn to_output(&self, mode: OutputMode, config: &crate::config::Config) -> Output {
         if let Some(ref mining) = self.mining_result {
             match mode {
                 OutputMode::Templates => {
@@ -65,8 +66,13 @@ impl ParseResult {
                 }
                 OutputMode::Full => {
                     // Mode 2: Full metadata
+                    // Redact path if configured (only in Full mode where source is shown)
+                    let source_path = match config.redact_paths {
+                        true => crate::tools::redact_path(&self.file_path),
+                        false => self.file_path.clone(),
+                    };
                     let metadata = FileMetadata {
-                        source: self.file_path.clone(),
+                        source: source_path,
                         file_type: format!("{:?}", self.file_type),
                         line_count: self.line_count,
                         byte_count: self.byte_count,
@@ -96,8 +102,13 @@ impl ParseResult {
             match mode {
                 OutputMode::Templates => Output::templates_only(vec![]),
                 OutputMode::Full => {
+                    // Redact path if configured
+                    let source_path = match config.redact_paths {
+                        true => crate::tools::redact_path(&self.file_path),
+                        false => self.file_path.clone(),
+                    };
                     let metadata = FileMetadata {
-                        source: self.file_path.clone(),
+                        source: source_path,
                         file_type: format!("{:?}", self.file_type),
                         line_count: self.line_count,
                         byte_count: self.byte_count,
@@ -125,7 +136,12 @@ impl ParseResult {
     }
 
     /// Write the parse result to an output file as JSON
-    pub fn write_to_file(&self, output_path: &str, mode: OutputMode) -> Result<()> {
+    pub fn write_to_file(
+        &self,
+        output_path: &str,
+        mode: OutputMode,
+        config: &crate::config::Config,
+    ) -> Result<()> {
         let mut output_file = OpenOptions::new()
             .create(true)
             .truncate(true)
@@ -133,7 +149,7 @@ impl ParseResult {
             .open(output_path)?;
 
         // Both modes now use the Output object to include writing_footprint
-        let output = self.to_output(mode);
+        let output = self.to_output(mode, config);
         let json = serde_json::to_string_pretty(&output)?;
         writeln!(output_file, "{}", json)?;
 
@@ -197,43 +213,49 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
 
     match stats.file_type {
         FileType::Image => {
-            // Extract image metadata in Phase 2
-            // extract_image_metadata always returns Ok, so this should always be Some
-            stats.image_metadata = match image::extract_image_metadata(&mmap, stats, config) {
-                Ok(metadata) => Some(metadata),
-                Err(_) => {
-                    // Fallback: create minimal metadata if extraction fails unexpectedly
-                    Some(crate::results::create_minimal_fallback::<
-                        crate::results::ImageMetadata,
-                    >(stats.byte_count))
-                }
-            };
+            // Extract image metadata in Phase 2 (unless skipped)
+            if !config.skip_media_metadata {
+                // extract_image_metadata always returns Ok, so this should always be Some
+                stats.image_metadata = match image::extract_image_metadata(&mmap, stats, config) {
+                    Ok(metadata) => Some(metadata),
+                    Err(_) => {
+                        // Fallback: create minimal metadata if extraction fails unexpectedly
+                        Some(crate::results::create_minimal_fallback::<
+                            crate::results::ImageMetadata,
+                        >(stats.byte_count))
+                    }
+                };
+            }
             image::extract_image_templates(&mmap, stats, config)
         }
         FileType::Video => {
-            // Extract video metadata in Phase 2
-            stats.video_metadata = match video::extract_video_metadata(&mmap, stats, config) {
-                Ok(metadata) => Some(metadata),
-                Err(_) => {
-                    // Fallback: create minimal metadata if extraction fails unexpectedly
-                    Some(crate::results::create_minimal_fallback::<
-                        crate::results::VideoMetadata,
-                    >(stats.byte_count))
-                }
-            };
+            // Extract video metadata in Phase 2 (unless skipped)
+            if !config.skip_media_metadata {
+                stats.video_metadata = match video::extract_video_metadata(&mmap, stats, config) {
+                    Ok(metadata) => Some(metadata),
+                    Err(_) => {
+                        // Fallback: create minimal metadata if extraction fails unexpectedly
+                        Some(crate::results::create_minimal_fallback::<
+                            crate::results::VideoMetadata,
+                        >(stats.byte_count))
+                    }
+                };
+            }
             video::extract_video_templates(&mmap, stats, config)
         }
         FileType::Audio => {
-            // Extract audio metadata in Phase 2
-            stats.audio_metadata = match audio::extract_audio_metadata(&mmap, stats, config) {
-                Ok(metadata) => Some(metadata),
-                Err(_) => {
-                    // Fallback: create minimal metadata if extraction fails unexpectedly
-                    Some(crate::results::create_minimal_fallback::<
-                        crate::results::AudioMetadata,
-                    >(stats.byte_count))
-                }
-            };
+            // Extract audio metadata in Phase 2 (unless skipped)
+            if !config.skip_media_metadata {
+                stats.audio_metadata = match audio::extract_audio_metadata(&mmap, stats, config) {
+                    Ok(metadata) => Some(metadata),
+                    Err(_) => {
+                        // Fallback: create minimal metadata if extraction fails unexpectedly
+                        Some(crate::results::create_minimal_fallback::<
+                            crate::results::AudioMetadata,
+                        >(stats.byte_count))
+                    }
+                };
+            }
             audio::extract_audio_templates(&mmap, stats, config)
         }
         _ => {
@@ -294,11 +316,11 @@ pub(crate) fn estimate_compressed_tokens_with_footprint(
     let footprint_tokens = if let Some(footprint) = writing_footprint {
         // Rough estimate: count significant fields in writing footprint
         // Vocabulary richness, sentence length, punctuation metrics, template diversity, entropy
-        // SVO analysis: structure percent, subject/object lengths, common pivots (up to 10)
-        let mut tokens = 20; // Base overhead for structure
+        // SVO analysis: structure percent, subject/object lengths, common pivots
+        let mut tokens = config.footprint_base_overhead_tokens; // Base overhead for structure
         if let Some(ref svo) = footprint.svo_analysis {
-            tokens += 10; // SVO metrics
-            tokens += svo.common_pivots.len().min(10); // Common pivots
+            tokens += config.footprint_svo_metrics_tokens; // SVO metrics
+            tokens += svo.common_pivots.len().min(config.max_common_pivots); // Common pivots
         }
         tokens
     } else {

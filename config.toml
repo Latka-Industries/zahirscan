@@ -13,6 +13,17 @@ max_workers = 0
 small_file_threshold_bytes = 100000  # 100 KB
 large_file_threshold_bytes = 1000000 # 1 MB
 
+# File batching threshold multiplier
+# Batching kicks in when files > workers * threshold_multiplier
+# This scales with available parallelism (e.g., 13 workers * 50 = 650 file threshold)
+# Lower values = batching activates sooner, higher values = batching activates later
+threshold_multiplier = 50
+
+# Minimum collection size for chunking
+# Collections smaller than this threshold will not be chunked (chunk_size = 1)
+# This avoids overhead for small collections where parallelization isn't beneficial
+min_collection_size_for_chunking = 1000
+
 [mining]
 # Static token threshold (0.0-1.0) - percentage of lines that must match for a token to be considered static
 static_threshold = 0.8
@@ -33,6 +44,12 @@ min_phrase_length = 3
 # Token estimation settings
 bytes_per_token = 4
 json_overhead_tokens = 50
+
+# Writing footprint token estimation
+# Base overhead for writing footprint structure (vocabulary, sentence length, punctuation, etc.)
+footprint_base_overhead_tokens = 20
+# Additional tokens for SVO analysis metrics (structure percent, subject/object lengths)
+footprint_svo_metrics_tokens = 10
 
 # Entropy calculation settings (for writing footprint analysis)
 # Minimum number of matching sentences required to calculate entropy
@@ -67,5 +84,9 @@ short_prefix_threshold = 3
 min_pivot_variation = 2
 # Maximum variation score - above this, word is too random to be structural
 max_pivot_variation = 50
+# Maximum number of common pivots to include in SVO analysis output
+max_common_pivots = 10
 
-# Performance optimization settings
+# Markdown parsing settings
+# Maximum length of paragraph text preview in examples (characters)
+markdown_preview_length = 100

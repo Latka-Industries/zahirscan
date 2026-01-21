@@ -1,11 +1,14 @@
 [package]
 name = "zahirscan"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
+rust-version = "1.92"
 authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
 description = "Token-efficient content compression for AI analysis using probabilistic template mining"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/thicclatka/zahirscan"
+homepage = "https://github.com/thicclatka/zahirscan"
+documentation = "https://docs.rs/zahirscan"
 readme = "README.md"
 keywords = [
   "log",
@@ -36,6 +39,10 @@ path = "src/lib.rs"
 name = "zahirscan"
 path = "src/main.rs"
 
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
+
 [dependencies]
 anyhow = "1.0.100"
 chrono = { version = "0.4.43", features = ["serde"] }
@@ -57,6 +64,15 @@ png = "0.18.0"
 tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread"] }
 ffprobe = "0.4.0"
 lofty = "0.22.4"
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+debug = false
+overflow-checks = false
 
 [dev-dependencies]
 anyhow = "1.0.100"

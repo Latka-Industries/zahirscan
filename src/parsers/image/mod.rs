@@ -1,6 +1,6 @@
 //! Image file metadata extraction
 
-mod metadata;
+pub mod metadata;
 
 use crate::config::Config;
 use crate::parsers::ParseResult;
