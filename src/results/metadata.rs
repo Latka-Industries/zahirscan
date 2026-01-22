@@ -4,6 +4,11 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 
 use super::MinimalFallback;
+use crate::parsers::{BitrateMode, CompressionMode};
+
+// ============================================================================
+// Image Metadata
+// ============================================================================
 
 /// Image metadata (Mode 2 only, for image files)
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -49,9 +54,14 @@ impl Serialize for ImageMetadata {
 
 crate::impl_minimal_fallback!(ImageMetadata);
 
+// ============================================================================
+// Video Metadata
+// ============================================================================
+
 /// Video metadata (Mode 2 only, for video files)
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct VideoMetadata {
+    // Video dimensions and aspect ratios
     /// Video width in pixels
     pub width: usize,
     /// Video height in pixels
@@ -74,6 +84,8 @@ pub struct VideoMetadata {
     pub creation_time: Option<String>,
     /// Duration in seconds
     pub duration_seconds: Option<f64>,
+
+    // Video codec and encoding
     /// Video codec (e.g., "h264", "hevc", "vp9")
     pub video_codec: Option<String>,
     /// Video codec profile (e.g., "High", "Main", "Baseline")
@@ -90,6 +102,8 @@ pub struct VideoMetadata {
     pub chroma_subsampling: Option<String>,
     /// Scan type (e.g., "progressive", "interlaced")
     pub scan_type: Option<String>,
+
+    // Video frame and bitrate information
     /// Frame rate (frames per second)
     pub frame_rate: Option<f64>,
     /// Frame count (total number of video frames)
@@ -99,7 +113,9 @@ pub struct VideoMetadata {
     /// Video stream bitrate in bits per second
     pub video_bitrate: Option<u64>,
     /// Bitrate mode (e.g., "VBR", "CBR")
-    pub bitrate_mode: Option<String>,
+    pub bitrate_mode: Option<BitrateMode>,
+
+    // Audio stream information
     /// Audio codec (e.g., "aac", "mp3", "opus")
     pub audio_codec: Option<String>,
     /// Audio bitrate in bits per second
@@ -112,6 +128,8 @@ pub struct VideoMetadata {
     pub audio_sample_rate: Option<u32>,
     /// Audio language code (e.g., "eng", "jpn")
     pub audio_language: Option<String>,
+
+    // Container and file information
     /// Container format (e.g., "mp4", "mkv", "avi")
     pub container_format: Option<String>,
     /// Video stream size in bytes
@@ -171,9 +189,14 @@ impl Serialize for VideoMetadata {
 
 crate::impl_minimal_fallback!(VideoMetadata);
 
+// ============================================================================
+// Audio Metadata
+// ============================================================================
+
 /// Audio metadata (Mode 2 only, for audio files)
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct AudioMetadata {
+    // Audio technical properties
     /// Duration in seconds
     pub duration_seconds: Option<f64>,
     /// Audio codec (e.g., "aac", "mp3", "opus", "flac")
@@ -196,6 +219,8 @@ pub struct AudioMetadata {
     pub audio_stream_size: Option<u64>,
     /// Creation/encoded date (ISO 8601 format)
     pub creation_time: Option<String>,
+
+    // Track metadata (ID3 tags, etc.)
     /// Track title
     pub title: Option<String>,
     /// Artist name
@@ -212,14 +237,16 @@ pub struct AudioMetadata {
     pub genre: Option<String>,
     /// Album artist
     pub album_artist: Option<String>,
+
+    // Audio encoding details
     /// Bit depth (bits per sample, e.g., 16, 24, 32)
     pub bit_depth: Option<u32>,
     /// Compression mode (e.g., "lossy", "lossless")
-    pub compression_mode: Option<String>,
+    pub compression_mode: Option<CompressionMode>,
     /// Encoding library/software (e.g., "LAME", "libopus", "libvorbis")
     pub encoded_library: Option<String>,
     /// Bit rate mode (e.g., "CBR", "VBR", "ABR")
-    pub bit_rate_mode: Option<String>,
+    pub bit_rate_mode: Option<BitrateMode>,
     /// Comments/notes
     pub comments: Option<String>,
     /// Album artwork/cover art metadata (if present)
@@ -261,11 +288,11 @@ impl Serialize for AudioMetadata {
     }
 }
 
-impl MinimalFallback for AudioMetadata {
-    fn minimal_fallback(_file_size_bytes: usize) -> Self {
-        Self::default()
-    }
-}
+crate::impl_minimal_fallback!(AudioMetadata, _);
+
+// ============================================================================
+// CSV Statistics Types
+// ============================================================================
 
 /// Numeric column statistics
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -336,9 +363,14 @@ impl Serialize for BooleanStats {
     }
 }
 
+// ============================================================================
+// CSV Metadata
+// ============================================================================
+
 /// CSV metadata (Mode 2 only, for CSV files)
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct CsvMetadata {
+    // Basic structure
     /// Number of rows (excluding header if present)
     pub row_count: usize,
     /// Number of columns
@@ -349,6 +381,8 @@ pub struct CsvMetadata {
     pub encoding: Option<String>,
     /// Inferred data types per column (e.g., "string", "number", "date", "boolean", "null")
     pub column_types: Option<Vec<String>>,
+
+    // Format detection
     /// Detected delimiter character (e.g., ",", ";", "\t", "|")
     pub delimiter: Option<String>,
     /// Detected quote character (e.g., "\"", "'")
@@ -357,6 +391,8 @@ pub struct CsvMetadata {
     pub escape_character: Option<String>,
     /// Whether the CSV has a header row
     pub has_header: Option<bool>,
+
+    // Column statistics
     /// Percentage of null/empty values per column (0.0-100.0)
     pub null_percentages: Option<Vec<f64>>,
     /// Number of unique values per column (based on sample)
@@ -393,8 +429,61 @@ impl Serialize for CsvMetadata {
     }
 }
 
-impl MinimalFallback for CsvMetadata {
-    fn minimal_fallback(_file_size_bytes: usize) -> Self {
-        Self::default()
+crate::impl_minimal_fallback!(CsvMetadata, _);
+
+// ============================================================================
+// PDF Metadata
+// ============================================================================
+
+/// PDF metadata
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct PdfMetadata {
+    // Document structure
+    /// Number of pages
+    pub page_count: Option<usize>,
+    /// PDF version (e.g., "1.7", "2.0")
+    pub pdf_version: Option<String>,
+    /// Whether the PDF is encrypted
+    pub is_encrypted: Option<bool>,
+    /// File size in bytes
+    pub file_size: Option<usize>,
+
+    // Document metadata (from InfoDict)
+    /// Document title
+    pub title: Option<String>,
+    /// Document author
+    pub author: Option<String>,
+    /// Document subject
+    pub subject: Option<String>,
+    /// Document creator (application that created the PDF)
+    pub creator: Option<String>,
+    /// Document producer (application that produced the PDF)
+    pub producer: Option<String>,
+    /// Creation date (ISO 8601 format)
+    pub creation_date: Option<String>,
+    /// Modification date (ISO 8601 format)
+    pub modification_date: Option<String>,
+}
+
+impl Serialize for PdfMetadata {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("PdfMetadata", 11)?;
+        crate::serialize_optional!(state, self.page_count, "page_count");
+        crate::serialize_optional!(state, self.pdf_version, "pdf_version");
+        crate::serialize_optional!(state, self.title, "title");
+        crate::serialize_optional!(state, self.author, "author");
+        crate::serialize_optional!(state, self.subject, "subject");
+        crate::serialize_optional!(state, self.creator, "creator");
+        crate::serialize_optional!(state, self.producer, "producer");
+        crate::serialize_optional!(state, self.creation_date, "creation_date");
+        crate::serialize_optional!(state, self.modification_date, "modification_date");
+        crate::serialize_optional!(state, self.is_encrypted, "is_encrypted");
+        crate::serialize_optional!(state, self.file_size, "file_size");
+        state.end()
     }
 }
+
+crate::impl_minimal_fallback!(PdfMetadata, file_size);

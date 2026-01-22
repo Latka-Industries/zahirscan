@@ -31,10 +31,11 @@ repos:
     hooks:
       - id: rustfmt
         name: rustfmt
-        entry: bash -c 'cargo fmt --check'
+        entry: bash -c 'cargo fmt --all && git add -u'
         language: system
         files: \.rs$
         pass_filenames: false
+        stages: [commit]
       - id: clippy
         name: clippy
         entry: bash -c 'cargo clippy --manifest-path=Cargo.toml -- -D warnings'

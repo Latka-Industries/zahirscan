@@ -1,6 +1,6 @@
 [package]
 name = "zahirscan"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.92"
 authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
@@ -65,6 +65,7 @@ tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread"] }
 ffprobe = "0.4.0"
 lofty = "0.22.4"
 csv = "1.4.0"
+pdf = "0.9.0"
 
 [profile.release]
 opt-level = "s"

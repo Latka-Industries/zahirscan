@@ -162,41 +162,44 @@ fn try_parse_element(
     list_re: &Regex,
 ) -> ElementParseResult {
     // Headers (# ## ### etc.) - highest priority
-    if let Some(header) = parse_header(line) {
-        return ElementParseResult::Single(header, idx + 1);
-    }
-
-    // Horizontal rule
-    if horizontal_rule_re.is_match(line) {
-        return ElementParseResult::Single(MarkdownElement::HorizontalRule, idx + 1);
-    }
-
-    // Code blocks (```) - multi-line
-    if line.starts_with("```")
-        && let Some((code_block, next_idx)) = parse_code_block(lines, idx)
-    {
-        return ElementParseResult::Single(code_block, next_idx);
-    }
-
-    // Block quotes (>) - multi-line
-    if line.starts_with('>')
-        && let Some((block_quote, next_idx)) =
-            parse_block_quote(lines, idx, horizontal_rule_re, list_re)
-    {
-        return ElementParseResult::Single(block_quote, next_idx);
-    }
-
-    // Lists (-, *, +, or numbered) - multi-line, can produce multiple elements
-    if let Some((list_items, next_idx)) = parse_list(lines, idx) {
-        return ElementParseResult::Multiple(list_items, next_idx);
-    }
-
-    // Paragraph (collect consecutive non-special lines) - multi-line
-    if let Some((paragraph, next_idx)) = parse_paragraph(lines, idx, horizontal_rule_re, list_re) {
-        return ElementParseResult::Single(paragraph, next_idx);
-    }
-
-    ElementParseResult::None
+    parse_header(line)
+        .map(|header| ElementParseResult::Single(header, idx + 1))
+        .or_else(|| {
+            // Horizontal rule
+            if horizontal_rule_re.is_match(line) {
+                Some(ElementParseResult::Single(
+                    MarkdownElement::HorizontalRule,
+                    idx + 1,
+                ))
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            // Code blocks (```) - multi-line
+            line.starts_with("```")
+                .then(|| parse_code_block(lines, idx))
+                .flatten()
+                .map(|(code_block, next_idx)| ElementParseResult::Single(code_block, next_idx))
+        })
+        .or_else(|| {
+            // Block quotes (>) - multi-line
+            line.starts_with('>')
+                .then(|| parse_block_quote(lines, idx, horizontal_rule_re, list_re))
+                .flatten()
+                .map(|(block_quote, next_idx)| ElementParseResult::Single(block_quote, next_idx))
+        })
+        .or_else(|| {
+            // Lists (-, *, +, or numbered) - multi-line, can produce multiple elements
+            parse_list(lines, idx)
+                .map(|(list_items, next_idx)| ElementParseResult::Multiple(list_items, next_idx))
+        })
+        .or_else(|| {
+            // Paragraph (collect consecutive non-special lines) - multi-line
+            parse_paragraph(lines, idx, horizontal_rule_re, list_re)
+                .map(|(paragraph, next_idx)| ElementParseResult::Single(paragraph, next_idx))
+        })
+        .unwrap_or(ElementParseResult::None)
 }
 
 /// Parse markdown header (# ## ### etc.)

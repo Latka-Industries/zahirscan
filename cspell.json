@@ -5,11 +5,13 @@
   "dictionaries": [],
   "words": [
     "alac",
+    "CIELAB",
     "codegen",
     "dtolnay",
     "elems",
     "ffprobe",
     "flac",
+    "IHDR",
     "Interner",
     "interquartile",
     "memchr",
@@ -18,6 +20,7 @@
     "Subsamp",
     "subsampling",
     "wavpack",
+    "YCBCR",
     "Zahir",
     "zahirscan"
   ],

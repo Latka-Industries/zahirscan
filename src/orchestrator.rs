@@ -2,11 +2,61 @@
 
 use crate::chunking::{AdaptiveChunking, ProcessingTask};
 use crate::config::Config;
-use crate::parsers::initial_file_scan;
+use crate::parsers::{FileType, extract_templates, initial_file_scan};
+use crate::results::Output;
 use crate::tools::{determine_output_path, format_bytes};
 use anyhow::Result;
 use log::{debug, error};
 use rayon::prelude::*;
+use std::time::Duration;
+
+/// Log Phase 1 processing metrics
+fn log_phase1_metrics(
+    duration: Duration,
+    scan_duration: Duration,
+    path_duration: Duration,
+    input_file_count: usize,
+    tasks: &[ProcessingTask],
+) {
+    let duration_secs = duration.as_secs_f64();
+    let scan_secs = scan_duration.as_secs_f64();
+    let path_secs = path_duration.as_secs_f64();
+    let valid_file_count = tasks.len();
+
+    debug!(
+        "Phase 1: Processed {} files ({} valid) in {:.2}s (scan: {:.2}s, path setup: {:.2}s)",
+        input_file_count, valid_file_count, duration_secs, scan_secs, path_secs
+    );
+}
+
+/// Log Phase 2 processing metrics
+fn log_phase2_metrics(duration: Duration, tasks: &[ProcessingTask], max_workers: usize) {
+    let total_bytes = tasks.iter().map(|t| t.stats.byte_count).sum::<usize>();
+    let file_count = tasks.len();
+    let duration_secs = duration.as_secs_f64();
+
+    let mean_time_per_file = if file_count > 0 {
+        duration_secs / file_count as f64
+    } else {
+        0.0
+    };
+
+    let mean_size_per_file = if file_count > 0 {
+        (total_bytes as f64 / file_count as f64) as usize
+    } else {
+        0
+    };
+
+    debug!(
+        "Phase 2: Completed in {:.2}s. (workers: {}, files: {}, size: {}, size/file: {}, time/file: {:.4}s)",
+        duration_secs,
+        max_workers,
+        file_count,
+        format_bytes(total_bytes),
+        format_bytes(mean_size_per_file),
+        mean_time_per_file,
+    );
+}
 
 /// Phase 1: Initial scan to collect stats and prepare for template mining
 pub fn phase1_scan(
@@ -51,15 +101,14 @@ pub fn phase1_scan(
         }
     }
     let path_duration = path_start.elapsed();
-    let phase1_duration = phase1_start.elapsed();
 
-    debug!(
-        "Phase 1: Processed {} files ({} valid) in {:.2}s (scan: {:.2}s, path setup: {:.2}s)",
+    // Calculate Phase 1 metrics
+    log_phase1_metrics(
+        phase1_start.elapsed(),
+        scan_duration,
+        path_duration,
         input_paths.len(),
-        tasks.len(),
-        phase1_duration.as_secs_f64(),
-        scan_duration.as_secs_f64(),
-        path_duration.as_secs_f64()
+        &tasks,
     );
 
     tasks
@@ -73,7 +122,7 @@ pub fn phase2_mining(
     adaptive: &AdaptiveChunking,
     max_workers: usize,
     skip_file_write: bool,
-) -> Result<Vec<crate::results::Output>> {
+) -> Result<Vec<Output>> {
     use std::time::Instant;
 
     let phase2_start = Instant::now();
@@ -90,19 +139,8 @@ pub fn phase2_mining(
         |task| process_task_phase2(task, config, adaptive, max_workers, skip_file_write),
     );
 
-    let phase2_duration = phase2_start.elapsed();
-    let total_bytes = tasks.iter().map(|t| t.stats.byte_count).sum::<usize>();
-    let mean_time_per_file = phase2_duration.as_secs_f64() / tasks.len() as f64;
-    let mean_size_per_file = (total_bytes as f64 / tasks.len() as f64) as usize;
-    debug!(
-        "Phase 2: Completed in {:.2}s. (workers: {}, files: {}, size: {}, size/file: {}, time/file: {:.4}s)",
-        phase2_duration.as_secs_f64(),
-        max_workers,
-        tasks.len(),
-        format_bytes(total_bytes),
-        format_bytes(mean_size_per_file),
-        mean_time_per_file,
-    );
+    // Calculate and log Phase 2 metrics
+    log_phase2_metrics(phase2_start.elapsed(), &tasks, max_workers);
 
     // Collect all outputs (or handle errors)
     let mut outputs = Vec::new();
@@ -135,9 +173,6 @@ where
     if tasks.len() > batching_threshold {
         // Large batches: use adaptive batching to prevent thread pool saturation
         // Batch size scales with how far above threshold we are:
-        // - Just above threshold (1-2x): batch_size = workers * 2 (light batching)
-        // - Well above threshold (2-3x): batch_size = workers * 3 (moderate batching)
-        // - Far above threshold (3x+): batch_size = workers * 4 (heavy batching)
         let ratio = tasks.len() as f64 / batching_threshold as f64;
         let batch_multiplier = if ratio < 2.0 {
             2 // Light batching for 1-2x threshold
@@ -169,17 +204,19 @@ fn process_task_phase2(
     adaptive: &AdaptiveChunking,
     max_workers: usize,
     skip_file_write: bool,
-) -> Result<crate::results::Output> {
+) -> Result<Output> {
     use std::time::Instant;
 
     let start = Instant::now();
     let mut stats = task.stats.clone();
 
-    // Images, videos, and audio files are binary but still need metadata extraction
+    // Images, videos, audio, PDFs, and CSVs are binary but still need metadata extraction
     let needs_processing = !stats.is_binary
-        || stats.file_type == crate::parsers::FileType::Image
-        || stats.file_type == crate::parsers::FileType::Video
-        || stats.file_type == crate::parsers::FileType::Audio;
+        || stats.file_type == FileType::Image
+        || stats.file_type == FileType::Video
+        || stats.file_type == FileType::Audio
+        || stats.file_type == FileType::Pdf
+        || stats.file_type == FileType::Csv;
 
     if needs_processing {
         // Create modified config with adaptive chunking
@@ -189,28 +226,20 @@ fn process_task_phase2(
         phase2_config.target_chunks_per_file = target_chunks;
 
         // Template mining (and image metadata extraction for images)
-        match crate::parsers::extract_templates(&mut stats, &phase2_config) {
-            Ok(mining_result) => {
-                stats.mining_result = Some(mining_result);
-            }
-            Err(e) => {
+        stats.mining_result = extract_templates(&mut stats, &phase2_config)
+            .inspect_err(|e| {
                 error!("Error extracting templates for {}: {}", stats.file_path, e);
-            }
-        }
+            })
+            .ok();
     }
     stats.duration = start.elapsed();
 
     // Write to file (unless skipped for library usage)
     if !skip_file_write {
-        match stats.write_to_file(&task.output_path, config.output_mode, config) {
-            Ok(_) => {
-                debug!("Output written to: {}", task.output_path);
-            }
-            Err(e) => {
-                error!("Error writing {}: {}", task.output_path, e);
-                return Err(e);
-            }
-        }
+        stats
+            .write_to_file(&task.output_path, config.output_mode, config)
+            .inspect(|_| debug!("Output written to: {}", task.output_path))
+            .inspect_err(|e| error!("Error writing {}: {}", task.output_path, e))?;
     }
 
     // Return the Output object

@@ -2,6 +2,14 @@
 
 pub mod metadata;
 
+mod bmp;
+mod constants;
+mod gif;
+mod jpeg;
+mod png;
+mod tiff;
+mod webp;
+
 use crate::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::{ImageMetadata, MiningResult};
@@ -23,6 +31,23 @@ pub fn extract_image_metadata(
     match reader.with_guessed_format() {
         Ok(reader) => {
             let format = reader.format().map(|f| format!("{:?}", f));
+
+            // Extract format-specific metadata based on detected format
+            // This can be done even if into_dimensions() fails, since header-only parsing
+            // doesn't require full image decoding
+            let (chroma_subsampling, compression, bit_depth, color_type) = format
+                .as_deref()
+                .and_then(format_from_string)
+                .map(|image_format| {
+                    (
+                        image_format.extract_chroma_subsampling(content),
+                        image_format.extract_compression(content),
+                        image_format.extract_bit_depth(content),
+                        image_format.extract_color_type(content),
+                    )
+                })
+                .unwrap_or((None, None, None, None));
+
             // Use into_dimensions() instead of decode() - reads only header metadata
             // This is much faster as it doesn't decompress/decode the entire image
             match reader.into_dimensions() {
@@ -36,32 +61,12 @@ pub fn extract_image_metadata(
                         None
                     };
 
-                    // Extract format-specific metadata based on detected format
-                    // Format string from Debug representation (e.g., "Jpeg", "Png")
-                    // format_from_string already handles case-insensitive matching
-                    let (chroma_subsampling, compression, bit_depth) =
-                        if let Some(format_str) = format.as_deref() {
-                            if let Some(image_format) = format_from_string(format_str) {
-                                (
-                                    image_format.extract_chroma_subsampling(content),
-                                    image_format.extract_compression(content),
-                                    image_format.extract_bit_depth(content),
-                                )
-                            } else {
-                                // Format not recognized by our parser, but we still have dimensions
-                                (None, None, None)
-                            }
-                        } else {
-                            // Format detection failed, but we still have dimensions
-                            (None, None, None)
-                        };
-
                     Ok(ImageMetadata {
                         width: width_usize,
                         height: height_usize,
                         aspect_ratio,
                         stream_size,
-                        color_type: None, // Color type requires full decode, skip for speed
+                        color_type,
                         format,
                         chroma_subsampling,
                         compression,
@@ -69,17 +74,17 @@ pub fn extract_image_metadata(
                     })
                 }
                 Err(_) => {
-                    // Failed to read dimensions, return basic metadata with format if available
+                    // Failed to read dimensions, but we can still return format-specific metadata
                     Ok(ImageMetadata {
                         width: 0,
                         height: 0,
                         aspect_ratio: None,
                         stream_size,
-                        color_type: None,
+                        color_type,
                         format,
-                        chroma_subsampling: None,
-                        compression: None,
-                        bit_depth: None,
+                        chroma_subsampling,
+                        compression,
+                        bit_depth,
                     })
                 }
             }

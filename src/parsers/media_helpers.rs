@@ -1,6 +1,31 @@
 //! Shared helpers for audio and video metadata extraction
 
 use ffprobe::{FfProbe, Stream};
+use serde::{Deserialize, Serialize};
+
+/// Bitrate encoding mode for audio/video streams
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum BitrateMode {
+    /// Constant Bitrate - bitrate remains constant throughout
+    Cbr,
+    /// Variable Bitrate - bitrate varies based on content complexity
+    Vbr,
+    /// Average Bitrate - target average bitrate with some variation
+    Abr,
+    /// Lossless encoding (no bitrate mode applies)
+    Lossless,
+}
+
+/// Audio compression mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CompressionMode {
+    /// Lossy compression (e.g., MP3, AAC, Opus)
+    Lossy,
+    /// Lossless compression (e.g., FLAC, ALAC, WavPack)
+    Lossless,
+}
 
 /// Audio stream metadata extracted from ffprobe
 #[derive(Debug, Clone)]
@@ -121,7 +146,7 @@ pub fn extract_bitrate_mode(
     codec: Option<&String>,
     encoder: Option<&String>,
     _file_path: Option<&str>, // Kept for API compatibility, but MP3 parsing is now in audio module
-) -> Option<String> {
+) -> Option<BitrateMode> {
     extract_bitrate_mode_from_metadata(codec, encoder)
 }
 
@@ -129,50 +154,56 @@ pub fn extract_bitrate_mode(
 pub(crate) fn extract_bitrate_mode_from_metadata(
     codec: Option<&String>,
     encoder: Option<&String>,
-) -> Option<String> {
+) -> Option<BitrateMode> {
     // First, check if it's a lossless codec (not CBR/VBR)
-    if let Some(codec_str) = codec {
-        let codec_lower = codec_str.to_lowercase();
-        if codec_lower.contains("flac") || codec_lower.contains("alac") {
-            return Some("lossless".to_string());
-        }
-    }
-
-    // Check encoder string for mode hints
-    // Many encoders include CBR/VBR/ABR in their encoder string
-    if let Some(enc) = encoder {
-        let enc_lower = enc.to_lowercase();
-
-        // First, check for explicit mode indicators (works for any encoder)
-        if enc_lower.contains("cbr") {
-            return Some("CBR".to_string());
-        } else if enc_lower.contains("abr") {
-            return Some("ABR".to_string());
-        } else if enc_lower.contains("vbr") {
-            return Some("VBR".to_string());
-        }
-
-        // Opus is typically VBR
-        if enc_lower.contains("opus")
-            || codec
-                .map(|c| c.to_lowercase().contains("opus"))
-                .unwrap_or(false)
-        {
-            return Some("VBR".to_string());
-        }
-    }
-
-    // Codec-specific heuristics
-    if let Some(codec_str) = codec {
-        let codec_lower = codec_str.to_lowercase();
-        // Opus is almost always VBR
-        if codec_lower.contains("opus") {
-            return Some("VBR".to_string());
-        }
-        // AAC can be CBR or VBR, but many modern encoders default to VBR
-        // Without additional metadata, we can't be certain
-    }
-
-    // Can't determine reliably
-    None
+    codec
+        .and_then(|codec_str| {
+            use crate::parsers::audio;
+            // Check if it's a lossless codec using the helper from audio module
+            if audio::is_lossless_codec(codec_str) {
+                Some(BitrateMode::Lossless)
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            // Check encoder string for mode hints
+            // Many encoders include CBR/VBR/ABR in their encoder string
+            encoder.and_then(|enc| {
+                let enc_lower = enc.to_lowercase();
+                // First, check for explicit mode indicators (works for any encoder)
+                if enc_lower.contains("cbr") {
+                    Some(BitrateMode::Cbr)
+                } else if enc_lower.contains("abr") {
+                    Some(BitrateMode::Abr)
+                } else if enc_lower.contains("vbr") {
+                    Some(BitrateMode::Vbr)
+                } else {
+                    use crate::parsers::audio;
+                    // Opus is typically VBR
+                    if audio::is_opus_codec(enc)
+                        || codec.map(|c| audio::is_opus_codec(c)).unwrap_or(false)
+                    {
+                        Some(BitrateMode::Vbr)
+                    } else {
+                        None
+                    }
+                }
+            })
+        })
+        .or_else(|| {
+            // Codec-specific heuristics
+            codec.and_then(|codec_str| {
+                use crate::parsers::audio;
+                // Opus is almost always VBR
+                if audio::is_opus_codec(codec_str) {
+                    Some(BitrateMode::Vbr)
+                } else {
+                    // AAC can be CBR or VBR, but many modern encoders default to VBR
+                    // Without additional metadata, we can't be certain
+                    None
+                }
+            })
+        })
+    // Can't determine reliably - returns None if all checks fail
 }

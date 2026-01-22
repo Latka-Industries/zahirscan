@@ -14,7 +14,8 @@ pub trait MinimalFallback {
 // Re-export all public types for convenience
 pub use core::{FileMetadata, MiningResult, Output, OutputMode, Template};
 pub use metadata::{
-    AudioMetadata, BooleanStats, CsvMetadata, DateStats, ImageMetadata, NumericStats, VideoMetadata,
+    AudioMetadata, BooleanStats, CsvMetadata, DateStats, ImageMetadata, NumericStats, PdfMetadata,
+    VideoMetadata,
 };
 pub use writing::{CompressionStats, PunctuationMetrics, SVOAnalysis, WritingFootprint};
 
@@ -40,9 +41,33 @@ macro_rules! serialize_optional {
 }
 
 /// Macro to implement MinimalFallback trait for metadata types
-/// Assumes the type has a `stream_size: Option<usize>` field and implements Default
+///
+/// Usage:
+/// - `impl_minimal_fallback!(TypeName)` - for types with `stream_size: Option<usize>`
+/// - `impl_minimal_fallback!(TypeName, field_name)` - for types with a different field name
+/// - `impl_minimal_fallback!(TypeName, _)` - for types that just need `Self::default()`
 #[macro_export]
 macro_rules! impl_minimal_fallback {
+    // Default-only case (ignores file_size_bytes) - must come first
+    ($type:ty, _) => {
+        impl MinimalFallback for $type {
+            fn minimal_fallback(_file_size_bytes: usize) -> Self {
+                Self::default()
+            }
+        }
+    };
+    // Custom field name case
+    ($type:ty, $field:ident) => {
+        impl MinimalFallback for $type {
+            fn minimal_fallback(file_size_bytes: usize) -> Self {
+                Self {
+                    $field: Some(file_size_bytes),
+                    ..Default::default()
+                }
+            }
+        }
+    };
+    // Default case: use stream_size field
     ($type:ty) => {
         impl MinimalFallback for $type {
             fn minimal_fallback(file_size_bytes: usize) -> Self {

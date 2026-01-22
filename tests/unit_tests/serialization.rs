@@ -1,6 +1,7 @@
 //! Tests for serialization edge cases
 
 use serde_json;
+use zahirscan::parsers::BitrateMode;
 use zahirscan::results::{AudioMetadata, ImageMetadata, VideoMetadata};
 
 #[test]
@@ -64,7 +65,7 @@ fn test_audio_metadata_serialize_with_all_fields() {
     metadata.audio_channels = Some(2);
     metadata.title = Some("Test Song".to_string());
     metadata.artist = Some("Test Artist".to_string());
-    metadata.bit_rate_mode = Some("CBR".to_string());
+    metadata.bit_rate_mode = Some(BitrateMode::Cbr);
 
     let json = serde_json::to_string(&metadata).unwrap();
 

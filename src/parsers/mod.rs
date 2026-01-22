@@ -2,9 +2,11 @@
 //! Main handler that routes to log or text parsers
 
 mod audio;
-mod csv;
+pub mod csv;
 pub mod image;
 mod media_helpers;
+pub use media_helpers::{BitrateMode, CompressionMode};
+pub mod pdf;
 pub mod text;
 pub mod traits;
 mod video;
@@ -13,10 +15,48 @@ use crate::config::Config;
 use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
 use crate::tools::detect_file_type;
 use anyhow::Result;
+use log::warn;
 use memmap2::Mmap;
 use serde_json;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
+
+/// Macro to extract metadata with error handling and fallback
+/// Usage: extract_metadata_with_fallback!(stats.field, extract_fn, stats, MetadataType, type_name_expr)
+macro_rules! extract_metadata_with_fallback {
+    ($field:expr, $extract_fn:expr, $stats:expr, $metadata_type:path, $type_name:expr) => {
+        $field = match $extract_fn {
+            Ok(metadata) => Some(metadata),
+            Err(e) => {
+                warn!(
+                    "{} metadata extraction failed for {}: {:?}",
+                    $type_name, $stats.file_path, e
+                );
+                Some(crate::results::create_minimal_fallback::<$metadata_type>(
+                    $stats.byte_count,
+                ))
+            }
+        };
+    };
+}
+
+/// Macro to handle media file processing (metadata + templates)
+/// Usage: process_media_file!(stats, mmap, config, module::extract_X_metadata, module::extract_X_templates, field_name, MetadataType, FileType::X)
+macro_rules! process_media_file {
+    ($stats:expr, $mmap:expr, $config:expr, $extract_metadata_fn:path, $extract_templates_fn:path, $field:ident, $metadata_type:path, $file_type:expr) => {{
+        // Extract metadata in Phase 2 (unless skipped)
+        if !$config.skip_media_metadata {
+            extract_metadata_with_fallback!(
+                $stats.$field,
+                $extract_metadata_fn($mmap, $stats, $config),
+                $stats,
+                $metadata_type,
+                $file_type.as_metadata_name()
+            );
+        }
+        $extract_templates_fn($mmap, $stats, $config)
+    }};
+}
 
 /// Supported file types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,7 +69,26 @@ pub enum FileType {
     Video,
     Audio,
     Csv,
+    Pdf,
     Unknown,
+}
+
+impl FileType {
+    /// Get the string representation of the file type for metadata extraction
+    pub fn as_metadata_name(&self) -> &'static str {
+        match self {
+            FileType::Image => "Image",
+            FileType::Video => "Video",
+            FileType::Audio => "Audio",
+            FileType::Csv => "CSV",
+            FileType::Pdf => "PDF",
+            FileType::Log => "Log",
+            FileType::Json => "JSON",
+            FileType::Text => "Text",
+            FileType::Markdown => "Markdown",
+            FileType::Unknown => "Unknown",
+        }
+    }
 }
 
 /// Parse result containing file statistics and metadata
@@ -54,6 +113,8 @@ pub struct ParseResult {
     pub audio_metadata: Option<crate::results::AudioMetadata>,
     /// CSV metadata (for CSV files)
     pub csv_metadata: Option<crate::results::CsvMetadata>,
+    /// PDF metadata (for PDF files)
+    pub pdf_metadata: Option<crate::results::PdfMetadata>,
 }
 
 impl ParseResult {
@@ -67,11 +128,12 @@ impl ParseResult {
                     let mut output = Output::templates_only(mining.templates.clone());
                     // Include writing footprint if available (text/markdown files only)
                     output.writing_footprint = mining.writing_footprint.clone();
-                    // Include media metadata if available (images, videos, audio, CSV)
+                    // Include media metadata if available (images, videos, audio, CSV, PDF)
                     output.image_metadata = self.image_metadata.clone();
                     output.video_metadata = self.video_metadata.clone();
                     output.audio_metadata = self.audio_metadata.clone();
                     output.csv_metadata = self.csv_metadata.clone();
+                    output.pdf_metadata = self.pdf_metadata.clone();
                     output
                 }
                 OutputMode::Full => {
@@ -96,16 +158,12 @@ impl ParseResult {
                         reduction_percent: mining.token_reduction_percent,
                     };
                     let mut output = Output::full(mining.templates.clone(), metadata, compression);
-                    // Include writing footprint if available
                     output.writing_footprint = mining.writing_footprint.clone();
-                    // Include image metadata if available
                     output.image_metadata = self.image_metadata.clone();
-                    // Include video metadata if available
                     output.video_metadata = self.video_metadata.clone();
-                    // Include audio metadata if available
                     output.audio_metadata = self.audio_metadata.clone();
-                    // Include CSV metadata if available
                     output.csv_metadata = self.csv_metadata.clone();
+                    output.pdf_metadata = self.pdf_metadata.clone();
                     output
                 }
             }
@@ -119,6 +177,7 @@ impl ParseResult {
                     output.video_metadata = self.video_metadata.clone();
                     output.audio_metadata = self.audio_metadata.clone();
                     output.csv_metadata = self.csv_metadata.clone();
+                    output.pdf_metadata = self.pdf_metadata.clone();
                     output
                 }
                 OutputMode::Full => {
@@ -151,6 +210,8 @@ impl ParseResult {
                     output.audio_metadata = self.audio_metadata.clone();
                     // Include CSV metadata if available
                     output.csv_metadata = self.csv_metadata.clone();
+                    // Include PDF metadata if available
+                    output.pdf_metadata = self.pdf_metadata.clone();
                     output
                 }
             }
@@ -220,10 +281,11 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
         duration: std::time::Duration::ZERO, // Will be set in Phase 2
         is_binary,
         mining_result: None,
-        image_metadata: None, // Will be extracted in Phase 2
-        video_metadata: None, // Will be extracted in Phase 2
-        audio_metadata: None, // Will be extracted in Phase 2
-        csv_metadata: None,   // Will be extracted in Phase 2
+        image_metadata: None,
+        video_metadata: None,
+        audio_metadata: None,
+        csv_metadata: None,
+        pdf_metadata: None,
     })
 }
 
@@ -236,68 +298,67 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
 
     match stats.file_type {
         FileType::Image => {
-            // Extract image metadata in Phase 2 (unless skipped)
-            if !config.skip_media_metadata {
-                // extract_image_metadata always returns Ok, so this should always be Some
-                stats.image_metadata = match image::extract_image_metadata(&mmap, stats, config) {
-                    Ok(metadata) => Some(metadata),
-                    Err(_) => {
-                        // Fallback: create minimal metadata if extraction fails unexpectedly
-                        Some(crate::results::create_minimal_fallback::<
-                            crate::results::ImageMetadata,
-                        >(stats.byte_count))
-                    }
-                };
-            }
-            image::extract_image_templates(&mmap, stats, config)
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                image::extract_image_metadata,
+                image::extract_image_templates,
+                image_metadata,
+                crate::results::ImageMetadata,
+                FileType::Image
+            )
         }
         FileType::Video => {
-            // Extract video metadata in Phase 2 (unless skipped)
-            if !config.skip_media_metadata {
-                stats.video_metadata = match video::extract_video_metadata(&mmap, stats, config) {
-                    Ok(metadata) => Some(metadata),
-                    Err(_) => {
-                        // Fallback: create minimal metadata if extraction fails unexpectedly
-                        Some(crate::results::create_minimal_fallback::<
-                            crate::results::VideoMetadata,
-                        >(stats.byte_count))
-                    }
-                };
-            }
-            video::extract_video_templates(&mmap, stats, config)
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                video::extract_video_metadata,
+                video::extract_video_templates,
+                video_metadata,
+                crate::results::VideoMetadata,
+                FileType::Video
+            )
         }
         FileType::Audio => {
-            // Extract audio metadata in Phase 2 (unless skipped)
-            if !config.skip_media_metadata {
-                stats.audio_metadata = match audio::extract_audio_metadata(&mmap, stats, config) {
-                    Ok(metadata) => Some(metadata),
-                    Err(_) => {
-                        // Fallback: create minimal metadata if extraction fails unexpectedly
-                        Some(crate::results::create_minimal_fallback::<
-                            crate::results::AudioMetadata,
-                        >(stats.byte_count))
-                    }
-                };
-            }
-            audio::extract_audio_templates(&mmap, stats, config)
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                audio::extract_audio_metadata,
+                audio::extract_audio_templates,
+                audio_metadata,
+                crate::results::AudioMetadata,
+                FileType::Audio
+            )
         }
         FileType::Csv => {
-            // Extract CSV metadata in Phase 2 (unless skipped)
-            if !config.skip_media_metadata {
-                stats.csv_metadata = match csv::extract_csv_metadata(&mmap, stats, config) {
-                    Ok(metadata) => Some(metadata),
-                    Err(_) => {
-                        // Fallback: create minimal metadata if extraction fails unexpectedly
-                        Some(crate::results::create_minimal_fallback::<
-                            crate::results::CsvMetadata,
-                        >(stats.byte_count))
-                    }
-                };
-            }
-            csv::extract_csv_templates(&mmap, stats, config)
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                csv::extract_csv_metadata,
+                csv::extract_csv_templates,
+                csv_metadata,
+                crate::results::CsvMetadata,
+                FileType::Csv
+            )
+        }
+        FileType::Pdf => {
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                pdf::extract_pdf_metadata,
+                pdf::extract_pdf_templates,
+                pdf_metadata,
+                crate::results::PdfMetadata,
+                FileType::Pdf
+            )
         }
         _ => {
-            // Skip binary files (non-images, non-videos, non-audio)
+            // Skip binary files (non-images, videos, audio, CSV, PDF, etc)
             if stats.is_binary {
                 return Ok(traits::empty_mining_result(stats));
             }
@@ -312,20 +373,17 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 FileType::Text => text::text::extract_text_templates(content, stats, config),
                 FileType::Unknown => {
                     // Try JSON first (most structured), then log, then text
-                    if serde_json::from_str::<serde_json::Value>(
-                        content.lines().next().unwrap_or(""),
-                    )
-                    .is_ok()
-                    {
-                        text::json::extract_json_templates(content, stats, config)
-                    } else {
-                        text::log::extract_log_templates(content, stats, config)
-                    }
+                    serde_json::from_str::<serde_json::Value>(content.lines().next().unwrap_or(""))
+                        .map_or_else(
+                            |_| text::log::extract_log_templates(content, stats, config),
+                            |_| text::json::extract_json_templates(content, stats, config),
+                        )
                 }
-                FileType::Image => unreachable!(), // Handled above
-                FileType::Video => unreachable!(), // Handled above
-                FileType::Audio => unreachable!(), // Handled above
-                FileType::Csv => unreachable!(),   // Handled above
+                FileType::Image => unreachable!(),
+                FileType::Video => unreachable!(),
+                FileType::Audio => unreachable!(),
+                FileType::Csv => unreachable!(),
+                FileType::Pdf => unreachable!(),
             }
         }
     }

@@ -17,3 +17,9 @@ mod serialization;
 
 #[path = "unit_tests/placeholder_formatting.rs"]
 mod placeholder_formatting;
+
+#[path = "unit_tests/csv_metadata.rs"]
+mod csv_metadata;
+
+#[path = "unit_tests/image_metadata.rs"]
+mod image_metadata;

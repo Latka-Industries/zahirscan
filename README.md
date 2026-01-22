@@ -20,10 +20,10 @@ ZahirScan uses probabilistic template mining to extract essential structure and 
 
 - **Logs**: Plain text logs, JSON-formatted logs, structured log files
 - **Text Documents**: TXT, Markdown (MD), plain text content
-- **CSV Files**: CSV (extracts row/column counts, column names, data types, delimiter, quote/escape characters, null percentages, unique counts, type-specific statistics)
-- **Images**: JPEG, PNG, GIF, WebP, BMP, TIFF (extracts dimensions, format, compression, chroma subsampling, aspect ratio)
-- **Videos**: MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, 3GP, OGV (extracts comprehensive MediaInfo-like metadata: codec, resolution, bitrate, frame rate, audio tracks, etc.)
-- **Audio**: MP3, FLAC, WAV, M4A, AAC, OGG, Opus, WMA, APE, DSD, DSF (extracts codec, bitrate, sample rate, channels, duration, etc.)
+- **CSV Files**: CSV
+- **Images**: JPEG, PNG, GIF, WebP, BMP, TIFF
+- **Videos**: MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, 3GP, OGV
+- **Audio**: MP3, FLAC, WAV, M4A, AAC, OGG, Opus, WMA, APE, DSD, DSF
 
 All outputs reduce size by 80-95% compared to raw content while preserving essential information.
 
@@ -31,6 +31,7 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 
 - **Template Mining**: Automatically identifies repeated patterns in logs/text and extracts them as templates with placeholders
 - **Media Metadata**: Extracts comprehensive metadata for images, videos, and audio (dimensions, codecs, bitrates, etc.)
+- **CSV Metadata**: Extracts row/column counts, column names, data types, delimiter, quote/escape characters, null percentages, unique counts, and type-specific statistics (numeric: min/max/mean/median/IQR/stdev, date: span/min/max, boolean: true percentage)
 - **Writing Footprint**: For text/markdown files, provides vocabulary richness, sentence structure, and template diversity metrics
 - **Zero-Copy Processing**: Uses memory-mapped files (`memmap2`) to handle files larger than available RAM
 - **Adaptive Parallelization**: Automatically optimizes chunk sizes based on file statistics and CPU resources

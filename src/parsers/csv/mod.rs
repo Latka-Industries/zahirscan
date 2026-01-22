@@ -371,12 +371,9 @@ fn compute_date_stats(
             let val = &row[col_idx];
 
             // First try parsing as Unix timestamp (if it's a numeric timestamp)
-            if let Some(ts) = crate::tools::parse_timestamp_to_seconds(val) {
-                return Some(ts);
-            }
-
             // Otherwise try parsing as date string
-            crate::tools::parse_date_to_timestamp(val)
+            crate::tools::parse_timestamp_to_seconds(val)
+                .or_else(|| crate::tools::parse_date_to_timestamp(val))
         })
         .collect();
 

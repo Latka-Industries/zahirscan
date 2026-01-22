@@ -7,6 +7,98 @@ use anyhow::Result;
 use chrono::{DateTime, NaiveDateTime};
 use ffprobe::{Config as FfprobeConfig, FfProbe, ffprobe_config};
 
+/// File extension to FileType mapping
+/// Organized by file type for easy maintenance
+const FILE_EXTENSION_MAP: &[(&str, FileType)] = &[
+    // Text formats
+    ("log", FileType::Log),
+    ("json", FileType::Json),
+    ("txt", FileType::Text),
+    ("md", FileType::Markdown),
+    ("markdown", FileType::Markdown),
+    // Image formats
+    ("jpg", FileType::Image),
+    ("jpeg", FileType::Image),
+    ("png", FileType::Image),
+    ("gif", FileType::Image),
+    ("bmp", FileType::Image),
+    ("tiff", FileType::Image),
+    ("tif", FileType::Image),
+    ("webp", FileType::Image),
+    ("ico", FileType::Image),
+    ("svg", FileType::Image),
+    // Video formats
+    ("mp4", FileType::Video),
+    ("mkv", FileType::Video),
+    ("avi", FileType::Video),
+    ("mov", FileType::Video),
+    ("wmv", FileType::Video),
+    ("flv", FileType::Video),
+    ("webm", FileType::Video),
+    ("m4v", FileType::Video),
+    ("3gp", FileType::Video),
+    ("ogv", FileType::Video),
+    // Audio formats
+    ("mp3", FileType::Audio),
+    ("flac", FileType::Audio),
+    ("wav", FileType::Audio),
+    ("m4a", FileType::Audio),
+    ("aac", FileType::Audio),
+    ("ogg", FileType::Audio),
+    ("opus", FileType::Audio),
+    ("wma", FileType::Audio),
+    ("ape", FileType::Audio),
+    ("dsd", FileType::Audio),
+    ("dsf", FileType::Audio),
+    // Other formats
+    ("csv", FileType::Csv),
+    ("pdf", FileType::Pdf),
+];
+
+/// Get FileType from extension using linear search
+/// Returns FileType::Unknown if extension is not recognized
+///
+/// For ~44 extensions, linear search is faster than HashMap due to:
+/// - No hash computation overhead
+/// - No memory allocation
+/// - Cache-friendly sequential access
+/// - Most common extensions (jpg, mp3, pdf) are near the start
+fn get_file_type_from_extension(extension: &str) -> FileType {
+    FILE_EXTENSION_MAP
+        .iter()
+        .find(|(ext, _)| *ext == extension)
+        .map(|(_, file_type)| *file_type)
+        .unwrap_or(FileType::Unknown)
+}
+
+/// Get all file extensions for a given FileType
+/// Useful for validation, documentation, or UI display
+pub fn get_extensions_for_file_type(file_type: FileType) -> Vec<&'static str> {
+    FILE_EXTENSION_MAP
+        .iter()
+        .filter_map(|(ext, ft)| if *ft == file_type { Some(*ext) } else { None })
+        .collect()
+}
+
+/// Check if a codec name (string) matches any extension for a given FileType
+/// Useful for checking codec names from ffprobe against our known file types
+///
+/// Example:
+/// ```
+/// use zahirscan::tools::is_codec_for_file_type;
+/// use zahirscan::parsers::FileType;
+///
+/// assert!(is_codec_for_file_type("mp3", FileType::Audio));
+/// assert!(is_codec_for_file_type("flac", FileType::Audio));
+/// assert!(!is_codec_for_file_type("mp3", FileType::Video));
+/// ```
+pub fn is_codec_for_file_type(codec: &str, file_type: FileType) -> bool {
+    let codec_lower = codec.to_lowercase();
+    FILE_EXTENSION_MAP
+        .iter()
+        .any(|(ext, ft)| *ft == file_type && codec_lower.contains(ext))
+}
+
 /// Detect file type from extension
 pub fn detect_file_type(path: &str) -> FileType {
     let extension = Path::new(path)
@@ -15,23 +107,7 @@ pub fn detect_file_type(path: &str) -> FileType {
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
 
-    match extension.as_str() {
-        "log" => FileType::Log,
-        "json" => FileType::Json,
-        "txt" => FileType::Text,
-        "md" | "markdown" => FileType::Markdown,
-        "jpg" | "jpeg" | "png" | "gif" | "bmp" | "tiff" | "tif" | "webp" | "ico" | "svg" => {
-            FileType::Image
-        }
-        "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" | "3gp" | "ogv" => {
-            FileType::Video
-        }
-        "mp3" | "flac" | "wav" | "m4a" | "aac" | "ogg" | "opus" | "wma" | "ape" | "dsd" | "dsf" => {
-            FileType::Audio
-        }
-        "csv" => FileType::Csv,
-        _ => FileType::Unknown,
-    }
+    get_file_type_from_extension(&extension)
 }
 
 /// Format duration into human-readable format
@@ -96,8 +172,10 @@ pub fn redact_path(path: &str) -> String {
 
 /// Get temporary output path for a file
 pub fn get_temp_output_path(input_path: &str, config: &Config) -> String {
-    let input_name = Path::new(input_path)
-        .file_stem()
+    let path = Path::new(input_path);
+    // Get filename with extension (e.g., "file.txt" -> "file.txt.zahirscan.out")
+    let input_name = path
+        .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("zahirscan");
     let sanitized_name = sanitize_filename(input_name);
@@ -121,9 +199,11 @@ pub fn determine_output_path(
 ) -> String {
     if let Some(output) = output {
         if output_is_dir {
-            // Output to folder: create filename.zahirscan.out in the folder
-            let input_name = Path::new(input_path)
-                .file_stem()
+            // Output to folder: create filename.ext.zahirscan.out in the folder
+            // Preserves original extension (e.g., "file.txt" -> "file.txt.zahirscan.out")
+            let path = Path::new(input_path);
+            let input_name = path
+                .file_name()
                 .and_then(|s| s.to_str())
                 .unwrap_or("zahirscan");
             let sanitized_name = sanitize_filename(input_name);

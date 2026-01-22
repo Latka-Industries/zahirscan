@@ -3,8 +3,30 @@
 mod mp3;
 
 use crate::config::Config;
-use crate::parsers::{FileType, ParseResult, image, media_helpers};
+use crate::parsers::{CompressionMode, FileType, ParseResult, image, media_helpers};
 use crate::results::{AudioMetadata as OutputAudioMetadata, ImageMetadata, MiningResult};
+use crate::tools::get_extensions_for_file_type;
+
+/// Lossless audio codec extensions
+/// Maps codec extensions to their compression mode
+const LOSSLESS_CODECS: &[&str] = &["flac", "alac", "wavpack", "ape"];
+
+/// Check if a codec string represents a lossless audio format
+/// Verifies against extension map from tools.rs for consistency
+pub(crate) fn is_lossless_codec(codec: &str) -> bool {
+    let audio_extensions = get_extensions_for_file_type(FileType::Audio);
+    let codec_lower = codec.to_lowercase();
+    LOSSLESS_CODECS.iter().any(|lossless_ext| {
+        codec_lower.contains(lossless_ext) && audio_extensions.contains(lossless_ext)
+    })
+}
+
+/// Check if a string contains "opus" (case-insensitive)
+/// Verifies that "opus" is in our extension map for safety
+pub fn is_opus_codec(s: &str) -> bool {
+    let audio_extensions = get_extensions_for_file_type(FileType::Audio);
+    audio_extensions.contains(&"opus") && s.to_lowercase().contains("opus")
+}
 use crate::tools::{check_ffprobe_available, run_ffprobe_safe};
 use anyhow::Result;
 use lofty::{
@@ -28,16 +50,11 @@ struct RichTags {
     artwork: Option<ImageMetadata>,
 }
 
-fn extract_compression_mode(codec: &str) -> String {
-    let codec_lower = codec.to_lowercase();
-    if codec_lower.contains("flac")
-        || codec_lower.contains("alac")
-        || codec_lower.contains("wavpack")
-        || codec_lower.contains("ape")
-    {
-        "lossless".to_string()
+fn extract_compression_mode(codec: &str) -> CompressionMode {
+    if is_lossless_codec(codec) {
+        CompressionMode::Lossless
     } else {
-        "lossy".to_string()
+        CompressionMode::Lossy
     }
 }
 
@@ -85,7 +102,7 @@ pub fn extract_audio_metadata(
     // Bit depth (bits per sample) - only meaningful for lossless formats
     // Lossy formats (MP3, AAC, Opus, etc.) don't have meaningful bit depth
     // as they use perceptual coding, not direct sample representation
-    let bit_depth = if compression_mode.as_deref() == Some("lossless") {
+    let bit_depth = if compression_mode == Some(CompressionMode::Lossless) {
         media_helpers::extract_stream_bit_depth(audio_stream)
     } else {
         None
@@ -96,18 +113,17 @@ pub fn extract_audio_metadata(
     let encoded_library = media_helpers::extract_encoded_library(audio_stream, &probe_result);
 
     // Bit rate mode (CBR/VBR/ABR) - try LAME tag first, then encoder string or codec heuristics
-    let bit_rate_mode = if let Some(codec_str) = audio_codec.as_ref()
-        && codec_str.to_lowercase() == "mp3"
-        && let Some(mode) = mp3::read_lame_tag_bitrate_mode(&stats.file_path)
-    {
-        Some(mode)
-    } else {
-        media_helpers::extract_bitrate_mode(
-            audio_codec.as_ref(),
-            encoded_library.as_ref(),
-            None, // Not MP3, so no file path needed
-        )
-    };
+    let bit_rate_mode = audio_codec
+        .as_ref()
+        .filter(|codec| mp3::is_mp3_codec(codec))
+        .and_then(|_| mp3::read_lame_tag_bitrate_mode(&stats.file_path))
+        .or_else(|| {
+            media_helpers::extract_bitrate_mode(
+                audio_codec.as_ref(),
+                encoded_library.as_ref(),
+                None, // Not MP3, so no file path needed
+            )
+        });
 
     // Language and creation time (from tags)
     let audio_language = media_helpers::extract_language(audio_stream);
@@ -278,6 +294,7 @@ fn analyze_image_data(image_data: &[u8]) -> Option<ImageMetadata> {
         duration: std::time::Duration::ZERO,
         is_binary: true,
         csv_metadata: None,
+        pdf_metadata: None,
         mining_result: None,
         image_metadata: None,
         video_metadata: None,

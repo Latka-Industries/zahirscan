@@ -1,5 +1,16 @@
 //! MP3-specific parsing utilities, including LAME tag reading
 
+use crate::parsers::FileType;
+use crate::parsers::media_helpers::BitrateMode;
+use crate::tools::get_extensions_for_file_type;
+
+/// Check if a codec string represents MP3
+/// Verifies against extension map from tools.rs for consistency
+pub fn is_mp3_codec(codec: &str) -> bool {
+    let audio_extensions = get_extensions_for_file_type(FileType::Audio);
+    audio_extensions.contains(&"mp3") && codec.to_lowercase().contains("mp3")
+}
+
 /// MP3 frame header constants
 mod mp3_constants {
     /// MPEG-1 version identifier
@@ -49,12 +60,6 @@ mod mp3_constants {
         pub const VBR_ABR_ALT: u8 = 8;
     }
 
-    pub mod br_name {
-        pub const CBR: &str = "CBR";
-        pub const ABR: &str = "ABR";
-        pub const VBR: &str = "VBR";
-    }
-
     /// Side info sizes (in bytes) for different MPEG versions and channel modes
     pub mod side_info_size {
         /// MPEG-1 Layer III mono
@@ -75,7 +80,7 @@ mod mp3_constants {
 ///
 /// Note: Many MP3 files (especially CBR) don't have a Xing/Info header,
 /// so this will return None for those files.
-pub fn read_lame_tag_bitrate_mode(file_path: &str) -> Option<String> {
+pub fn read_lame_tag_bitrate_mode(file_path: &str) -> Option<BitrateMode> {
     use std::fs::File;
     use std::io::{Read, Seek, SeekFrom};
 
@@ -227,15 +232,15 @@ pub fn read_lame_tag_bitrate_mode(file_path: &str) -> Option<String> {
     // High 4 bits contain the info tag revision
     let vbr_method = revision_vbr_byte[0] & mp3_constants::VBR_METHOD_MASK;
 
-    // Map VBR method to string
+    // Map VBR method to BitrateMode enum
     match vbr_method {
-        mp3_constants::vbr_method::CBR => Some(mp3_constants::br_name::CBR.to_string()),
-        mp3_constants::vbr_method::ABR => Some(mp3_constants::br_name::ABR.to_string()),
-        mp3_constants::vbr_method::VBR_OLD => Some(mp3_constants::br_name::VBR.to_string()),
-        mp3_constants::vbr_method::VBR_NEW => Some(mp3_constants::br_name::VBR.to_string()),
-        mp3_constants::vbr_method::VBR_MT => Some(mp3_constants::br_name::VBR.to_string()),
-        mp3_constants::vbr_method::VBR_MTRH => Some(mp3_constants::br_name::VBR.to_string()),
-        mp3_constants::vbr_method::VBR_ABR_ALT => Some(mp3_constants::br_name::VBR.to_string()),
+        mp3_constants::vbr_method::CBR => Some(BitrateMode::Cbr),
+        mp3_constants::vbr_method::ABR => Some(BitrateMode::Abr),
+        mp3_constants::vbr_method::VBR_OLD => Some(BitrateMode::Vbr),
+        mp3_constants::vbr_method::VBR_NEW => Some(BitrateMode::Vbr),
+        mp3_constants::vbr_method::VBR_MT => Some(BitrateMode::Vbr),
+        mp3_constants::vbr_method::VBR_MTRH => Some(BitrateMode::Vbr),
+        mp3_constants::vbr_method::VBR_ABR_ALT => Some(BitrateMode::Vbr),
         _ => None, // Unknown or reserved
     }
 }
