@@ -9,7 +9,22 @@
 //! 1. **Phase 1**: Initial file scan to collect statistics and prepare for processing
 //! 2. **Phase 2**: Template mining and metadata extraction
 //!
-//! # Example
+//! # Simple API Example
+//!
+//! ```no_run
+//! use zahirscan::{extract_schema, OutputMode};
+//!
+//! // Process a single file
+//! let outputs = extract_schema("file.log", OutputMode::Full)?;
+//! println!("Found {} templates", outputs[0].templates.len());
+//!
+//! // Process multiple files
+//! let files = vec!["file1.log", "file2.log"];
+//! let outputs = extract_schema(files.as_slice(), OutputMode::Full)?;
+//! # Ok::<(), anyhow::Error>(())
+//! ```
+//!
+//! # Advanced API Example
 //!
 //! ```no_run
 //! use zahirscan::{Config, phase1_scan, phase2_mining, calculate_adaptive_chunking};
@@ -52,3 +67,114 @@ pub use tools::{
     detect_file_type, determine_output_path, format_bytes, format_duration, get_temp_output_path,
     sanitize_filename,
 };
+
+// Simple API wrapper functions
+use anyhow::Result;
+
+/// Helper trait to convert both `&str` and collections into an iterator of strings
+pub(crate) trait ToPathIter {
+    fn to_path_iter(self) -> Vec<String>;
+}
+
+impl ToPathIter for &str {
+    fn to_path_iter(self) -> Vec<String> {
+        vec![self.to_string()]
+    }
+}
+
+// Explicit impls for common collection types
+impl ToPathIter for &[&str] {
+    fn to_path_iter(self) -> Vec<String> {
+        self.iter().map(|s| s.to_string()).collect()
+    }
+}
+
+impl ToPathIter for Vec<&str> {
+    fn to_path_iter(self) -> Vec<String> {
+        self.into_iter().map(|s| s.to_string()).collect()
+    }
+}
+
+impl ToPathIter for &Vec<&str> {
+    fn to_path_iter(self) -> Vec<String> {
+        self.iter().map(|s| s.to_string()).collect()
+    }
+}
+
+impl<const N: usize> ToPathIter for [&str; N] {
+    fn to_path_iter(self) -> Vec<String> {
+        self.into_iter().map(|s| s.to_string()).collect()
+    }
+}
+
+/// Extract schema (templates and metadata) from one or more files
+///
+/// This is a convenience function that handles all the internal complexity:
+/// - Loads configuration (or uses defaults)
+/// - Performs Phase 1 scan for all files
+/// - Calculates adaptive chunking
+/// - Performs Phase 2 mining and metadata extraction
+/// - Returns a vector of Outputs containing templates and metadata
+///
+/// # Arguments
+///
+/// * `paths` - A single file path (`&str`) or multiple paths (`&[&str]` or `Vec<&str>`)
+/// * `mode` - Output mode (Templates or Full)
+///
+/// # Example - Single file
+///
+/// ```no_run
+/// use zahirscan::{extract_schema, OutputMode};
+///
+/// let outputs = extract_schema("document.log", OutputMode::Full)?;
+/// println!("Templates: {}", outputs[0].templates.len());
+/// # Ok::<(), anyhow::Error>(())
+/// ```
+///
+/// # Example - Multiple files
+///
+/// ```no_run
+/// use zahirscan::{extract_schema, OutputMode};
+///
+/// let files = vec!["file1.log", "file2.log", "file3.log"];
+/// let outputs = extract_schema(files.as_slice(), OutputMode::Full)?;
+/// for output in outputs {
+///     println!("Templates: {}", output.templates.len());
+/// }
+/// # Ok::<(), anyhow::Error>(())
+/// ```
+#[allow(private_bounds)]
+pub fn extract_schema<P: ToPathIter>(paths: P, mode: OutputMode) -> Result<Vec<Output>> {
+    let config = Config::load().unwrap_or_default();
+    let path_strings = paths.to_path_iter();
+
+    // Validate input - fail fast with clear error
+    if path_strings.is_empty() {
+        return Err(anyhow::anyhow!("No file paths provided"));
+    }
+
+    // Phase 1: Initial scan
+    let tasks = phase1_scan(&path_strings, None, false, &config);
+    if tasks.is_empty() {
+        return Err(anyhow::anyhow!(
+            "No valid files found. All provided paths failed to scan or do not exist"
+        ));
+    }
+
+    // Calculate adaptive chunking
+    let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, &config);
+
+    // Phase 2: Template mining and metadata extraction
+    // Set output mode in config
+    let mut config_with_mode = config.clone();
+    config_with_mode.output_mode = mode;
+
+    // Process (skip file write for library usage)
+    phase2_mining(
+        tasks,
+        &config_with_mode,
+        &adaptive,
+        config.max_workers,
+        true,
+    )
+}

@@ -137,6 +137,90 @@ Options:
   - File statistics (size, line count, processing time)
   - Size comparison (before/after)
 
+### Library Usage
+
+ZahirScan can be used as a Rust library to extract schemas (templates and metadata) from files programmatically.
+
+#### Basic Example
+
+```rust
+use zahirscan::{extract_schema, OutputMode};
+
+// Process a single file
+let outputs = extract_schema("app.log", OutputMode::Full)?;
+println!("Found {} templates", outputs[0].templates.len());
+
+// Process multiple files
+let files = vec!["file1.log", "file2.log", "file3.log"];
+let outputs = extract_schema(files.as_slice(), OutputMode::Full)?;
+for output in outputs {
+    println!("File: {:?}", output.source);
+    println!("Templates: {}", output.templates.len());
+}
+```
+
+For a complete working example, see [`examples/basic_usage.rs`](examples/basic_usage.rs). Run it with:
+
+```bash
+cargo run --example basic_usage -- <input-file>
+```
+
+#### Output Schema
+
+The `extract_schema()` function returns `Result<Vec<Output>>`. Each `Output` object contains:
+
+**Always Present:**
+
+- `templates: Vec<Template>` - Extracted template patterns
+
+**Mode 2 (Full) Only (all optional):**
+
+- `source: Option<String>` - Source file path
+- `file_type: Option<String>` - Detected file type (e.g., "log", "text", "image", "video")
+- `line_count: Option<usize>` - Number of lines in file
+- `byte_count: Option<usize>` - File size in bytes
+- `token_count: Option<usize>` - Estimated token count
+- `processing_time_ms: Option<f64>` - Processing duration
+- `is_binary: Option<bool>` - Whether file is binary
+- `compression: Option<CompressionStats>` - Compression metrics
+
+**Conditional Fields (present when applicable):**
+
+- `writing_footprint: Option<WritingFootprint>` - Writing analysis for text/markdown files
+- `image_metadata: Option<ImageMetadata>` - Image metadata (dimensions, format, etc.)
+- `video_metadata: Option<VideoMetadata>` - Video metadata (codec, resolution, bitrate, etc.)
+- `audio_metadata: Option<AudioMetadata>` - Audio metadata (codec, bitrate, sample rate, etc.)
+- `csv_metadata: Option<CsvMetadata>` - CSV metadata (row/column counts, data types, statistics)
+- `pdf_metadata: Option<PdfMetadata>` - PDF metadata (page count, document properties, etc.)
+- `docx_metadata: Option<DocumentMetadata>` - DOCX metadata (word count, title, author, dates, etc.)
+
+#### Template Structure
+
+Each `Template` contains:
+
+- `pattern: String` - Template pattern with placeholders (e.g., `"[DATE] [TIME] ERROR: [MESSAGE]"`)
+- `count: usize` - Number of lines matching this template
+- `examples: BTreeMap<String, Vec<String>>` - Example values for each placeholder
+
+#### Writing Footprint Structure
+
+`WritingFootprint` (for text/markdown files) contains:
+
+- `vocabulary_richness: f64` - Unique words / total words (0.0-1.0)
+- `avg_sentence_length: f64` - Average sentence length in words
+- `punctuation: PunctuationMetrics` - Punctuation usage statistics
+- `template_diversity: usize` - Number of unique template patterns
+- `avg_entropy: f64` - Average entropy across templates (0.0-1.0)
+- `svo_analysis: Option<SVOAnalysis>` - Sentence structure analysis
+
+#### Compression Stats Structure
+
+`CompressionStats` contains:
+
+- `original_tokens: usize` - Original content token count
+- `compressed_tokens: usize` - Compressed template token count
+- `reduction_percent: f64` - Percentage reduction (0.0-100.0)
+
 ### Configuration
 
 See [`config.toml`](config.toml) for configuration.
@@ -180,7 +264,7 @@ ZahirScan implements non-invasive file operations:
 - [x] DOCX metadata extraction (word count, character count, paragraph count, core properties: title, author, creation/modification dates, revision)
 - [x] PDF metadata extraction (page count, document properties, PDF version, title, author, subject, creator, producer, creation/modification dates, encryption status)
 - [ ] Pages metadata extraction (similar to DOCX - metadata extraction only)
-- [ ] Simple library wrapper API (`process_file()` / `process_files()` functions)
+- [x] Simple library wrapper API (`extract_schema()` function)
 
 ## License
 

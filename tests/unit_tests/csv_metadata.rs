@@ -24,6 +24,7 @@ fn get_test_stats() -> ParseResult {
         audio_metadata: None,
         csv_metadata: None,
         pdf_metadata: None,
+        docx_metadata: None,
     }
 }
 

@@ -1,9 +1,11 @@
 //! Basic example of using ZahirScan as a library
 //!
 //! Run with: `cargo run --example basic_usage -- <input-file>`
+//!
+//! This example demonstrates the simple `extract_schema()` API for library usage.
 
 use std::env;
-use zahirscan::{Config, calculate_adaptive_chunking, phase1_scan, phase2_mining};
+use zahirscan::{OutputMode, extract_schema};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get input file from command line args
@@ -15,44 +17,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let input_file = &args[1];
 
-    // Load configuration (or use defaults)
-    let config = Config::load().unwrap_or_else(|_| Config::default());
-    println!("Using binary name: {}", config.binary_name);
-    println!("Max workers: {}\n", config.max_workers);
+    println!("Processing file: {}\n", input_file);
 
-    // Phase 1: Initial scan to prepare for template mining
-    println!("Phase 1: Scanning file...");
-    let tasks = phase1_scan(&[input_file.clone()], None, false, &config);
-    println!("Phase 1 complete: {} file(s) scanned\n", tasks.len());
+    // Simple API: extract_schema handles all the complexity internally
+    // Use OutputMode::Full to get complete metadata, or OutputMode::Templates for minimal output
+    let outputs = extract_schema(input_file, OutputMode::Full)?;
+    println!("Processing complete: {} file(s) processed\n", outputs.len());
 
-    // Calculate adaptive chunking based on Phase 1 stats
-    let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, &config);
+    // Access Output objects directly
+    let Some(output) = outputs.first() else {
+        println!("No output generated");
+        return Ok(());
+    };
 
-    // Phase 2: Template mining and processing
-    // skip_file_write=true for library usage (no file I/O)
-    println!("Phase 2: Mining templates...");
-    let outputs = phase2_mining(tasks, &config, &adaptive, config.max_workers, true)?;
-    println!("Phase 2 complete: {} file(s) processed\n", outputs.len());
+    println!("Output summary:");
+    println!("  Templates: {}", output.templates.len());
 
-    // Access Output objects directly (programmatic access)
-    if let Some(output) = outputs.first() {
-        println!("First output summary:");
-        println!("  Templates: {}", output.templates.len());
-        if let Some(ref compression) = output.compression {
+    // Show template patterns
+    if !output.templates.is_empty() {
+        println!("\n  Template patterns:");
+        for (i, template) in output.templates.iter().take(5).enumerate() {
             println!(
-                "  Compression: {:.2}% reduction",
-                compression.reduction_percent
+                "    {}. {} ({} matches)",
+                i + 1,
+                template.pattern,
+                template.count
             );
+        }
+        let remaining = output.templates.len().saturating_sub(5);
+        if remaining > 0 {
+            println!("    ... and {} more", remaining);
         }
     }
 
-    // Convert to JSON strings if needed (optional - files are already JSON when written)
-    println!("\n--- Converting to JSON strings (optional) ---");
+    // Show compression stats
+    if let Some(compression) = &output.compression {
+        println!(
+            "\n  Compression: {:.2}% reduction ({} -> {} tokens)",
+            compression.reduction_percent,
+            compression.original_tokens,
+            compression.compressed_tokens
+        );
+    }
+
+    // Convert to pretty JSON - this shows all metadata automatically
+    println!("\n--- Full Output (JSON) ---");
     for (i, output) in outputs.iter().enumerate() {
         let json = serde_json::to_string_pretty(output)?;
-        println!("=== JSON Output {} ===", i + 1);
+        if outputs.len() > 1 {
+            println!("=== Output {} ===", i + 1);
+        }
         println!("{}", json);
-        println!();
+        if i < outputs.len() - 1 {
+            println!();
+        }
     }
 
     Ok(())
