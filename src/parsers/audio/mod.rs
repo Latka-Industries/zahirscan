@@ -295,6 +295,7 @@ fn analyze_image_data(image_data: &[u8]) -> Option<ImageMetadata> {
         is_binary: true,
         csv_metadata: None,
         pdf_metadata: None,
+        docx_metadata: None,
         mining_result: None,
         image_metadata: None,
         video_metadata: None,

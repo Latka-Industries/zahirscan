@@ -53,6 +53,7 @@ const FILE_EXTENSION_MAP: &[(&str, FileType)] = &[
     // Other formats
     ("csv", FileType::Csv),
     ("pdf", FileType::Pdf),
+    ("docx", FileType::Docx),
 ];
 
 /// Get FileType from extension using linear search

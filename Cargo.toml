@@ -66,6 +66,9 @@ ffprobe = "0.4.0"
 lofty = "0.22.4"
 csv = "1.4.0"
 pdf = "0.9.0"
+zip = "7.2.0"
+quick-xml = { version = "0.39.0", features = ["serialize"] }
+unicode-segmentation = "1.12.0"
 
 [profile.release]
 opt-level = "s"

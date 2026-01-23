@@ -3,6 +3,7 @@
 
 mod audio;
 pub mod csv;
+pub mod docx;
 pub mod image;
 mod media_helpers;
 pub use media_helpers::{BitrateMode, CompressionMode};
@@ -70,6 +71,7 @@ pub enum FileType {
     Audio,
     Csv,
     Pdf,
+    Docx,
     Unknown,
 }
 
@@ -82,6 +84,7 @@ impl FileType {
             FileType::Audio => "Audio",
             FileType::Csv => "CSV",
             FileType::Pdf => "PDF",
+            FileType::Docx => "DOCX",
             FileType::Log => "Log",
             FileType::Json => "JSON",
             FileType::Text => "Text",
@@ -115,6 +118,8 @@ pub struct ParseResult {
     pub csv_metadata: Option<crate::results::CsvMetadata>,
     /// PDF metadata (for PDF files)
     pub pdf_metadata: Option<crate::results::PdfMetadata>,
+    /// Document metadata (for DOCX and Pages files)
+    pub docx_metadata: Option<crate::results::DocumentMetadata>,
 }
 
 impl ParseResult {
@@ -126,14 +131,17 @@ impl ParseResult {
                     // Mode 1: Templates + Writing Footprint (for text/markdown files)
                     // Also include media metadata (images, videos, audio) even in templates mode
                     let mut output = Output::templates_only(mining.templates.clone());
-                    // Include writing footprint if available (text/markdown files only)
-                    output.writing_footprint = mining.writing_footprint.clone();
-                    // Include media metadata if available (images, videos, audio, CSV, PDF)
+                    // Include writing footprint if available (text/markdown files only, not DOCX)
+                    if self.file_type != crate::parsers::FileType::Docx {
+                        output.writing_footprint = mining.writing_footprint.clone();
+                    }
+                    // Include media metadata if available (images, videos, audio, CSV, PDF, DOCX)
                     output.image_metadata = self.image_metadata.clone();
                     output.video_metadata = self.video_metadata.clone();
                     output.audio_metadata = self.audio_metadata.clone();
                     output.csv_metadata = self.csv_metadata.clone();
                     output.pdf_metadata = self.pdf_metadata.clone();
+                    output.docx_metadata = self.docx_metadata.clone();
                     output
                 }
                 OutputMode::Full => {
@@ -158,12 +166,16 @@ impl ParseResult {
                         reduction_percent: mining.token_reduction_percent,
                     };
                     let mut output = Output::full(mining.templates.clone(), metadata, compression);
-                    output.writing_footprint = mining.writing_footprint.clone();
+                    // Only include writing_footprint for text/markdown files, not DOCX
+                    if self.file_type != crate::parsers::FileType::Docx {
+                        output.writing_footprint = mining.writing_footprint.clone();
+                    }
                     output.image_metadata = self.image_metadata.clone();
                     output.video_metadata = self.video_metadata.clone();
                     output.audio_metadata = self.audio_metadata.clone();
                     output.csv_metadata = self.csv_metadata.clone();
                     output.pdf_metadata = self.pdf_metadata.clone();
+                    output.docx_metadata = self.docx_metadata.clone();
                     output
                 }
             }
@@ -178,6 +190,7 @@ impl ParseResult {
                     output.audio_metadata = self.audio_metadata.clone();
                     output.csv_metadata = self.csv_metadata.clone();
                     output.pdf_metadata = self.pdf_metadata.clone();
+                    output.docx_metadata = self.docx_metadata.clone();
                     output
                 }
                 OutputMode::Full => {
@@ -212,6 +225,8 @@ impl ParseResult {
                     output.csv_metadata = self.csv_metadata.clone();
                     // Include PDF metadata if available
                     output.pdf_metadata = self.pdf_metadata.clone();
+                    // Include DOCX metadata if available
+                    output.docx_metadata = self.docx_metadata.clone();
                     output
                 }
             }
@@ -286,6 +301,7 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
         audio_metadata: None,
         csv_metadata: None,
         pdf_metadata: None,
+        docx_metadata: None,
     })
 }
 
@@ -357,6 +373,20 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 FileType::Pdf
             )
         }
+        FileType::Docx => {
+            // Extract metadata
+            if !config.skip_media_metadata {
+                extract_metadata_with_fallback!(
+                    stats.docx_metadata,
+                    docx::extract_docx_metadata(&mmap, stats, config),
+                    stats,
+                    crate::results::DocumentMetadata,
+                    FileType::Docx.as_metadata_name()
+                );
+            }
+            // Extract templates
+            docx::extract_docx_templates(&mmap, stats, config)
+        }
         _ => {
             // Skip binary files (non-images, videos, audio, CSV, PDF, etc)
             if stats.is_binary {
@@ -370,7 +400,7 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 FileType::Markdown => {
                     text::markdown::extract_markdown_templates(content, stats, config)
                 }
-                FileType::Text => text::text::extract_text_templates(content, stats, config),
+                FileType::Text => text::plain_text::extract_text_templates(content, stats, config),
                 FileType::Unknown => {
                     // Try JSON first (most structured), then log, then text
                     serde_json::from_str::<serde_json::Value>(content.lines().next().unwrap_or(""))
@@ -384,6 +414,7 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 FileType::Audio => unreachable!(),
                 FileType::Csv => unreachable!(),
                 FileType::Pdf => unreachable!(),
+                FileType::Docx => unreachable!(),
             }
         }
     }

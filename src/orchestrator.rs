@@ -210,12 +210,13 @@ fn process_task_phase2(
     let start = Instant::now();
     let mut stats = task.stats.clone();
 
-    // Images, videos, audio, PDFs, and CSVs are binary but still need metadata extraction
+    // Images, videos, audio, PDFs, DOCX, and CSVs are binary but still need metadata extraction
     let needs_processing = !stats.is_binary
         || stats.file_type == FileType::Image
         || stats.file_type == FileType::Video
         || stats.file_type == FileType::Audio
         || stats.file_type == FileType::Pdf
+        || stats.file_type == FileType::Docx
         || stats.file_type == FileType::Csv;
 
     if needs_processing {

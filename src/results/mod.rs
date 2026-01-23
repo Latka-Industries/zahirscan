@@ -14,8 +14,8 @@ pub trait MinimalFallback {
 // Re-export all public types for convenience
 pub use core::{FileMetadata, MiningResult, Output, OutputMode, Template};
 pub use metadata::{
-    AudioMetadata, BooleanStats, CsvMetadata, DateStats, ImageMetadata, NumericStats, PdfMetadata,
-    VideoMetadata,
+    AudioMetadata, BooleanStats, CsvMetadata, DateStats, DocumentMetadata, ImageMetadata,
+    NumericStats, PdfMetadata, VideoMetadata,
 };
 pub use writing::{CompressionStats, PunctuationMetrics, SVOAnalysis, WritingFootprint};
 

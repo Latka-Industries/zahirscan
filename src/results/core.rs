@@ -4,7 +4,7 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
 
-use super::metadata::{AudioMetadata, ImageMetadata, VideoMetadata};
+use super::metadata::{AudioMetadata, DocumentMetadata, ImageMetadata, VideoMetadata};
 use super::writing::{CompressionStats, WritingFootprint};
 
 /// Output mode for results
@@ -75,6 +75,8 @@ pub struct Output {
     pub csv_metadata: Option<super::metadata::CsvMetadata>,
     /// PDF metadata (Mode 2 only, for PDF files)
     pub pdf_metadata: Option<super::metadata::PdfMetadata>,
+    /// Document metadata (Mode 2 only, for DOCX and Pages files)
+    pub docx_metadata: Option<DocumentMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -94,8 +96,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 14 fields: 1 required (templates) + 13 optional fields
-        let mut state = serializer.serialize_struct("Output", 14)?;
+        // Maximum 16 fields: 1 required (templates) + 15 optional fields
+        let mut state = serializer.serialize_struct("Output", 16)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -115,6 +117,7 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.audio_metadata, "audio_metadata");
         crate::serialize_optional!(state, self.csv_metadata, "csv_metadata");
         crate::serialize_optional!(state, self.pdf_metadata, "pdf_metadata");
+        crate::serialize_optional!(state, self.docx_metadata, "docx_metadata");
 
         state.end()
     }
@@ -141,6 +144,7 @@ impl Output {
             audio_metadata: None,
             csv_metadata: None,
             pdf_metadata: None,
+            docx_metadata: None,
         }
     }
 
@@ -168,6 +172,7 @@ impl Output {
             audio_metadata: None,
             csv_metadata: None,
             pdf_metadata: None,
+            docx_metadata: None,
         }
     }
 }

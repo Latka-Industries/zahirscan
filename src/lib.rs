@@ -43,8 +43,8 @@ pub use parsers::{FileType, ParseResult, extract_templates, initial_file_scan};
 
 // Re-export result types
 pub use results::{
-    AudioMetadata, CompressionStats, CsvMetadata, FileMetadata, ImageMetadata, MiningResult,
-    Output, OutputMode, Template, VideoMetadata,
+    AudioMetadata, CompressionStats, CsvMetadata, DocumentMetadata, FileMetadata, ImageMetadata,
+    MiningResult, Output, OutputMode, PdfMetadata, Template, VideoMetadata,
 };
 
 // Re-export utility functions
