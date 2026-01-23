@@ -20,6 +20,7 @@ ZahirScan uses probabilistic template mining to extract essential structure and 
 
 - **Logs**: Plain text logs, JSON-formatted logs, structured log files
 - **Text Documents**: TXT, Markdown (MD), plain text content
+- **Documents**: DOCX (Word documents), PDF (metadata extraction)
 - **CSV Files**: CSV
 - **Images**: JPEG, PNG, GIF, WebP, BMP, TIFF
 - **Videos**: MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, 3GP, OGV
@@ -31,6 +32,7 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 
 - **Template Mining**: Automatically identifies repeated patterns in logs/text and extracts them as templates with placeholders
 - **Media Metadata**: Extracts comprehensive metadata for images, videos, and audio (dimensions, codecs, bitrates, etc.)
+- **Document Metadata**: Extracts metadata from DOCX files (word count, character count, paragraph count, title, author, creation/modification dates, revision) and PDF files (page count, title, author, subject, creator, producer, creation/modification dates, PDF version, encryption status)
 - **CSV Metadata**: Extracts row/column counts, column names, data types, delimiter, quote/escape characters, null percentages, unique counts, and type-specific statistics (numeric: min/max/mean/median/IQR/stdev, date: span/min/max, boolean: true percentage)
 - **Writing Footprint**: For text/markdown files, provides vocabulary richness, sentence structure, and template diversity metrics
 - **Zero-Copy Processing**: Uses memory-mapped files (`memmap2`) to handle files larger than available RAM
@@ -79,8 +81,11 @@ zahirscan -i audio/*.mp3 -o output/ -f
 # Extract CSV metadata (row/column counts, data types, statistics)
 zahirscan -i data/*.csv -o output/ -f
 
+# Extract DOCX metadata (word count, character count, title, author, dates, revision)
+zahirscan -i documents/*.docx -o output/ -f
+
 # Process multiple file types at once
-zahirscan -i logs/*.log docs/*.md images/*.jpg data/*.csv -o output/ -f
+zahirscan -i logs/*.log docs/*.md images/*.jpg data/*.csv documents/*.docx -o output/ -f
 
 # Skip media metadata for faster processing
 zahirscan -i logs/*.log -o output/ -n
@@ -127,7 +132,7 @@ Options:
 
 **Output formats:**
 
-- **Mode 1 (Templates)**: Minimal JSON with template patterns & schema, writing footprint (for text/markdown), and media metadata (for images/videos/audio)
+- **Mode 1 (Templates)**: Minimal JSON with template patterns & schema, writing footprint (for text/markdown), media metadata (for images/videos/audio), and document metadata (for DOCX)
 - **Mode 2 (Full)**: Mode 1 output plus:
   - File statistics (size, line count, processing time)
   - Size comparison (before/after)
@@ -154,6 +159,7 @@ See [`config.toml`](config.toml) for configuration.
 ### Phase 2: Template Mining and Metadata Extraction
 
 - **Media Metadata**: Extracts metadata for images (via `image` crate), videos/audio (via `ffprobe`)
+- **Document Metadata**: Extracts metadata from DOCX files (via `zip` and `quick_xml` crates)
 - **Template Mining**: Frequency-based analysis to identify static vs. dynamic fields, extracts patterns as templates
 - **Tokenization**: Content-aware (whitespace for logs, JSON structure for JSON logs, sentence/paragraph for text/markdown)
 - **Writing Footprint**: Calculates vocabulary richness, sentence structure, template diversity for text/markdown
@@ -171,8 +177,10 @@ ZahirScan implements non-invasive file operations:
 
 - [ ] Publish to crates.io
 - [x] CSV metadata extraction (row/column counts, data types, delimiter detection, quote/escape characters, type-specific statistics)
-- [ ] PDF metadata extraction (page count, document properties, PDF version)
-- [ ] DOCX & Pages text extraction (plain text without formatting)
+- [x] DOCX metadata extraction (word count, character count, paragraph count, core properties: title, author, creation/modification dates, revision)
+- [x] PDF metadata extraction (page count, document properties, PDF version, title, author, subject, creator, producer, creation/modification dates, encryption status)
+- [ ] Pages metadata extraction (similar to DOCX - metadata extraction only)
+- [ ] Simple library wrapper API (`process_file()` / `process_files()` functions)
 
 ## License
 
