@@ -4,7 +4,9 @@ use super::ParseResult;
 use super::traits::empty_mining_result;
 use crate::config::Config;
 use crate::parsers::column_stats;
-use crate::results::{BlobStats, ColumnInfo, ForeignKeyInfo, IndexInfo, SqliteMetadata, TableInfo, TextStats};
+use crate::results::{
+    BlobStats, ColumnInfo, ForeignKeyInfo, IndexInfo, SqliteMetadata, TableInfo, TextStats,
+};
 use anyhow::{Context, Result};
 use log::debug;
 use rusqlite::{Connection, OpenFlags};
@@ -69,26 +71,24 @@ pub fn extract_sqlite_metadata(
     let mut total_rows = 0usize;
 
     // Get all table names (excluding system tables)
-    let table_names: Vec<String> = match conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'") {
-        Ok(mut stmt) => {
-            match stmt.query_map([], |row| row.get::<_, String>(0)) {
-                Ok(rows) => {
-                    match rows.collect::<Result<Vec<_>, _>>() {
-                        Ok(names) => names,
-                        Err(e) => {
-                            let error_msg = format!("Failed to collect table names: {}", e);
-                            debug!("SQLite error for '{}': {}", stats.file_path, error_msg);
-                            metadata.error = Some(error_msg);
-                            return Ok(metadata);
-                        }
-                    }
-                },
+    let table_names: Vec<String> = match conn
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+    {
+        Ok(mut stmt) => match stmt.query_map([], |row| row.get::<_, String>(0)) {
+            Ok(rows) => match rows.collect::<Result<Vec<_>, _>>() {
+                Ok(names) => names,
                 Err(e) => {
-                    let error_msg = format!("Failed to query table names: {}", e);
+                    let error_msg = format!("Failed to collect table names: {}", e);
                     debug!("SQLite error for '{}': {}", stats.file_path, error_msg);
                     metadata.error = Some(error_msg);
                     return Ok(metadata);
                 }
+            },
+            Err(e) => {
+                let error_msg = format!("Failed to query table names: {}", e);
+                debug!("SQLite error for '{}': {}", stats.file_path, error_msg);
+                metadata.error = Some(error_msg);
+                return Ok(metadata);
             }
         },
         Err(e) => {
@@ -118,7 +118,10 @@ pub fn extract_sqlite_metadata(
         let mut stmt = match conn.prepare(&pragma_query) {
             Ok(s) => s,
             Err(e) => {
-                let error_msg = format!("Failed to prepare PRAGMA query for table '{}': {}", table_name, e);
+                let error_msg = format!(
+                    "Failed to prepare PRAGMA query for table '{}': {}",
+                    table_name, e
+                );
                 debug!("SQLite error for '{}': {}", stats.file_path, error_msg);
                 metadata.error = Some(error_msg);
                 return Ok(metadata);
@@ -139,7 +142,10 @@ pub fn extract_sqlite_metadata(
             let (_cid, name, type_name, notnull, default_value, pk) = match row_result {
                 Ok(row) => row,
                 Err(e) => {
-                    let error_msg = format!("Failed to read column info for table '{}': {}", table_name, e);
+                    let error_msg = format!(
+                        "Failed to read column info for table '{}': {}",
+                        table_name, e
+                    );
                     debug!("SQLite error for '{}': {}", stats.file_path, error_msg);
                     metadata.error = Some(error_msg);
                     return Ok(metadata);
@@ -461,24 +467,27 @@ fn compute_column_statistics(
                 // Compute BLOB size statistics (min/max/avg size in bytes)
                 // Use length() function to get blob size without loading the actual blob data
                 // quoted_col already contains quotes, so use it directly in length()
-                let blob_size_query = format!("SELECT length({}) FROM {} WHERE {} IS NOT NULL;", quoted_col, quoted_table, quoted_col);
+                let blob_size_query = format!(
+                    "SELECT length({}) FROM {} WHERE {} IS NOT NULL;",
+                    quoted_col, quoted_table, quoted_col
+                );
                 let blob_sizes: Vec<usize> = match conn.prepare(&blob_size_query) {
-                    Ok(mut stmt) => {
-                        stmt.query_map([], |row| row.get::<_, Option<i64>>(0))
-                            .ok()
-                            .map(|rows| {
-                                rows.filter_map(|r| r.ok().flatten().map(|s| s as usize))
-                                    .collect()
-                            })
-                            .unwrap_or_default()
-                    }
+                    Ok(mut stmt) => stmt
+                        .query_map([], |row| row.get::<_, Option<i64>>(0))
+                        .ok()
+                        .map(|rows| {
+                            rows.filter_map(|r| r.ok().flatten().map(|s| s as usize))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                     Err(_) => Vec::new(),
                 };
 
                 if !blob_sizes.is_empty() {
                     let min_size = *blob_sizes.iter().min().unwrap();
                     let max_size = *blob_sizes.iter().max().unwrap();
-                    let avg_size = blob_sizes.iter().sum::<usize>() as f64 / blob_sizes.len() as f64;
+                    let avg_size =
+                        blob_sizes.iter().sum::<usize>() as f64 / blob_sizes.len() as f64;
 
                     col.blob_stats = Some(BlobStats {
                         min_size: Some(min_size),

@@ -3,8 +3,8 @@
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::results::MinimalFallback;
 use crate::parsers::BitrateMode;
+use crate::results::MinimalFallback;
 
 /// Video metadata (Mode 2 only, for video files)
 #[derive(Debug, Clone, Deserialize, Default)]

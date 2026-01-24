@@ -1,12 +1,12 @@
 //! Tests for SQLite metadata extraction
 
+use rusqlite::Connection;
 use std::fs;
 use std::time::Duration;
 use tempfile::NamedTempFile;
 use zahirscan::config::Config;
 use zahirscan::parsers::sqlite::extract_sqlite_metadata;
 use zahirscan::parsers::{FileType, ParseResult};
-use rusqlite::Connection;
 
 fn get_test_config() -> Config {
     Config::default()
@@ -36,7 +36,7 @@ fn get_test_stats(file_path: &str, byte_count: usize) -> ParseResult {
 fn create_simple_db() -> Vec<u8> {
     let temp_file = NamedTempFile::new().unwrap();
     let temp_path = temp_file.path();
-    
+
     let conn = Connection::open(temp_path).unwrap();
     conn.execute(
         "CREATE TABLE users (
@@ -47,8 +47,9 @@ fn create_simple_db() -> Vec<u8> {
             created_at TEXT
         )",
         [],
-    ).unwrap();
-    
+    )
+    .unwrap();
+
     // Insert test data
     for i in 1..=10 {
         conn.execute(
@@ -59,9 +60,10 @@ fn create_simple_db() -> Vec<u8> {
                 20 + i,
                 format!("2025-01-{:02}", i)
             ],
-        ).unwrap();
+        )
+        .unwrap();
     }
-    
+
     drop(conn);
     fs::read(temp_path).unwrap()
 }
@@ -70,12 +72,12 @@ fn create_simple_db() -> Vec<u8> {
 fn create_relational_db() -> Vec<u8> {
     let temp_file = NamedTempFile::new().unwrap();
     let temp_path = temp_file.path();
-    
+
     let conn = Connection::open(temp_path).unwrap();
-    
+
     // Enable foreign keys
     conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
-    
+
     // Create customers table
     conn.execute(
         "CREATE TABLE customers (
@@ -84,8 +86,9 @@ fn create_relational_db() -> Vec<u8> {
             email TEXT
         )",
         [],
-    ).unwrap();
-    
+    )
+    .unwrap();
+
     // Create orders table with foreign key
     conn.execute(
         "CREATE TABLE orders (
@@ -96,8 +99,9 @@ fn create_relational_db() -> Vec<u8> {
             FOREIGN KEY (customer_id) REFERENCES customers(id)
         )",
         [],
-    ).unwrap();
-    
+    )
+    .unwrap();
+
     // Create order_items table
     conn.execute(
         "CREATE TABLE order_items (
@@ -109,18 +113,35 @@ fn create_relational_db() -> Vec<u8> {
             FOREIGN KEY (order_id) REFERENCES orders(id)
         )",
         [],
-    ).unwrap();
-    
+    )
+    .unwrap();
+
     // Insert test data
-    conn.execute("INSERT INTO customers (name, email) VALUES ('Alice', 'alice@example.com')", []).unwrap();
-    conn.execute("INSERT INTO customers (name, email) VALUES ('Bob', 'bob@example.com')", []).unwrap();
-    
-    conn.execute("INSERT INTO orders (customer_id, order_date, total) VALUES (1, '2025-01-01', 100.0)", []).unwrap();
-    conn.execute("INSERT INTO orders (customer_id, order_date, total) VALUES (2, '2025-01-02', 200.0)", []).unwrap();
-    
+    conn.execute(
+        "INSERT INTO customers (name, email) VALUES ('Alice', 'alice@example.com')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO customers (name, email) VALUES ('Bob', 'bob@example.com')",
+        [],
+    )
+    .unwrap();
+
+    conn.execute(
+        "INSERT INTO orders (customer_id, order_date, total) VALUES (1, '2025-01-01', 100.0)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO orders (customer_id, order_date, total) VALUES (2, '2025-01-02', 200.0)",
+        [],
+    )
+    .unwrap();
+
     conn.execute("INSERT INTO order_items (order_id, product_name, quantity, price) VALUES (1, 'Widget', 2, 50.0)", []).unwrap();
     conn.execute("INSERT INTO order_items (order_id, product_name, quantity, price) VALUES (2, 'Gadget', 1, 200.0)", []).unwrap();
-    
+
     drop(conn);
     fs::read(temp_path).unwrap()
 }
@@ -129,9 +150,9 @@ fn create_relational_db() -> Vec<u8> {
 fn create_indexed_db() -> Vec<u8> {
     let temp_file = NamedTempFile::new().unwrap();
     let temp_path = temp_file.path();
-    
+
     let conn = Connection::open(temp_path).unwrap();
-    
+
     conn.execute(
         "CREATE TABLE products (
             id INTEGER PRIMARY KEY,
@@ -141,14 +162,17 @@ fn create_indexed_db() -> Vec<u8> {
             category TEXT
         )",
         [],
-    ).unwrap();
-    
+    )
+    .unwrap();
+
     // Create unique index on sku
-    conn.execute("CREATE UNIQUE INDEX idx_sku ON products(sku)", []).unwrap();
-    
+    conn.execute("CREATE UNIQUE INDEX idx_sku ON products(sku)", [])
+        .unwrap();
+
     // Create non-unique index on category
-    conn.execute("CREATE INDEX idx_category ON products(category)", []).unwrap();
-    
+    conn.execute("CREATE INDEX idx_category ON products(category)", [])
+        .unwrap();
+
     // Insert test data
     for i in 1..=20 {
         conn.execute(
@@ -157,11 +181,16 @@ fn create_indexed_db() -> Vec<u8> {
                 format!("Product {}", i),
                 format!("SKU-{:04}", i),
                 10.0 * i as f64,
-                if i % 2 == 0 { "Electronics" } else { "Clothing" }
+                if i % 2 == 0 {
+                    "Electronics"
+                } else {
+                    "Clothing"
+                }
             ],
-        ).unwrap();
+        )
+        .unwrap();
     }
-    
+
     drop(conn);
     fs::read(temp_path).unwrap()
 }
@@ -170,9 +199,9 @@ fn create_indexed_db() -> Vec<u8> {
 fn create_types_db() -> Vec<u8> {
     let temp_file = NamedTempFile::new().unwrap();
     let temp_path = temp_file.path();
-    
+
     let conn = Connection::open(temp_path).unwrap();
-    
+
     conn.execute(
         "CREATE TABLE test_types (
             integer_field INTEGER,
@@ -184,13 +213,14 @@ fn create_types_db() -> Vec<u8> {
             null_field TEXT
         )",
         [],
-    ).unwrap();
-    
+    )
+    .unwrap();
+
     // Insert test data with various types
     for i in 1..=10 {
         let blob_data = format!("blob data {}", i).into_bytes();
         conn.execute(
-            "INSERT INTO test_types (integer_field, real_field, text_field, blob_field, boolean_field, date_field, null_field) 
+            "INSERT INTO test_types (integer_field, real_field, text_field, blob_field, boolean_field, date_field, null_field)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 i,
@@ -203,7 +233,7 @@ fn create_types_db() -> Vec<u8> {
             ],
         ).unwrap();
     }
-    
+
     drop(conn);
     fs::read(temp_path).unwrap()
 }
@@ -212,10 +242,10 @@ fn create_types_db() -> Vec<u8> {
 fn create_complex_db() -> Vec<u8> {
     let temp_file = NamedTempFile::new().unwrap();
     let temp_path = temp_file.path();
-    
+
     let conn = Connection::open(temp_path).unwrap();
     conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
-    
+
     // Departments table
     conn.execute(
         "CREATE TABLE departments (
@@ -224,8 +254,9 @@ fn create_complex_db() -> Vec<u8> {
             budget REAL
         )",
         [],
-    ).unwrap();
-    
+    )
+    .unwrap();
+
     // Employees table with foreign key
     conn.execute(
         "CREATE TABLE employees (
@@ -236,8 +267,9 @@ fn create_complex_db() -> Vec<u8> {
             FOREIGN KEY (department_id) REFERENCES departments(id)
         )",
         [],
-    ).unwrap();
-    
+    )
+    .unwrap();
+
     // Projects table
     conn.execute(
         "CREATE TABLE projects (
@@ -247,19 +279,40 @@ fn create_complex_db() -> Vec<u8> {
             end_date TEXT
         )",
         [],
-    ).unwrap();
-    
+    )
+    .unwrap();
+
     // Insert test data
-    conn.execute("INSERT INTO departments (name, budget) VALUES ('Engineering', 100000.0)", []).unwrap();
-    conn.execute("INSERT INTO departments (name, budget) VALUES ('Sales', 50000.0)", []).unwrap();
-    
-    conn.execute("INSERT INTO employees (name, department_id, salary) VALUES ('Alice', 1, 75000.0)", []).unwrap();
-    conn.execute("INSERT INTO employees (name, department_id, salary) VALUES ('Bob', 1, 80000.0)", []).unwrap();
-    conn.execute("INSERT INTO employees (name, department_id, salary) VALUES ('Charlie', 2, 60000.0)", []).unwrap();
-    
+    conn.execute(
+        "INSERT INTO departments (name, budget) VALUES ('Engineering', 100000.0)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO departments (name, budget) VALUES ('Sales', 50000.0)",
+        [],
+    )
+    .unwrap();
+
+    conn.execute(
+        "INSERT INTO employees (name, department_id, salary) VALUES ('Alice', 1, 75000.0)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO employees (name, department_id, salary) VALUES ('Bob', 1, 80000.0)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO employees (name, department_id, salary) VALUES ('Charlie', 2, 60000.0)",
+        [],
+    )
+    .unwrap();
+
     conn.execute("INSERT INTO projects (name, start_date, end_date) VALUES ('Project A', '2025-01-01', '2025-06-30')", []).unwrap();
     conn.execute("INSERT INTO projects (name, start_date, end_date) VALUES ('Project B', '2025-02-01', '2025-07-31')", []).unwrap();
-    
+
     drop(conn);
     fs::read(temp_path).unwrap()
 }
@@ -414,9 +467,9 @@ fn test_indexed_database_indexes() {
             assert!(!indexes.is_empty());
 
             // Check for unique index on sku
-            let sku_index = indexes.iter().find(|idx| {
-                idx.columns.contains(&"sku".to_string()) && idx.unique == Some(true)
-            });
+            let sku_index = indexes
+                .iter()
+                .find(|idx| idx.columns.contains(&"sku".to_string()) && idx.unique == Some(true));
             assert!(sku_index.is_some());
         }
     }
@@ -546,7 +599,10 @@ fn test_complex_database_constraints() {
                 if col.not_null == Some(true) {
                     // NOT NULL columns should have null_percentage = 0.0 (or very close)
                     if let Some(null_pct) = col.null_percentage {
-                        assert!(null_pct < 1.0, "NOT NULL column should have null_percentage < 1.0");
+                        assert!(
+                            null_pct < 1.0,
+                            "NOT NULL column should have null_percentage < 1.0"
+                        );
                     }
                 }
             }
@@ -591,10 +647,7 @@ fn test_database_row_counts() {
 
     // Total rows should be sum of all table row counts
     if let (Some(total_rows), Some(tables)) = (metadata.total_rows, &metadata.tables) {
-        let calculated_total: usize = tables
-            .iter()
-            .map(|t| t.row_count.unwrap_or(0))
-            .sum();
+        let calculated_total: usize = tables.iter().map(|t| t.row_count.unwrap_or(0)).sum();
         assert_eq!(total_rows, calculated_total);
     }
 
@@ -687,17 +740,18 @@ fn test_numeric_statistics_calculation() {
     let columns = tables[0].columns.as_ref().unwrap();
 
     // Find a numeric column with data
-    let numeric_col = columns
-        .iter()
-        .find(|c| {
-            c.type_name.as_ref().map(|t| t == "INTEGER" || t == "REAL").unwrap_or(false)
-                && c.null_percentage != Some(100.0)
-                && c.numeric_stats.is_some()
-        });
+    let numeric_col = columns.iter().find(|c| {
+        c.type_name
+            .as_ref()
+            .map(|t| t == "INTEGER" || t == "REAL")
+            .unwrap_or(false)
+            && c.null_percentage != Some(100.0)
+            && c.numeric_stats.is_some()
+    });
 
     if let Some(col) = numeric_col {
         let stats = col.numeric_stats.as_ref().unwrap();
-        
+
         // If we have min and max, max should be >= min
         if let (Some(min), Some(max)) = (stats.min, stats.max) {
             assert!(max >= min);
@@ -727,24 +781,24 @@ fn test_text_statistics_calculation() {
     let columns = tables[0].columns.as_ref().unwrap();
 
     // Find a text column with data
-    let text_col = columns
-        .iter()
-        .find(|c| {
-            c.type_name.as_ref().map(|t| t == "TEXT").unwrap_or(false)
-                && c.null_percentage != Some(100.0)
-                && c.text_stats.is_some()
-        });
+    let text_col = columns.iter().find(|c| {
+        c.type_name.as_ref().map(|t| t == "TEXT").unwrap_or(false)
+            && c.null_percentage != Some(100.0)
+            && c.text_stats.is_some()
+    });
 
     if let Some(col) = text_col {
         let stats = col.text_stats.as_ref().unwrap();
-        
+
         // If we have min and max length, max should be >= min
         if let (Some(min_len), Some(max_len)) = (stats.min_length, stats.max_length) {
             assert!(max_len >= min_len);
         }
 
         // Average length should be between min and max (if both exist)
-        if let (Some(avg_len), Some(min_len), Some(max_len)) = (stats.avg_length, stats.min_length, stats.max_length) {
+        if let (Some(avg_len), Some(min_len), Some(max_len)) =
+            (stats.avg_length, stats.min_length, stats.max_length)
+        {
             assert!(avg_len >= min_len as f64);
             assert!(avg_len <= max_len as f64);
         }
@@ -762,24 +816,24 @@ fn test_blob_statistics_calculation() {
     let columns = tables[0].columns.as_ref().unwrap();
 
     // Find a blob column with data
-    let blob_col = columns
-        .iter()
-        .find(|c| {
-            c.type_name.as_ref().map(|t| t == "BLOB").unwrap_or(false)
-                && c.null_percentage != Some(100.0)
-                && c.blob_stats.is_some()
-        });
+    let blob_col = columns.iter().find(|c| {
+        c.type_name.as_ref().map(|t| t == "BLOB").unwrap_or(false)
+            && c.null_percentage != Some(100.0)
+            && c.blob_stats.is_some()
+    });
 
     if let Some(col) = blob_col {
         let stats = col.blob_stats.as_ref().unwrap();
-        
+
         // If we have min and max size, max should be >= min
         if let (Some(min_size), Some(max_size)) = (stats.min_size, stats.max_size) {
             assert!(max_size >= min_size);
         }
 
         // Average size should be between min and max (if both exist)
-        if let (Some(avg_size), Some(min_size), Some(max_size)) = (stats.avg_size, stats.min_size, stats.max_size) {
+        if let (Some(avg_size), Some(min_size), Some(max_size)) =
+            (stats.avg_size, stats.min_size, stats.max_size)
+        {
             assert!(avg_size >= min_size as f64);
             assert!(avg_size <= max_size as f64);
         }
@@ -799,14 +853,11 @@ fn test_boolean_statistics_calculation() {
     // Find a boolean column with data
     let boolean_col = columns
         .iter()
-        .find(|c| {
-            c.boolean_stats.is_some()
-                && c.null_percentage != Some(100.0)
-        });
+        .find(|c| c.boolean_stats.is_some() && c.null_percentage != Some(100.0));
 
     if let Some(col) = boolean_col {
         let stats = col.boolean_stats.as_ref().unwrap();
-        
+
         // true_percentage should be between 0 and 100
         if let Some(true_pct) = stats.true_percentage {
             assert!(true_pct >= 0.0);
@@ -838,7 +889,7 @@ fn test_empty_table_statistics() {
         let empty_table = tables.iter().find(|t| t.name == "empty_table");
         if let Some(table) = empty_table {
             assert_eq!(table.row_count, Some(0));
-            
+
             if let Some(columns) = &table.columns {
                 for col in columns {
                     // Empty tables should have null_percentage = 100.0 and unique_count = 0
@@ -904,10 +955,12 @@ fn test_foreign_key_references() {
                 assert!(!fk.references_column.is_empty());
 
                 // Referenced table should exist in the database
-                let referenced_table_exists = tables
-                    .iter()
-                    .any(|t| t.name == fk.references_table);
-                assert!(referenced_table_exists, "Foreign key references non-existent table: {}", fk.references_table);
+                let referenced_table_exists = tables.iter().any(|t| t.name == fk.references_table);
+                assert!(
+                    referenced_table_exists,
+                    "Foreign key references non-existent table: {}",
+                    fk.references_table
+                );
             }
         }
     }

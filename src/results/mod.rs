@@ -16,8 +16,8 @@ pub use core::{FileMetadata, MiningResult, Output, OutputMode, Template};
 // Re-export all metadata types (now from metadata module)
 pub use metadata::{
     AudioMetadata, BlobStats, BooleanStats, ColumnInfo, CsvMetadata, DateStats, DocumentMetadata,
-    ForeignKeyInfo, ImageMetadata, IndexInfo, NumericStats, PdfMetadata, SqliteMetadata,
-    TableInfo, TextStats, VideoMetadata,
+    ForeignKeyInfo, ImageMetadata, IndexInfo, NumericStats, PdfMetadata, SqliteMetadata, TableInfo,
+    TextStats, VideoMetadata,
 };
 pub use writing::{CompressionStats, PunctuationMetrics, SVOAnalysis, WritingFootprint};
 
@@ -81,4 +81,3 @@ macro_rules! impl_minimal_fallback {
         }
     };
 }
-
