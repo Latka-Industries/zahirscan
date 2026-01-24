@@ -23,3 +23,6 @@ mod csv_metadata;
 
 #[path = "unit_tests/image_metadata.rs"]
 mod image_metadata;
+
+#[path = "unit_tests/sqlite_metadata.rs"]
+mod sqlite_metadata;
