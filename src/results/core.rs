@@ -4,7 +4,9 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
 
-use super::metadata::{AudioMetadata, DocumentMetadata, ImageMetadata, VideoMetadata};
+use super::metadata::{
+    AudioMetadata, DocumentMetadata, ImageMetadata, SqliteMetadata, VideoMetadata,
+};
 use super::writing::{CompressionStats, WritingFootprint};
 
 /// Output mode for results
@@ -77,6 +79,8 @@ pub struct Output {
     pub pdf_metadata: Option<super::metadata::PdfMetadata>,
     /// Document metadata (Mode 2 only, for DOCX and Pages files)
     pub docx_metadata: Option<DocumentMetadata>,
+    /// SQLite metadata (Mode 2 only, for SQLite database files)
+    pub sqlite_metadata: Option<SqliteMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -96,8 +100,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 16 fields: 1 required (templates) + 15 optional fields
-        let mut state = serializer.serialize_struct("Output", 16)?;
+        // Maximum 17 fields: 1 required (templates) + 16 optional fields
+        let mut state = serializer.serialize_struct("Output", 17)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -118,6 +122,7 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.csv_metadata, "csv_metadata");
         crate::serialize_optional!(state, self.pdf_metadata, "pdf_metadata");
         crate::serialize_optional!(state, self.docx_metadata, "docx_metadata");
+        crate::serialize_optional!(state, self.sqlite_metadata, "sqlite_metadata");
 
         state.end()
     }
@@ -149,6 +154,7 @@ impl Output {
             csv_metadata: None,
             pdf_metadata: None,
             docx_metadata: None,
+            sqlite_metadata: None,
         }
     }
 
@@ -177,6 +183,7 @@ impl Output {
             csv_metadata: None,
             pdf_metadata: None,
             docx_metadata: None,
+            sqlite_metadata: None,
         }
     }
 }
