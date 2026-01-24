@@ -34,7 +34,7 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 - **Media Metadata**: Extracts comprehensive metadata for images, videos, and audio (dimensions, codecs, bitrates, etc.)
 - **Document Metadata**: Extracts metadata from DOCX files (word count, character count, paragraph count, title, author, creation/modification dates, revision), XLSX files (sheet count, sheet names, row/column counts per sheet, core properties), and PDF files (page count, title, author, subject, creator, producer, creation/modification dates, PDF version, encryption status)
 - **CSV Metadata**: Extracts row/column counts, column names, data types, delimiter, quote/escape characters, null percentages, unique counts, and type-specific statistics (numeric: min/max/mean/median/IQR/stdev, date: span/min/max, boolean: true percentage)
-- **Writing Footprint**: For text/markdown files, provides vocabulary richness, sentence structure, and template diversity metrics
+- **Writing Footprint**: For text/markdown files, provides vocabulary richness, sentence structure, template diversity metrics, and word universe analysis (when enabled)
 - **Zero-Copy Processing**: Uses memory-mapped files (`memmap2`) to handle files larger than available RAM
 - **Adaptive Parallelization**: Automatically optimizes chunk sizes based on file statistics and CPU resources
 - **Size Reduction**: Typically reduces content size by 80-95% while preserving essential information
@@ -220,6 +220,15 @@ Each `Template` contains:
 - `template_diversity: usize` - Number of unique template patterns
 - `avg_entropy: f64` - Average entropy across templates (0.0-1.0)
 - `svo_analysis: Option<SVOAnalysis>` - Sentence structure analysis
+- `word_universe: Option<WordUniverse>` - Per-document vocabulary corpus for enhanced writing analysis (future enhancement)
+
+**Word Universe** (when enabled) provides detailed vocabulary analysis:
+
+- Unique word collection and frequency distributions
+- Word length statistics (min, max, average, median, distribution)
+- Most common and rare words
+- Frequency histograms for visualization
+- Enables better template extraction for short texts by identifying structural vs. content words
 
 #### Compression Stats Structure
 
@@ -254,7 +263,7 @@ See [`config.toml`](config.toml) for configuration.
 - **Document Metadata**: Extracts metadata from DOCX/XLSX files (via `zip` and `quick_xml` crates, `calamine` for XLSX row/column counts)
 - **Template Mining**: Frequency-based analysis to identify static vs. dynamic fields, extracts patterns as templates
 - **Tokenization**: Content-aware (whitespace for logs, JSON structure for JSON logs, sentence/paragraph for text/markdown)
-- **Writing Footprint**: Calculates vocabulary richness, sentence structure, template diversity for text/markdown
+- **Writing Footprint**: Calculates vocabulary richness, sentence structure, template diversity for text/markdown, with optional word universe analysis for enhanced pattern recognition
 - **Parallel Processing**: Single Rayon thread pool with adaptive chunk sizing based on Phase 1 statistics
 
 ## Security
@@ -267,14 +276,9 @@ ZahirScan implements non-invasive file operations:
 
 ## TODO
 
-- [ ] Publish to crates.io
-- [x] CSV metadata extraction (row/column counts, data types, delimiter detection, quote/escape characters, type-specific statistics)
-- [x] DOCX metadata extraction (word count, character count, paragraph count, core properties: title, author, creation/modification dates, revision)
-- [x] XLSX metadata extraction (sheet count, sheet names, row/column counts per sheet, core properties: title, author, creation/modification dates, revision)
-- [x] PDF metadata extraction (page count, document properties, PDF version, title, author, subject, creator, producer, creation/modification dates, encryption status)
-- [x] Simple library wrapper API (`extract_schema()` function with flexible input types via `ToPathIter` trait)
-- [x] DOCX code refactoring (extracted utilities, struct-based pattern matching, shared ZIP archive helpers)
-- [x] XLSX code refactoring (extracted utilities, organized constants/structs, shared helpers with DOCX)
+- [ ] Word universe for enhanced writing analysis (per-document vocabulary corpus with frequency distributions, word length statistics, and visualization data)
+- [ ] Improve template extraction for short literary texts (adaptive thresholds and pattern similarity merging for better pattern recognition in short documents)
+- [ ] SQLite database metadata extraction (schema information, table/column metadata, database statistics)
 
 ## License
 
