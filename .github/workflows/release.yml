@@ -25,8 +25,15 @@ jobs:
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
           if [ -n "$TAG_MESSAGE" ]; then
+            # Use tag message as-is if it has markdown, otherwise wrap in ## Changes
+            if echo "$TAG_MESSAGE" | grep -q "^##"; then
+              FORMATTED="$TAG_MESSAGE"
+            else
+              FORMATTED="## Changes"$'\n'$'\n'"$TAG_MESSAGE"
+            fi
+
             echo "BODY<<EOF" >> $GITHUB_OUTPUT
-            echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
+            echo "$FORMATTED" >> $GITHUB_OUTPUT
             if [ -n "$PREV_TAG" ]; then
               echo "" >> $GITHUB_OUTPUT
               echo "**Full Changelog**: ${PREV_TAG}...${{ steps.tag.outputs.VERSION }}" >> $GITHUB_OUTPUT
