@@ -1,13 +1,13 @@
 # ZahirScan: Template-Based Content Compression & Media Metadata Extraction
 
+[![Crates.io](https://img.shields.io/crates/v/zahirscan.svg)](https://crates.io/crates/zahirscan)
+[![docs.rs](https://docs.rs/zahirscan/badge.svg)](https://docs.rs/zahirscan)
 ![Build](https://github.com/thicclatka/zahirscan/workflows/Build/badge.svg)
 ![Rust](https://img.shields.io/badge/rust-1.92.0-orange.svg)
 
 > _"Others will dream that I am mad, while I dream of the Zahir."_ — [JL Borges, Labyrinths](https://bookshop.org/p/books/labyrinths-jorge-luis-borges/f14b472a366ed106?ean=9780811216999&next=t&)
 
 A high-performance Rust CLI tool that extracts templates and patterns from unstructured content, converting them into compact structured formats while preserving essential information. Additionally provides comprehensive metadata extraction for media files.
-
-> **Note**: This project is currently a work in progress, so use with caution.
 
 ## Overview
 
@@ -41,63 +41,26 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 
 ## Installation
 
-### Prerequisites
-
-- **Rust** (stable toolchain)
-- **ffprobe** (optional, for video/audio metadata extraction): `ffprobe` is distributed with FFmpeg. Install FFmpeg: `https://ffmpeg.org/download.html`
-
-  > **Note**: If `ffprobe` is not installed, ZahirScan will still work for text, log, and image files. Video and audio files will be processed but metadata extraction will be skipped.
-
-### Build
-
 ```bash
-# Build from source
+# library
+cargo add zahirscan
+
+#cli
+cargo install zahirscan
+
+# from source
+git clone https://github.com/thicclatka/zahirscan.git
+cd zahirscan
 cargo build --release
 ```
 
+**Note**: `ffprobe` (from FFmpeg) is optional but required for video/audio metadata extraction.
+
+Documentation: [docs.rs/zahirscan](https://docs.rs/zahirscan)
+
 ## Usage
 
-### Quickstart Examples
-
-```bash
-# Process log files
-zahirscan -i app.log -o output/
-zahirscan -i logs/*.log -o output/
-zahirscan -i app.log -o output/ -f  # Full metadata mode
-
-# Process text/markdown files (extracts templates and writing footprint)
-zahirscan -i document.md -o output/
-zahirscan -i docs/*.txt docs/*.md -o output/
-
-# Extract image metadata (dimensions, format, compression, chroma subsampling)
-zahirscan -i images/*.jpg images/*.png -o output/ -f
-
-# Extract video metadata (requires ffprobe: codec, resolution, bitrate, frame_rate, etc.)
-zahirscan -i videos/*.mp4 -o output/ -f
-
-# Extract audio metadata (codec, bitrate, sample_rate, channels, bit_rate_mode for MP3)
-zahirscan -i audio/*.mp3 -o output/ -f
-
-# Extract CSV metadata (row/column counts, data types, statistics)
-zahirscan -i data/*.csv -o output/ -f
-
-# Extract DOCX metadata (word count, character count, title, author, dates, revision)
-zahirscan -i documents/*.docx -o output/ -f
-
-# Extract XLSX metadata (sheet count, sheet names, row/column counts, core properties)
-zahirscan -i spreadsheets/*.xlsx -o output/ -f
-
-# Process multiple file types at once
-zahirscan -i logs/*.log docs/*.md images/*.jpg data/*.csv documents/*.docx spreadsheets/*.xlsx -o output/ -f
-
-# Skip media metadata for faster processing
-zahirscan -i logs/*.log -o output/ -n
-
-# Redact file paths in output (privacy)
-zahirscan -i sensitive.log -o output/ -f -r
-```
-
-### Command-Line Options
+### CLI
 
 ```bash
 $ zahirscan --help
@@ -150,22 +113,6 @@ The `extract_schema()` function accepts flexible input types via the `ToPathIter
 
 - Single file: `&str`, `&String`, or `String`
 - Multiple files: `&[&str]`, `Vec<&str>`, `&[String]`, `Vec<String>`, or arrays like `[&str; N]`
-
-```rust
-use zahirscan::{extract_schema, OutputMode};
-
-// Process a single file (accepts &str, &String, or String)
-let outputs = extract_schema("app.log", OutputMode::Full)?;
-println!("Found {} templates", outputs[0].templates.len());
-
-// Process multiple files (accepts slices, vectors, or arrays)
-let files = vec!["file1.log", "file2.log", "file3.log"];
-let outputs = extract_schema(files.as_slice(), OutputMode::Full)?;
-for output in outputs {
-    println!("File: {:?}", output.source);
-    println!("Templates: {}", output.templates.len());
-}
-```
 
 For a complete working example, see [`examples/basic_usage.rs`](examples/basic_usage.rs). Run it with:
 
