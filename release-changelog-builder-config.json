@@ -1,0 +1,41 @@
+{
+  "categories": [
+    {
+      "title": "## Added",
+      "labels": ["feat", "feature"]
+    },
+    {
+      "title": "## Fixed",
+      "labels": ["fix", "bug"]
+    },
+    {
+      "title": "## Documentation",
+      "labels": ["docs", "documentation"]
+    },
+    {
+      "title": "## Changed",
+      "labels": ["chore", "refactor", "perf", "test", "ci", "build"]
+    },
+    {
+      "title": "## Tests",
+      "labels": ["type: test"]
+    }
+  ],
+  "ignore_labels": ["ignore"],
+  "sort": "ASC",
+  "template": "${{CATEGORIZED_COUNT}} changes since ${{FROM_TAG}}\n\n${{CHANGELOG}}\n\n## Other Updates\n\n${{UNCATEGORIZED}}\n",
+  "pr_template": "- ${{TITLE}} (#${{NUMBER}})",
+  "empty_template": "No Changes",
+  "label_extractor": [
+    {
+      "pattern": "(.) (.+)",
+      "target": "$1"
+    }
+  ],
+  "max_tags_to_fetch": 200,
+  "max_pull_requests": 250,
+  "max_back_track_time_days": 90,
+  "tag_resolver": {
+    "method": "semver"
+  }
+}

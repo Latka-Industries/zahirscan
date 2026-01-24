@@ -1,117 +1,37 @@
 name: Release
 
-permissions:
-  contents: write
-
 on:
-  workflow_dispatch:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  create-release:
-    name: Create Source Release
+  release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v2
         with:
           fetch-depth: 0
-
-      - name: Get version from tag
-        id: tag
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Get tag message or generate from commits
-        id: release_notes
-        run: |
-          TAG_MESSAGE=$(git tag -l --format='%(contents)' ${{ steps.tag.outputs.VERSION }} 2>/dev/null || echo "")
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-
-          if [ -n "$TAG_MESSAGE" ]; then
-            # Use tag message as-is if it has markdown, otherwise auto-format with sections
-            if echo "$TAG_MESSAGE" | grep -q "^##"; then
-              FORMATTED="$TAG_MESSAGE"
-            else
-              # Auto-detect sections by blank lines and add markdown headers
-              BLANK_LINES=$(echo "$TAG_MESSAGE" | grep -c "^$" || echo "0")
-              if [ "$BLANK_LINES" -ge 2 ]; then
-                # Multiple sections - add headers before each section after blank lines
-                FORMATTED=$(echo "$TAG_MESSAGE" | awk '
-                  BEGIN { section=0; headers[0]="## Added"; headers[1]="## Fixed"; headers[2]="## Changed"; headers[3]="## Documentation"; prev_was_blank=0; header_added=0 }
-                  /^-/ && header_added == 0 {
-                    print headers[0]
-                    print ""
-                    header_added=1
-                    section=1
-                    print
-                    next
-                  }
-                  /^$/ {
-                    if (prev_was_blank == 0 && section < 4 && header_added == 1) {
-                      print ""
-                      print headers[section]
-                      section++
-                    }
-                    prev_was_blank=1
-                    print
-                    next
-                  }
-                  {
-                    if (/^-/ && header_added == 0) {
-                      print headers[0]
-                      print ""
-                      header_added=1
-                      section=1
-                    }
-                    prev_was_blank=0
-                    print
-                  }
-                ')
-              else
-                # Single section - use ## Added
-                FORMATTED="## Added"$'\n'$'\n'"$TAG_MESSAGE"
-              fi
-            fi
-
-            echo "BODY<<EOF" >> $GITHUB_OUTPUT
-            echo "$FORMATTED" >> $GITHUB_OUTPUT
-            if [ -n "$PREV_TAG" ]; then
-              echo "" >> $GITHUB_OUTPUT
-              echo "**Full Changelog**: ${PREV_TAG}...${{ steps.tag.outputs.VERSION }}" >> $GITHUB_OUTPUT
-            fi
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            # Generate from commits since last tag
-            if [ -z "$PREV_TAG" ]; then
-              COMMITS=$(git log --pretty=format:"- %s" HEAD)
-            else
-              COMMITS=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD)
-            fi
-            echo "BODY<<EOF" >> $GITHUB_OUTPUT
-            echo "## Changes" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "$COMMITS" >> $GITHUB_OUTPUT
-            if [ -n "$PREV_TAG" ]; then
-              echo "" >> $GITHUB_OUTPUT
-              echo "**Full Changelog**: ${PREV_TAG}...${{ steps.tag.outputs.VERSION }}" >> $GITHUB_OUTPUT
-            fi
-            echo "EOF" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create source archive
-        run: |
-          git archive --format=tar.gz --prefix=zahirscan-${{ steps.tag.outputs.VERSION }}/ \
-            -o zahirscan-${{ steps.tag.outputs.VERSION }}-source.tar.gz \
-            HEAD
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+      - name: Build changelog
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@main
         with:
-          files: zahirscan-${{ steps.tag.outputs.VERSION }}-source.tar.gz
-          name: Release ${{ steps.tag.outputs.VERSION }}
-          body: ${{ steps.release_notes.outputs.BODY }}
-          draft: false
-          prerelease: false
+          configuration: 'release-changelog-builder-config.json'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: ${{steps.build_changelog.outputs.changelog}}
+          draft: false
+          prerelease: false
