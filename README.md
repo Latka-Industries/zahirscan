@@ -1,7 +1,7 @@
 # ZahirScan: Template-Based Content Compression & Media Metadata Extraction
 
 [![Crates.io](https://img.shields.io/crates/v/zahirscan.svg)](https://crates.io/crates/zahirscan)
-[![docs.rs](https://docs.rs/zahirscan/badge.svg)](https://docs.rs/zahirscan)
+[![docs.rs](https://img.shields.io/docsrs/zahirscan)](https://docs.rs/zahirscan)
 ![Build](https://github.com/thicclatka/zahirscan/workflows/Build/badge.svg)
 ![Rust](https://img.shields.io/badge/rust-1.92.0-orange.svg)
 
