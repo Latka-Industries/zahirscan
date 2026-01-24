@@ -2,7 +2,7 @@
 
 use crate::chunking::{AdaptiveChunking, ProcessingTask};
 use crate::config::Config;
-use crate::parsers::{FileType, extract_templates, initial_file_scan};
+use crate::parsers::{extract_templates, initial_file_scan};
 use crate::results::Output;
 use crate::tools::{determine_output_path, format_bytes};
 use anyhow::Result;
@@ -210,14 +210,8 @@ fn process_task_phase2(
     let start = Instant::now();
     let mut stats = task.stats.clone();
 
-    // Images, videos, audio, PDFs, DOCX, and CSVs are binary but still need metadata extraction
-    let needs_processing = !stats.is_binary
-        || stats.file_type == FileType::Image
-        || stats.file_type == FileType::Video
-        || stats.file_type == FileType::Audio
-        || stats.file_type == FileType::Pdf
-        || stats.file_type == FileType::Docx
-        || stats.file_type == FileType::Csv;
+    // Images, videos, audio, PDFs, DOCX, XLSX, and CSVs are binary but still need metadata extraction
+    let needs_processing = !stats.is_binary || stats.file_type.needs_processing();
 
     if needs_processing {
         // Create modified config with adaptive chunking

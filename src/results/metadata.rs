@@ -505,10 +505,12 @@ pub struct DocumentMetadata {
     pub character_count_no_spaces: Option<usize>,
     /// Paragraph count
     pub paragraph_count: Option<usize>,
+    /// Sheet count (for XLSX files)
+    pub sheet_count: Option<usize>,
+    /// Per-sheet statistics (for XLSX files, nested object with sheet name -> {rows, columns})
+    pub sheet_stats: Option<serde_json::Value>,
     /// File size in bytes
     pub file_size: Option<usize>,
-    /// Document format (e.g., "DOCX", "Pages")
-    pub format: Option<String>,
     /// Document title
     pub title: Option<String>,
     /// Document author/creator
@@ -532,7 +534,7 @@ impl Serialize for DocumentMetadata {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("DocumentMetadata", 16)?;
+        let mut state = serializer.serialize_struct("DocumentMetadata", 17)?;
         crate::serialize_optional!(state, self.page_count, "page_count");
         crate::serialize_optional!(state, self.word_count, "word_count");
         crate::serialize_optional!(state, self.character_count, "character_count");
@@ -542,8 +544,9 @@ impl Serialize for DocumentMetadata {
             "character_count_no_spaces"
         );
         crate::serialize_optional!(state, self.paragraph_count, "paragraph_count");
+        crate::serialize_optional!(state, self.sheet_count, "sheet_count");
+        crate::serialize_optional!(state, self.sheet_stats, "sheet_stats");
         crate::serialize_optional!(state, self.file_size, "file_size");
-        crate::serialize_optional!(state, self.format, "format");
         crate::serialize_optional!(state, self.title, "title");
         crate::serialize_optional!(state, self.author, "author");
         crate::serialize_optional!(state, self.subject, "subject");

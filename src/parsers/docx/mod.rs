@@ -1,6 +1,8 @@
 //! DOCX file text extraction and metadata
 //!
 
+mod utils;
+
 use super::ParseResult;
 use super::traits::empty_mining_result;
 use crate::config::Config;
@@ -8,10 +10,9 @@ use crate::results::DocumentMetadata;
 use anyhow::Result;
 use log::warn;
 use quick_xml::Reader;
-use quick_xml::escape::unescape;
 use quick_xml::events::Event;
-use std::io::Cursor;
-use zip::ZipArchive;
+use std::io::Read;
+use utils::{decode_xml_entities, has_namespace, open_office_archive, set_metadata_field};
 
 /// Extract DOCX metadata and text content
 pub fn extract_docx_metadata(
@@ -21,28 +22,20 @@ pub fn extract_docx_metadata(
 ) -> Result<DocumentMetadata> {
     let mut metadata = DocumentMetadata {
         file_size: Some(stats.byte_count),
-        format: Some("DOCX".to_string()),
         ..Default::default()
     };
 
     // DOCX is a ZIP archive - open it
-    let cursor = Cursor::new(content);
-    let mut archive = match ZipArchive::new(cursor) {
+    let mut archive = match open_office_archive(content, &stats.file_path) {
         Ok(arch) => arch,
-        Err(e) => {
-            warn!(
-                "Failed to open DOCX as ZIP archive {}: {:?}",
-                stats.file_path, e
-            );
-            return Ok(metadata);
-        }
+        Err(_) => return Ok(metadata),
     };
 
     // Read word/document.xml from the archive
     let document_xml = match archive.by_name("word/document.xml") {
         Ok(mut file) => {
             let mut xml_content = String::new();
-            if let Err(e) = std::io::Read::read_to_string(&mut file, &mut xml_content) {
+            if let Err(e) = file.read_to_string(&mut xml_content) {
                 warn!(
                     "Failed to read word/document.xml from DOCX {}: {:?}",
                     stats.file_path, e
@@ -72,12 +65,31 @@ pub fn extract_docx_metadata(
     // Extract core properties from docProps/core.xml
     if let Ok(mut file) = archive.by_name("docProps/core.xml") {
         let mut xml_content = String::new();
-        if std::io::Read::read_to_string(&mut file, &mut xml_content).is_ok() {
+        if file.read_to_string(&mut xml_content).is_ok() {
             extract_core_properties(&xml_content, &mut metadata);
         }
     }
 
     Ok(metadata)
+}
+
+/// Process a core property element and update metadata if it matches known properties
+fn process_core_property(name: &[u8], text_content: &str, metadata: &mut DocumentMetadata) {
+    // Check all defined properties
+    for prop in utils::CORE_PROPERTIES {
+        if name.ends_with(prop.element) && has_namespace(name, prop.namespace) {
+            set_metadata_field(metadata, text_content, prop.setter);
+            return;
+        }
+    }
+
+    // Special case for revision (needs parsing to i64)
+    if name.ends_with(b"revision")
+        && has_namespace(name, b"cp")
+        && let Ok(rev) = text_content.trim().parse::<i64>()
+    {
+        metadata.revision = Some(rev);
+    }
 }
 
 /// Extract core properties from docProps/core.xml
@@ -103,41 +115,8 @@ fn extract_core_properties(xml: &str, metadata: &mut DocumentMetadata) {
             }
             Ok(Event::End(ref e)) => {
                 let name = e.name().as_ref().to_vec();
-                // Match element names (handles namespaces like dc:, dcterms:, cp:)
-                if name.ends_with(b"title") && name.windows(2).any(|w| w == b"dc") {
-                    if !text_content.trim().is_empty() {
-                        metadata.title = Some(text_content.trim().to_string());
-                    }
-                } else if name.ends_with(b"creator") && name.windows(2).any(|w| w == b"dc") {
-                    if !text_content.trim().is_empty() {
-                        metadata.author = Some(text_content.trim().to_string());
-                    }
-                } else if name.ends_with(b"subject") && name.windows(2).any(|w| w == b"dc") {
-                    if !text_content.trim().is_empty() {
-                        metadata.subject = Some(text_content.trim().to_string());
-                    }
-                } else if name.ends_with(b"description") && name.windows(2).any(|w| w == b"dc") {
-                    if !text_content.trim().is_empty() {
-                        metadata.description = Some(text_content.trim().to_string());
-                    }
-                } else if name.ends_with(b"created") && name.windows(7).any(|w| w == b"dcterms") {
-                    if !text_content.trim().is_empty() {
-                        metadata.creation_date = Some(text_content.trim().to_string());
-                    }
-                } else if name.ends_with(b"modified") && name.windows(7).any(|w| w == b"dcterms") {
-                    if !text_content.trim().is_empty() {
-                        metadata.modified_date = Some(text_content.trim().to_string());
-                    }
-                } else if name.ends_with(b"lastModifiedBy") && name.windows(2).any(|w| w == b"cp") {
-                    if !text_content.trim().is_empty() {
-                        metadata.last_modified_by = Some(text_content.trim().to_string());
-                    }
-                } else if name.ends_with(b"revision")
-                    && name.windows(2).any(|w| w == b"cp")
-                    && let Ok(rev) = text_content.trim().parse::<i64>()
-                {
-                    metadata.revision = Some(rev);
-                }
+                let text = text_content.as_str();
+                process_core_property(&name, text, metadata);
                 in_element = false;
                 text_content.clear();
             }
@@ -179,21 +158,10 @@ fn extract_text_from_document_xml(xml: &str) -> (String, usize, usize, usize, us
             }
             Ok(Event::Text(e)) => {
                 if in_text_element {
-                    // Use quick-xml's unescape function to decode XML entities
+                    // Decode XML entities (with fallback)
                     if let Ok(utf8_str) = std::str::from_utf8(e.as_ref()) {
-                        match unescape(utf8_str) {
-                            Ok(decoded) => text.push_str(&decoded),
-                            Err(_) => {
-                                // Fallback: manual entity replacement if unescape fails
-                                let decoded = utf8_str
-                                    .replace("&amp;", "&")
-                                    .replace("&lt;", "<")
-                                    .replace("&gt;", ">")
-                                    .replace("&quot;", "\"")
-                                    .replace("&apos;", "'");
-                                text.push_str(&decoded);
-                            }
-                        }
+                        let decoded = decode_xml_entities(utf8_str);
+                        text.push_str(&decoded);
                     }
                 }
             }

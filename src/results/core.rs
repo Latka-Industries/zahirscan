@@ -47,9 +47,9 @@ pub struct Output {
     pub templates: Vec<Template>,
 
     // Mode 2 (Full) fields - all optional
-    /// Source file path (Mode 2 only)
+    /// Source file path (in both modes)
     pub source: Option<String>,
-    /// File type (Mode 2 only)
+    /// File type (in both modes)
     pub file_type: Option<String>,
     /// Line count (Mode 2 only)
     pub line_count: Option<usize>,
@@ -125,12 +125,16 @@ impl Serialize for Output {
 
 impl Output {
     /// Create Mode 1 output (templates + writing footprint if available)
-    pub fn templates_only(templates: Vec<Template>) -> Self {
+    pub fn templates_only(
+        templates: Vec<Template>,
+        source: Option<String>,
+        file_type: Option<String>,
+    ) -> Self {
         Self {
             templates,
-            // Mode 2 fields are None for Mode 1
-            source: None,
-            file_type: None,
+            // Source and file_type are included in both modes
+            source,
+            file_type,
             line_count: None,
             byte_count: None,
             token_count: None,

@@ -41,6 +41,7 @@ pub mod chunking;
 pub mod config;
 pub mod orchestrator;
 pub mod parsers;
+mod path_iter;
 pub mod results;
 pub mod tools;
 
@@ -70,42 +71,7 @@ pub use tools::{
 
 // Simple API wrapper functions
 use anyhow::Result;
-
-/// Helper trait to convert both `&str` and collections into an iterator of strings
-pub(crate) trait ToPathIter {
-    fn to_path_iter(self) -> Vec<String>;
-}
-
-impl ToPathIter for &str {
-    fn to_path_iter(self) -> Vec<String> {
-        vec![self.to_string()]
-    }
-}
-
-// Explicit impls for common collection types
-impl ToPathIter for &[&str] {
-    fn to_path_iter(self) -> Vec<String> {
-        self.iter().map(|s| s.to_string()).collect()
-    }
-}
-
-impl ToPathIter for Vec<&str> {
-    fn to_path_iter(self) -> Vec<String> {
-        self.into_iter().map(|s| s.to_string()).collect()
-    }
-}
-
-impl ToPathIter for &Vec<&str> {
-    fn to_path_iter(self) -> Vec<String> {
-        self.iter().map(|s| s.to_string()).collect()
-    }
-}
-
-impl<const N: usize> ToPathIter for [&str; N] {
-    fn to_path_iter(self) -> Vec<String> {
-        self.into_iter().map(|s| s.to_string()).collect()
-    }
-}
+use path_iter::ToPathIter;
 
 /// Extract schema (templates and metadata) from one or more files
 ///
@@ -118,7 +84,7 @@ impl<const N: usize> ToPathIter for [&str; N] {
 ///
 /// # Arguments
 ///
-/// * `paths` - A single file path (`&str`) or multiple paths (`&[&str]` or `Vec<&str>`)
+/// * `paths` - A single file path (`&str`), multiple paths (`&[&str]` or `Vec<&str>`), or a single String (`&String` or `String`)
 /// * `mode` - Output mode (Templates or Full)
 ///
 /// # Example - Single file

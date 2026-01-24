@@ -6,6 +6,7 @@ pub mod csv;
 pub mod docx;
 pub mod image;
 mod media_helpers;
+pub mod xlsx;
 pub use media_helpers::{BitrateMode, CompressionMode};
 pub mod pdf;
 pub mod text;
@@ -14,7 +15,7 @@ mod video;
 
 use crate::config::Config;
 use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
-use crate::tools::detect_file_type;
+use crate::tools::{detect_file_type, redact_path};
 use anyhow::Result;
 use log::warn;
 use memmap2::Mmap;
@@ -72,6 +73,7 @@ pub enum FileType {
     Csv,
     Pdf,
     Docx,
+    Xlsx,
     Unknown,
 }
 
@@ -85,12 +87,27 @@ impl FileType {
             FileType::Csv => "CSV",
             FileType::Pdf => "PDF",
             FileType::Docx => "DOCX",
+            FileType::Xlsx => "XLSX",
             FileType::Log => "Log",
             FileType::Json => "JSON",
             FileType::Text => "Text",
             FileType::Markdown => "Markdown",
             FileType::Unknown => "Unknown",
         }
+    }
+
+    /// Check if this file type needs processing (binary files that still need metadata extraction)
+    pub fn needs_processing(&self) -> bool {
+        matches!(
+            self,
+            FileType::Image
+                | FileType::Video
+                | FileType::Audio
+                | FileType::Pdf
+                | FileType::Docx
+                | FileType::Xlsx
+                | FileType::Csv
+        )
     }
 }
 
@@ -118,7 +135,7 @@ pub struct ParseResult {
     pub csv_metadata: Option<crate::results::CsvMetadata>,
     /// PDF metadata (for PDF files)
     pub pdf_metadata: Option<crate::results::PdfMetadata>,
-    /// Document metadata (for DOCX and Pages files)
+    /// Document metadata (for DOCX files)
     pub docx_metadata: Option<crate::results::DocumentMetadata>,
 }
 
@@ -130,9 +147,20 @@ impl ParseResult {
                 OutputMode::Templates => {
                     // Mode 1: Templates + Writing Footprint (for text/markdown files)
                     // Also include media metadata (images, videos, audio) even in templates mode
-                    let mut output = Output::templates_only(mining.templates.clone());
-                    // Include writing footprint if available (text/markdown files only, not DOCX)
-                    if self.file_type != crate::parsers::FileType::Docx {
+                    // Include source and file_type in both modes
+                    let source_path = match config.redact_paths {
+                        true => redact_path(&self.file_path),
+                        false => self.file_path.clone(),
+                    };
+                    let mut output = Output::templates_only(
+                        mining.templates.clone(),
+                        Some(source_path),
+                        Some(format!("{:?}", self.file_type)),
+                    );
+                    // Include writing footprint if available (text/markdown files only, not DOCX/XLSX)
+                    if self.file_type != crate::parsers::FileType::Docx
+                        && self.file_type != crate::parsers::FileType::Xlsx
+                    {
                         output.writing_footprint = mining.writing_footprint.clone();
                     }
                     // Include media metadata if available (images, videos, audio, CSV, PDF, DOCX)
@@ -148,7 +176,7 @@ impl ParseResult {
                     // Mode 2: Full metadata
                     // Redact path if configured (only in Full mode where source is shown)
                     let source_path = match config.redact_paths {
-                        true => crate::tools::redact_path(&self.file_path),
+                        true => redact_path(&self.file_path),
                         false => self.file_path.clone(),
                     };
                     let metadata = FileMetadata {
@@ -166,8 +194,10 @@ impl ParseResult {
                         reduction_percent: mining.token_reduction_percent,
                     };
                     let mut output = Output::full(mining.templates.clone(), metadata, compression);
-                    // Only include writing_footprint for text/markdown files, not DOCX
-                    if self.file_type != crate::parsers::FileType::Docx {
+                    // Only include writing_footprint for text/markdown files, not DOCX/XLSX
+                    if self.file_type != crate::parsers::FileType::Docx
+                        && self.file_type != crate::parsers::FileType::Xlsx
+                    {
                         output.writing_footprint = mining.writing_footprint.clone();
                     }
                     output.image_metadata = self.image_metadata.clone();
@@ -184,7 +214,16 @@ impl ParseResult {
             match mode {
                 OutputMode::Templates => {
                     // Include media metadata even when there are no templates (e.g., pure media files)
-                    let mut output = Output::templates_only(vec![]);
+                    // Include source and file_type in both modes
+                    let source_path = match config.redact_paths {
+                        true => redact_path(&self.file_path),
+                        false => self.file_path.clone(),
+                    };
+                    let mut output = Output::templates_only(
+                        vec![],
+                        Some(source_path),
+                        Some(format!("{:?}", self.file_type)),
+                    );
                     output.image_metadata = self.image_metadata.clone();
                     output.video_metadata = self.video_metadata.clone();
                     output.audio_metadata = self.audio_metadata.clone();
@@ -196,7 +235,7 @@ impl ParseResult {
                 OutputMode::Full => {
                     // Redact path if configured
                     let source_path = match config.redact_paths {
-                        true => crate::tools::redact_path(&self.file_path),
+                        true => redact_path(&self.file_path),
                         false => self.file_path.clone(),
                     };
                     let metadata = FileMetadata {
@@ -387,6 +426,20 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
             // Extract templates
             docx::extract_docx_templates(&mmap, stats, config)
         }
+        FileType::Xlsx => {
+            // Extract metadata
+            if !config.skip_media_metadata {
+                extract_metadata_with_fallback!(
+                    stats.docx_metadata,
+                    xlsx::extract_xlsx_metadata(&mmap, stats, config),
+                    stats,
+                    crate::results::DocumentMetadata,
+                    FileType::Xlsx.as_metadata_name()
+                );
+            }
+            // Extract templates
+            xlsx::extract_xlsx_templates(&mmap, stats, config)
+        }
         _ => {
             // Skip binary files (non-images, videos, audio, CSV, PDF, etc)
             if stats.is_binary {
@@ -415,6 +468,7 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 FileType::Csv => unreachable!(),
                 FileType::Pdf => unreachable!(),
                 FileType::Docx => unreachable!(),
+                FileType::Xlsx => unreachable!(),
             }
         }
     }
