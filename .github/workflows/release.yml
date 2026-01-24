@@ -25,11 +25,49 @@ jobs:
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
           if [ -n "$TAG_MESSAGE" ]; then
-            # Use tag message as-is if it has markdown, otherwise wrap in ## Changes
+            # Use tag message as-is if it has markdown, otherwise auto-format with sections
             if echo "$TAG_MESSAGE" | grep -q "^##"; then
               FORMATTED="$TAG_MESSAGE"
             else
-              FORMATTED="## Changes"$'\n'$'\n'"$TAG_MESSAGE"
+              # Auto-detect sections by blank lines and add markdown headers
+              BLANK_LINES=$(echo "$TAG_MESSAGE" | grep -c "^$" || echo "0")
+              if [ "$BLANK_LINES" -ge 2 ]; then
+                # Multiple sections - add headers before each section after blank lines
+                FORMATTED=$(echo "$TAG_MESSAGE" | awk '
+                  BEGIN { section=0; headers[0]="## Added"; headers[1]="## Fixed"; headers[2]="## Changed"; headers[3]="## Documentation"; prev_was_blank=0; header_added=0 }
+                  /^-/ && header_added == 0 {
+                    print headers[0]
+                    print ""
+                    header_added=1
+                    section=1
+                    print
+                    next
+                  }
+                  /^$/ {
+                    if (prev_was_blank == 0 && section < 4 && header_added == 1) {
+                      print ""
+                      print headers[section]
+                      section++
+                    }
+                    prev_was_blank=1
+                    print
+                    next
+                  }
+                  {
+                    if (/^-/ && header_added == 0) {
+                      print headers[0]
+                      print ""
+                      header_added=1
+                      section=1
+                    }
+                    prev_was_blank=0
+                    print
+                  }
+                ')
+              else
+                # Single section - use ## Added
+                FORMATTED="## Added"$'\n'$'\n'"$TAG_MESSAGE"
+              fi
             fi
 
             echo "BODY<<EOF" >> $GITHUB_OUTPUT
