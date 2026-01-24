@@ -20,6 +20,7 @@ fn create_test_task(byte_count: usize, file_type: FileType) -> ProcessingTask {
             csv_metadata: None,
             pdf_metadata: None,
             docx_metadata: None,
+            sqlite_metadata: None,
         },
         output_path: "test.out".to_string(),
     }

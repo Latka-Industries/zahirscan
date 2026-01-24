@@ -22,6 +22,7 @@ ZahirScan uses probabilistic template mining to extract essential structure and 
 - **Text Documents**: TXT, Markdown (MD), plain text content
 - **Documents**: DOCX (Word documents), XLSX (Excel spreadsheets), PDF (metadata extraction)
 - **CSV Files**: CSV
+- **Databases**: SQLite (.db, .sqlite, .sqlite3) - schema, tables, columns, indexes, foreign keys, and column statistics
 - **Images**: JPEG, PNG, GIF, WebP, BMP, TIFF
 - **Videos**: MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, 3GP, OGV
 - **Audio**: MP3, FLAC, WAV, M4A, AAC, OGG, Opus, WMA, APE, DSD, DSF
@@ -34,6 +35,7 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 - **Media Metadata**: Extracts comprehensive metadata for images, videos, and audio (dimensions, codecs, bitrates, etc.)
 - **Document Metadata**: Extracts metadata from DOCX files (word count, character count, paragraph count, title, author, creation/modification dates, revision), XLSX files (sheet count, sheet names, row/column counts per sheet, core properties), and PDF files (page count, title, author, subject, creator, producer, creation/modification dates, PDF version, encryption status)
 - **CSV Metadata**: Extracts row/column counts, column names, data types, delimiter, quote/escape characters, null percentages, unique counts, and type-specific statistics (numeric: min/max/mean/median/IQR/stdev, date: span/min/max, boolean: true percentage)
+- **SQLite Metadata**: Extracts database schema (tables, columns, types, constraints), primary keys, foreign keys, indexes, row counts, and comprehensive column statistics (null percentages, unique counts, numeric/text/boolean/blob/date statistics)
 - **Writing Footprint**: For text/markdown files, provides vocabulary richness, sentence structure, template diversity metrics, and word universe analysis (when enabled)
 - **Zero-Copy Processing**: Uses memory-mapped files (`memmap2`) to handle files larger than available RAM
 - **Adaptive Parallelization**: Automatically optimizes chunk sizes based on file statistics and CPU resources
@@ -148,6 +150,7 @@ The `extract_schema()` function returns `Result<Vec<Output>>`. Each `Output` obj
 - `video_metadata: Option<VideoMetadata>` - Video metadata (codec, resolution, bitrate, etc.)
 - `audio_metadata: Option<AudioMetadata>` - Audio metadata (codec, bitrate, sample rate, etc.)
 - `csv_metadata: Option<CsvMetadata>` - CSV metadata (row/column counts, data types, statistics)
+- `sqlite_metadata: Option<SqliteMetadata>` - SQLite database metadata (schema, tables, columns, indexes, statistics)
 - `pdf_metadata: Option<PdfMetadata>` - PDF metadata (page count, document properties, etc.)
 - `docx_metadata: Option<DocumentMetadata>` - DOCX/XLSX metadata (word count, sheet count, title, author, dates, etc.)
 
@@ -210,6 +213,7 @@ See [`config.toml`](config.toml) for configuration.
 
 - **Media Metadata**: Extracts metadata for images (via `image` crate), videos/audio (via `ffprobe`)
 - **Document Metadata**: Extracts metadata from DOCX/XLSX files (via `zip` and `quick_xml` crates, `calamine` for XLSX row/column counts)
+- **Database Metadata**: Extracts SQLite database schema and statistics (via `rusqlite` crate)
 - **Template Mining**: Frequency-based analysis to identify static vs. dynamic fields, extracts patterns as templates
 - **Tokenization**: Content-aware (whitespace for logs, JSON structure for JSON logs, sentence/paragraph for text/markdown)
 - **Writing Footprint**: Calculates vocabulary richness, sentence structure, template diversity for text/markdown, with optional word universe analysis for enhanced pattern recognition
@@ -227,7 +231,7 @@ ZahirScan implements non-invasive file operations:
 
 - [ ] Word universe for enhanced writing analysis (per-document vocabulary corpus with frequency distributions, word length statistics, and visualization data)
 - [ ] Improve template extraction for short literary texts (adaptive thresholds and pattern similarity merging for better pattern recognition in short documents)
-- [ ] SQLite database metadata extraction (schema information, table/column metadata, database statistics)
+- [x] SQLite database metadata extraction (schema information, table/column metadata, database statistics) ✅
 - [ ] Code file analysis (language detection + basic code metadata; decide integrated vs separate library)
 - [ ] HTML support: extract text content from webpages + metadata (title, meta tags, heading structure)
 - [ ] XML support: extract text content + structure metadata (element/attribute counts, namespace info)

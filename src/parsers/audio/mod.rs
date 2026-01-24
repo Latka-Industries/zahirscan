@@ -300,6 +300,7 @@ fn analyze_image_data(image_data: &[u8]) -> Option<ImageMetadata> {
         image_metadata: None,
         video_metadata: None,
         audio_metadata: None,
+        sqlite_metadata: None,
     };
 
     // Use the existing image parser
