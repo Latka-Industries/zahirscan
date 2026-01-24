@@ -4,12 +4,12 @@ mod utils;
 
 use crate::config::Config;
 use crate::parsers::ParseResult;
+use crate::parsers::column_stats;
 use crate::parsers::traits::AdaptiveParallel;
 use crate::results::{BooleanStats, CsvMetadata, DateStats, MiningResult, NumericStats};
 use ::csv::ReaderBuilder;
 use anyhow::Result;
-use chrono::DateTime;
-use dashmap::{DashMap, DashSet};
+use dashmap::DashMap;
 use rayon::prelude::*;
 use std::io::Cursor;
 
@@ -190,41 +190,16 @@ fn compute_column_statistics(
         return (vec![0.0; column_count], vec![0; column_count]);
     }
 
-    // Use DashMap for thread-safe parallel null counting
-    let null_counts: Vec<DashMap<(), usize>> = (0..column_count).map(|_| DashMap::new()).collect();
-    // Use DashSet for thread-safe parallel unique value tracking
-    let unique_sets: Vec<DashSet<String>> = (0..column_count).map(|_| DashSet::new()).collect();
+    // Extract each column's values and compute statistics
+    let mut null_percentages = Vec::with_capacity(column_count);
+    let mut unique_counts = Vec::with_capacity(column_count);
 
-    // Count nulls and collect unique values in parallel
-    sample_data.par_iter_adaptive(config).for_each(|row| {
-        for (col_idx, value) in row.iter().enumerate() {
-            if col_idx >= column_count {
-                break;
-            }
-
-            // Check if null/empty
-            if value.is_empty()
-                || value.eq_ignore_ascii_case("null")
-                || value.eq_ignore_ascii_case("nil")
-            {
-                *null_counts[col_idx].entry(()).or_insert(0) += 1;
-            }
-
-            // Track unique values (DashSet handles deduplication)
-            unique_sets[col_idx].insert(value.to_string());
-        }
-    });
-
-    // Calculate percentages and unique counts
-    let null_percentages: Vec<f64> = null_counts
-        .into_iter()
-        .map(|counts| {
-            let count = counts.into_iter().next().map(|(_, c)| c).unwrap_or(0);
-            (count as f64 / total_rows as f64) * 100.0
-        })
-        .collect();
-
-    let unique_counts: Vec<usize> = unique_sets.into_iter().map(|set| set.len()).collect();
+    for col_idx in 0..column_count {
+        let values = column_stats::extract_column_values(sample_data, col_idx);
+        let (null_pct, unique_ct) = column_stats::compute_null_and_unique_stats(&values, config);
+        null_percentages.push(null_pct);
+        unique_counts.push(unique_ct);
+    }
 
     (null_percentages, unique_counts)
 }
@@ -280,79 +255,8 @@ fn compute_numeric_stats(
     col_idx: usize,
     config: &Config,
 ) -> Option<NumericStats> {
-    // Collect and parse numeric values in parallel, filtering out NaN/invalid
-    let values: Vec<f64> = sample_data
-        .par_iter_adaptive(config)
-        .filter_map(|row| {
-            if col_idx >= row.len() {
-                return None;
-            }
-            let val = &row[col_idx];
-            // Skip null/empty values
-            if val.is_empty() || val.eq_ignore_ascii_case("null") || val.eq_ignore_ascii_case("nil")
-            {
-                return None;
-            }
-            // Parse as float and filter finite values
-            val.parse::<f64>().ok().filter(|&v| v.is_finite())
-        })
-        .collect();
-    if values.is_empty() {
-        return None;
-    }
-
-    // Sort for min/max/median/IQR calculations
-    let mut sorted_values = values.clone();
-    sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-
-    let min = sorted_values.first().copied();
-    let max = sorted_values.last().copied();
-    let range = min.zip(max).map(|(min_val, max_val)| max_val - min_val);
-
-    // Calculate mean
-    let mean = Some(values.iter().sum::<f64>() / values.len() as f64);
-
-    // Calculate median
-    let median = {
-        let mid = sorted_values.len() / 2;
-        if sorted_values.len().is_multiple_of(2) {
-            // Even number of values: average of two middle values
-            Some((sorted_values[mid - 1] + sorted_values[mid]) / 2.0)
-        } else {
-            // Odd number of values: middle value
-            Some(sorted_values[mid])
-        }
-    };
-
-    // Calculate IQR (interquartile range)
-    let iqr = if sorted_values.len() >= 4 {
-        let q1_idx = sorted_values.len() / 4;
-        let q3_idx = (3 * sorted_values.len()) / 4;
-        Some(sorted_values[q3_idx] - sorted_values[q1_idx])
-    } else {
-        None
-    };
-
-    // Calculate standard deviation
-    let stdev = if let Some(mean_val) = mean
-        && values.len() > 1
-    {
-        let variance =
-            values.iter().map(|&v| (v - mean_val).powi(2)).sum::<f64>() / (values.len() - 1) as f64;
-        Some(variance.sqrt())
-    } else {
-        None
-    };
-
-    Some(NumericStats {
-        min,
-        max,
-        mean,
-        median,
-        range,
-        iqr,
-        stdev,
-    })
+    let values = column_stats::extract_column_values(sample_data, col_idx);
+    column_stats::compute_numeric_stats_from_strings(&values, config)
 }
 
 /// Compute date statistics (span in days/minutes, min/max) for a column
@@ -361,45 +265,8 @@ fn compute_date_stats(
     col_idx: usize,
     _config: &Config,
 ) -> Option<DateStats> {
-    // Collect and parse date/timestamp values
-    let mut timestamps: Vec<i64> = sample_data
-        .iter()
-        .filter_map(|row| {
-            if col_idx >= row.len() {
-                return None;
-            }
-            let val = &row[col_idx];
-
-            // First try parsing as Unix timestamp (if it's a numeric timestamp)
-            // Otherwise try parsing as date string
-            crate::tools::parse_timestamp_to_seconds(val)
-                .or_else(|| crate::tools::parse_date_to_timestamp(val))
-        })
-        .collect();
-
-    if timestamps.is_empty() {
-        return None;
-    }
-
-    timestamps.sort();
-    let min_ts = timestamps.first().copied()?;
-    let max_ts = timestamps.last().copied()?;
-
-    // Calculate span in seconds, then convert to days and minutes
-    let span_seconds = (max_ts - min_ts) as f64;
-    let span_days = span_seconds / 86400.0;
-    let span_minutes = span_seconds / 60.0;
-
-    // Convert back to strings for min/max
-    let min_str = DateTime::from_timestamp(min_ts, 0).map(|dt| dt.to_rfc3339());
-    let max_str = DateTime::from_timestamp(max_ts, 0).map(|dt| dt.to_rfc3339());
-
-    Some(DateStats {
-        span_days: Some(span_days),
-        span_minutes: Some(span_minutes),
-        min: min_str,
-        max: max_str,
-    })
+    let values = column_stats::extract_column_values(sample_data, col_idx);
+    column_stats::compute_date_stats_from_strings(&values)
 }
 
 /// Compute boolean statistics (percentage of true values) for a column
@@ -408,40 +275,8 @@ fn compute_boolean_stats(
     col_idx: usize,
     config: &Config,
 ) -> Option<BooleanStats> {
-    use dashmap::DashMap;
-
-    // Use DashMap for thread-safe parallel counting
-    let total_count: DashMap<(), usize> = DashMap::new();
-    let true_count: DashMap<(), usize> = DashMap::new();
-
-    // Count totals and true values in parallel
-    sample_data.par_iter_adaptive(config).for_each(|row| {
-        if col_idx >= row.len() {
-            return;
-        }
-        let val = &row[col_idx];
-        // Skip null/empty values
-        if val.is_empty() || val.eq_ignore_ascii_case("null") || val.eq_ignore_ascii_case("nil") {
-            return;
-        }
-        *total_count.entry(()).or_insert(0) += 1;
-        // Check if value represents true
-        if matches!(val.to_lowercase().as_str(), "true" | "yes" | "1" | "y") {
-            *true_count.entry(()).or_insert(0) += 1;
-        }
-    });
-
-    let total = total_count.into_iter().next().map(|(_, c)| c).unwrap_or(0);
-    if total == 0 {
-        return None;
-    }
-
-    let true_val = true_count.into_iter().next().map(|(_, c)| c).unwrap_or(0);
-    let true_percentage = (true_val as f64 / total as f64) * 100.0;
-
-    Some(BooleanStats {
-        true_percentage: Some(true_percentage),
-    })
+    let values = column_stats::extract_column_values(sample_data, col_idx);
+    column_stats::compute_boolean_stats_from_strings(&values, config)
 }
 
 /// Extract templates from CSV files (CSV files don't have templates, return empty result)
