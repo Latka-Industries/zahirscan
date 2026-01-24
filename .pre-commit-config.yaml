@@ -35,7 +35,7 @@ repos:
         language: system
         files: \.rs$
         pass_filenames: false
-        stages: [commit]
+        stages: [pre-commit]
       - id: clippy
         name: clippy
         entry: bash -c 'cargo clippy --manifest-path=Cargo.toml -- -D warnings'

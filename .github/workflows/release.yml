@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  create-release:
+    name: Create Source Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: tag
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Get tag message or generate from commits
+        id: release_notes
+        run: |
+          TAG_MESSAGE=$(git tag -l --format='%(contents)' ${{ steps.tag.outputs.VERSION }} 2>/dev/null || echo "")
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -n "$TAG_MESSAGE" ]; then
+            echo "BODY<<EOF" >> $GITHUB_OUTPUT
+            echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
+            if [ -n "$PREV_TAG" ]; then
+              echo "" >> $GITHUB_OUTPUT
+              echo "**Full Changelog**: ${PREV_TAG}...${{ steps.tag.outputs.VERSION }}" >> $GITHUB_OUTPUT
+            fi
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            # Generate from commits since last tag
+            if [ -z "$PREV_TAG" ]; then
+              COMMITS=$(git log --pretty=format:"- %s" HEAD)
+            else
+              COMMITS=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD)
+            fi
+            echo "BODY<<EOF" >> $GITHUB_OUTPUT
+            echo "## Changes" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "$COMMITS" >> $GITHUB_OUTPUT
+            if [ -n "$PREV_TAG" ]; then
+              echo "" >> $GITHUB_OUTPUT
+              echo "**Full Changelog**: ${PREV_TAG}...${{ steps.tag.outputs.VERSION }}" >> $GITHUB_OUTPUT
+            fi
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create source archive
+        run: |
+          git archive --format=tar.gz --prefix=zahirscan-${{ steps.tag.outputs.VERSION }}/ \
+            -o zahirscan-${{ steps.tag.outputs.VERSION }}-source.tar.gz \
+            HEAD
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: zahirscan-${{ steps.tag.outputs.VERSION }}-source.tar.gz
+          name: Release ${{ steps.tag.outputs.VERSION }}
+          body: ${{ steps.release_notes.outputs.BODY }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

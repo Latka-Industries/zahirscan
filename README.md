@@ -45,10 +45,13 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 # library
 cargo add zahirscan
 
-#cli
+# CLI (from crates.io)
 cargo install zahirscan
 
-# from source
+# Source archive (from GitHub Releases)
+# Download from: https://github.com/thicclatka/zahirscan/releases
+
+# From git
 git clone https://github.com/thicclatka/zahirscan.git
 cd zahirscan
 cargo build --release
