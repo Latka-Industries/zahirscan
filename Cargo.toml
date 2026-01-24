@@ -11,17 +11,11 @@ homepage = "https://github.com/thicclatka/zahirscan"
 documentation = "https://docs.rs/zahirscan"
 readme = "README.md"
 keywords = [
-  "log",
   "parser",
-  "logs",
-  "analysis",
-  "cli",
-  "token-reduction",
-  "ai",
-  "compression",
   "template-mining",
+  "compression",
   "metadata",
-  "media",
+  "cli",
 ]
 categories = [
   "command-line-utilities",
