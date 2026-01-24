@@ -28,7 +28,7 @@
   "explorer.fileNesting.enabled": true,
   "explorer.fileNesting.expand": false,
   "explorer.fileNesting.patterns": {
-    ".gitignore": ".pre-commit-config.yaml, cspell.json",
+    ".gitignore": ".pre-commit-config.yaml, cspell.json, release-changelog-builder-config.json",
     "Cargo.toml": "Cargo.lock",
     "cargo.toml": "Cargo.lock",
     "README.md": "LICENSE-MIT, LICENSE-APACHE"

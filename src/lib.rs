@@ -33,7 +33,7 @@
 //! let paths = vec!["file.log".to_string()];
 //! let tasks = phase1_scan(&paths, None, false, &config);
 //! let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, &config);
-//! let outputs = phase2_mining(tasks, &config, &adaptive, config.max_workers, false)?;
+//! let outputs = phase2_mining(tasks, &config, &adaptive, false)?;
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
@@ -42,6 +42,7 @@ pub mod config;
 pub mod orchestrator;
 pub mod parsers;
 mod path_iter;
+mod progress;
 pub mod results;
 pub mod tools;
 
@@ -66,7 +67,7 @@ pub use results::{
 // Re-export utility functions
 pub use tools::{
     detect_file_type, determine_output_path, format_bytes, format_duration, get_temp_output_path,
-    sanitize_filename,
+    is_stderr_tty, print_progress_handler, sanitize_filename,
 };
 
 // Simple API wrapper functions
@@ -136,11 +137,5 @@ pub fn extract_schema<P: ToPathIter>(paths: P, mode: OutputMode) -> Result<Vec<O
     config_with_mode.output_mode = mode;
 
     // Process (skip file write for library usage)
-    phase2_mining(
-        tasks,
-        &config_with_mode,
-        &adaptive,
-        config.max_workers,
-        true,
-    )
+    phase2_mining(tasks, &config_with_mode, &adaptive, true)
 }

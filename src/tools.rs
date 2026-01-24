@@ -6,6 +6,7 @@ use crate::parsers::FileType;
 use anyhow::Result;
 use chrono::{DateTime, NaiveDateTime};
 use ffprobe::{Config as FfprobeConfig, FfProbe, ffprobe_config};
+use log::debug;
 
 /// File extension to FileType mapping
 /// Organized by file type for easy maintenance
@@ -483,4 +484,20 @@ pub fn is_date(value: &str) -> bool {
         return true;
     }
     false
+}
+
+/// Print a message if progress bars are enabled, and always log it with debug!
+///
+/// This is useful for progress-related messages that should be displayed to users
+/// when progress bars are enabled, while still being logged for debugging.
+pub fn print_progress_handler(message: &str, show_progress: bool) {
+    debug!("{}", message);
+    if show_progress {
+        println!("{}", message);
+    }
+}
+
+/// Check if stderr is a TTY
+pub fn is_stderr_tty() -> bool {
+    std::io::IsTerminal::is_terminal(&std::io::stderr())
 }

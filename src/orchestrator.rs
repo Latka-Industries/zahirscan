@@ -3,9 +3,11 @@
 use crate::chunking::{AdaptiveChunking, ProcessingTask};
 use crate::config::Config;
 use crate::parsers::{extract_templates, initial_file_scan};
+use crate::progress::{ProgressBarConfig, create_progress_bar};
 use crate::results::Output;
-use crate::tools::{determine_output_path, format_bytes};
+use crate::tools::{determine_output_path, format_bytes, print_progress_handler};
 use anyhow::Result;
+use kdam::Animation;
 use log::{debug, error};
 use rayon::prelude::*;
 use std::time::Duration;
@@ -17,20 +19,29 @@ fn log_phase1_metrics(
     path_duration: Duration,
     input_file_count: usize,
     tasks: &[ProcessingTask],
+    config: &Config,
 ) {
     let duration_secs = duration.as_secs_f64();
     let scan_secs = scan_duration.as_secs_f64();
     let path_secs = path_duration.as_secs_f64();
     let valid_file_count = tasks.len();
 
-    debug!(
-        "Phase 1: Processed {} files ({} valid) in {:.2}s (scan: {:.2}s, path setup: {:.2}s)",
-        input_file_count, valid_file_count, duration_secs, scan_secs, path_secs
+    print_progress_handler(
+        &format!(
+            "Phase 1: Processed {} files ({} valid) in {:.2}s (scan: {:.2}s, path setup: {:.2}s)",
+            input_file_count, valid_file_count, duration_secs, scan_secs, path_secs
+        ),
+        config.show_progress,
     );
 }
 
 /// Log Phase 2 processing metrics
-fn log_phase2_metrics(duration: Duration, tasks: &[ProcessingTask], max_workers: usize) {
+fn log_phase2_metrics(
+    duration: Duration,
+    tasks: &[ProcessingTask],
+    max_workers: usize,
+    config: &Config,
+) {
     let total_bytes = tasks.iter().map(|t| t.stats.byte_count).sum::<usize>();
     let file_count = tasks.len();
     let duration_secs = duration.as_secs_f64();
@@ -47,14 +58,17 @@ fn log_phase2_metrics(duration: Duration, tasks: &[ProcessingTask], max_workers:
         0
     };
 
-    debug!(
-        "Phase 2: Completed in {:.2}s. (workers: {}, files: {}, size: {}, size/file: {}, time/file: {:.4}s)",
-        duration_secs,
-        max_workers,
-        file_count,
-        format_bytes(total_bytes),
-        format_bytes(mean_size_per_file),
-        mean_time_per_file,
+    print_progress_handler(
+        &format!(
+            "Phase 2: Completed in {:.2}s. (workers: {}, files: {}, size: {}, size/file: {}, time/file: {:.4}s)",
+            duration_secs,
+            max_workers,
+            file_count,
+            format_bytes(total_bytes),
+            format_bytes(mean_size_per_file),
+            mean_time_per_file
+        ),
+        config.show_progress,
     );
 }
 
@@ -75,9 +89,19 @@ pub fn phase1_scan(
 
     // Phase 1: Initial file scan for all files in parallel
     let scan_start = Instant::now();
+    let pb = if config.show_progress {
+        Some(create_progress_bar(ProgressBarConfig::new(
+            input_paths.len(),
+            "Phase 1: Scanning files",
+            Animation::TqdmAscii,
+        )))
+    } else {
+        None
+    };
+    // Progress bar will close automatically on drop
     let stats_results: Vec<_> = input_paths
         .par_iter()
-        .map(|input_path| initial_file_scan(input_path))
+        .map(|input_path| crate::with_progress!(&pb, initial_file_scan(input_path)))
         .collect();
     let scan_duration = scan_start.elapsed();
     debug!(
@@ -109,6 +133,7 @@ pub fn phase1_scan(
         path_duration,
         input_paths.len(),
         &tasks,
+        config,
     );
 
     tasks
@@ -120,7 +145,6 @@ pub fn phase2_mining(
     tasks: Vec<ProcessingTask>,
     config: &Config,
     adaptive: &AdaptiveChunking,
-    max_workers: usize,
     skip_file_write: bool,
 ) -> Result<Vec<Output>> {
     use std::time::Instant;
@@ -132,15 +156,30 @@ pub fn phase2_mining(
     );
 
     // Process files in parallel with adaptive batching
+    let pb = if config.show_progress {
+        Some(create_progress_bar(ProgressBarConfig::new(
+            tasks.len(),
+            "Phase 2: Processing files",
+            Animation::TqdmAscii,
+        )))
+    } else {
+        None
+    };
+    // Progress bar will close automatically on drop
     let results: Vec<_> = process_files_with_adaptive_batching(
         &tasks,
-        max_workers,
+        config.max_workers,
         config.threshold_multiplier,
-        |task| process_task_phase2(task, config, adaptive, max_workers, skip_file_write),
+        |task| {
+            crate::with_progress!(
+                &pb,
+                process_task_phase2(task, config, adaptive, config.max_workers, skip_file_write)
+            )
+        },
     );
 
     // Calculate and log Phase 2 metrics
-    log_phase2_metrics(phase2_start.elapsed(), &tasks, max_workers);
+    log_phase2_metrics(phase2_start.elapsed(), &tasks, config.max_workers, config);
 
     // Collect all outputs (or handle errors)
     let mut outputs = Vec::new();
@@ -211,7 +250,7 @@ fn process_task_phase2(
     let mut stats = task.stats.clone();
 
     // Images, videos, audio, PDFs, DOCX, XLSX, and CSVs are binary but still need metadata extraction
-    let needs_processing = !stats.is_binary || stats.file_type.needs_processing();
+    let needs_processing = !stats.is_binary || stats.file_type.binary_needs_processing();
 
     if needs_processing {
         // Create modified config with adaptive chunking

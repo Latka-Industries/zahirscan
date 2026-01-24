@@ -96,8 +96,8 @@ impl FileType {
         }
     }
 
-    /// Check if this file type needs processing (binary files that still need metadata extraction)
-    pub fn needs_processing(&self) -> bool {
+    /// Check if this is a binary file type that still needs processing (metadata extraction)
+    pub fn binary_needs_processing(&self) -> bool {
         matches!(
             self,
             FileType::Image
@@ -413,32 +413,28 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
             )
         }
         FileType::Docx => {
-            // Extract metadata
-            if !config.skip_media_metadata {
-                extract_metadata_with_fallback!(
-                    stats.docx_metadata,
-                    docx::extract_docx_metadata(&mmap, stats, config),
-                    stats,
-                    crate::results::DocumentMetadata,
-                    FileType::Docx.as_metadata_name()
-                );
-            }
-            // Extract templates
-            docx::extract_docx_templates(&mmap, stats, config)
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                docx::extract_docx_metadata,
+                docx::extract_docx_templates,
+                docx_metadata,
+                crate::results::DocumentMetadata,
+                FileType::Docx
+            )
         }
         FileType::Xlsx => {
-            // Extract metadata
-            if !config.skip_media_metadata {
-                extract_metadata_with_fallback!(
-                    stats.docx_metadata,
-                    xlsx::extract_xlsx_metadata(&mmap, stats, config),
-                    stats,
-                    crate::results::DocumentMetadata,
-                    FileType::Xlsx.as_metadata_name()
-                );
-            }
-            // Extract templates
-            xlsx::extract_xlsx_templates(&mmap, stats, config)
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                xlsx::extract_xlsx_metadata,
+                xlsx::extract_xlsx_templates,
+                docx_metadata,
+                crate::results::DocumentMetadata,
+                FileType::Xlsx
+            )
         }
         _ => {
             // Skip binary files (non-images, videos, audio, CSV, PDF, etc)
@@ -454,21 +450,10 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                     text::markdown::extract_markdown_templates(content, stats, config)
                 }
                 FileType::Text => text::plain_text::extract_text_templates(content, stats, config),
-                FileType::Unknown => {
-                    // Try JSON first (most structured), then log, then text
-                    serde_json::from_str::<serde_json::Value>(content.lines().next().unwrap_or(""))
-                        .map_or_else(
-                            |_| text::log::extract_log_templates(content, stats, config),
-                            |_| text::json::extract_json_templates(content, stats, config),
-                        )
-                }
-                FileType::Image => unreachable!(),
-                FileType::Video => unreachable!(),
-                FileType::Audio => unreachable!(),
-                FileType::Csv => unreachable!(),
-                FileType::Pdf => unreachable!(),
-                FileType::Docx => unreachable!(),
-                FileType::Xlsx => unreachable!(),
+                FileType::Unknown => extract_unknown_templates(content, stats, config),
+                file_type if file_type.binary_needs_processing() => unreachable!(),
+                // Catch-all for any other file types
+                _ => unreachable!(),
             }
         }
     }
@@ -510,4 +495,16 @@ pub(crate) fn estimate_compressed_tokens_with_footprint(
     };
 
     template_tokens + example_tokens + footprint_tokens + config.json_overhead_tokens
+}
+
+fn extract_unknown_templates(
+    content: &str,
+    stats: &mut ParseResult,
+    config: &Config,
+) -> Result<MiningResult> {
+    // Try JSON first (most structured), then log, then text
+    serde_json::from_str::<serde_json::Value>(content.lines().next().unwrap_or("")).map_or_else(
+        |_| text::log::extract_log_templates(content, stats, config),
+        |_| text::json::extract_json_templates(content, stats, config),
+    )
 }

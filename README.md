@@ -80,7 +80,8 @@ Options:
 
   -d, --dev
           Development mode: enables debug logging.
-          Default is production mode (info level only)
+          Default is production mode (info level only).
+          This disables progress bars if enabled
 
   -r, --redact
           Redact file paths in output (show only filename as ***/filename.ext).
@@ -89,6 +90,9 @@ Options:
   -n, --no-media
           Skip media metadata extraction (audio, video, image).
           Faster processing when metadata is not needed
+  -p, --progress
+          Show progress bars during processing.
+          This is ignored if dev mode is enabled.
 
   -h, --help
           Print help
@@ -224,6 +228,21 @@ ZahirScan implements non-invasive file operations:
 - [ ] Word universe for enhanced writing analysis (per-document vocabulary corpus with frequency distributions, word length statistics, and visualization data)
 - [ ] Improve template extraction for short literary texts (adaptive thresholds and pattern similarity merging for better pattern recognition in short documents)
 - [ ] SQLite database metadata extraction (schema information, table/column metadata, database statistics)
+- [ ] Code file analysis (language detection + basic code metadata; decide integrated vs separate library)
+- [ ] HTML support: extract text content from webpages + metadata (title, meta tags, heading structure)
+- [ ] XML support: extract text content + structure metadata (element/attribute counts, namespace info)
+- [ ] EPUB support (ZIP-based): extract metadata + clean text from HTML/XHTML
+- [ ] PPTX metadata extraction (slide count + core properties; PPT optional/lower priority)
+- [ ] RTF support: extract text + basic formatting metadata
+- [ ] Archive support (ZIP, TAR/GZ/BZ2/XZ): list contents + compression stats
+- [ ] YAML metadata extraction (structure/key counts/type distribution)
+- [ ] INI metadata extraction (sections/keys/comments)
+- [ ] Shared lightweight NLP utility layer for logs + writing analysis (normalization/tokenization/stats/redaction; optional similarity/embeddings later)
+- [x] Progress bars/UX using `kdam` (default on; `--progress/-p`, consider `--no-progress`; write to stderr; respect non-TTY)
+- [ ] File filtering: add ignore patterns to `config.toml` (.DS_Store, Thumbs.db, hidden files, editor swap files, etc.)
+- [ ] Directory handling: detect and skip directories with message "Skipping directory: {path}" instead of erroring
+
+- [ ] (Optional) Security hardening: output path validation + symlink checks
 
 ## License
 

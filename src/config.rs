@@ -229,6 +229,8 @@ pub struct Config {
     pub redact_paths: bool,
     /// Whether to skip media metadata extraction (audio, video, image)
     pub skip_media_metadata: bool,
+    /// Whether to show progress bars during processing
+    pub show_progress: bool,
 }
 
 impl Config {
@@ -309,8 +311,10 @@ impl Config {
             min_collection_size_for_chunking: u64_to_usize(
                 concurrency.min_collection_size_for_chunking,
             ),
-            redact_paths: false,        // Set via CLI flag, not from TOML
-            skip_media_metadata: false, // Set via CLI flag, not from TOML
+            // Set via CLI flag, not from TOML
+            redact_paths: false,
+            skip_media_metadata: false,
+            show_progress: false,
         }
     }
 
