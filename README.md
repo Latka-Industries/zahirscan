@@ -50,11 +50,6 @@ cargo install zahirscan
 
 # Source archive (from GitHub Releases)
 # Download from: https://github.com/thicclatka/zahirscan/releases
-
-# From git
-git clone https://github.com/thicclatka/zahirscan.git
-cd zahirscan
-cargo build --release
 ```
 
 **Note**: `ffprobe` (from FFmpeg) is optional but required for video/audio metadata extraction.
