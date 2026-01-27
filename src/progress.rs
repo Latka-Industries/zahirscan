@@ -31,21 +31,27 @@ pub fn create_progress_bar(config: ProgressBarConfig) -> Arc<Mutex<Bar>> {
 }
 
 /// Update progress bar if available
+/// Uses try_lock to avoid blocking if mutex is contended (non-blocking)
 pub fn update_progress_bar(pb: &Option<Arc<Mutex<Bar>>>) {
-    if let Some(pb) = &pb
-        && let Ok(mut pb) = pb.lock()
-    {
-        let _ = pb.update(1);
+    if let Some(pb) = &pb {
+        // Use try_lock to avoid blocking parallel workers
+        // If lock is contended, skip update (progress bar will catch up on next update)
+        if let Ok(mut pb) = pb.try_lock() {
+            let _ = pb.update(1);
+        }
     }
 }
 
 /// Macro to execute a function and update progress bar
 /// Usage: `with_progress!(pb, function_call(...))`
+/// Optimized: only calls update_progress_bar if pb is Some
 #[macro_export]
 macro_rules! with_progress {
     ($pb:expr, $func:expr) => {{
         let result = $func;
-        $crate::progress::update_progress_bar($pb);
+        if $pb.is_some() {
+            $crate::progress::update_progress_bar($pb);
+        }
         result
     }};
 }

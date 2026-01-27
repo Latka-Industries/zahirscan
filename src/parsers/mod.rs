@@ -7,13 +7,16 @@ pub mod csv;
 pub mod docx;
 pub mod image;
 mod media_helpers;
-pub mod sqlite;
-pub mod xlsx;
-pub use media_helpers::{BitrateMode, CompressionMode};
 pub mod pdf;
+pub mod sqlite;
 pub mod text;
+pub mod toml;
 pub mod traits;
 mod video;
+pub mod xlsx;
+pub mod xml;
+pub mod zip;
+pub use media_helpers::{BitrateMode, CompressionMode};
 
 use crate::config::Config;
 use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
@@ -68,6 +71,23 @@ macro_rules! process_media_file {
     }};
 }
 
+/// Defines `extract_X_templates` that returns `empty_mining_result(stats)`.
+/// Use for parsers that do metadata only and no template mining.
+/// Usage: `crate::no_template_mining!(extract_toml_templates, "TOML is config; schema covers structure. No template mining.")`
+#[macro_export]
+macro_rules! no_template_mining {
+    ($name:ident, $doc:expr) => {
+        #[doc = $doc]
+        pub fn $name(
+            _content: &[u8],
+            stats: &$crate::parsers::ParseResult,
+            _config: &$crate::config::Config,
+        ) -> anyhow::Result<$crate::results::MiningResult> {
+            Ok($crate::parsers::traits::empty_mining_result(stats))
+        }
+    };
+}
+
 /// Supported file types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileType {
@@ -83,6 +103,9 @@ pub enum FileType {
     Docx,
     Xlsx,
     Sqlite,
+    Toml,
+    Zip,
+    Xml,
     Unknown,
 }
 
@@ -98,6 +121,9 @@ impl FileType {
             FileType::Docx => "DOCX",
             FileType::Xlsx => "XLSX",
             FileType::Sqlite => "SQLite",
+            FileType::Toml => "TOML",
+            FileType::Zip => "ZIP",
+            FileType::Xml => "XML",
             FileType::Log => "Log",
             FileType::Json => "JSON",
             FileType::Text => "Text",
@@ -118,6 +144,9 @@ impl FileType {
                 | FileType::Xlsx
                 | FileType::Csv
                 | FileType::Sqlite
+                | FileType::Toml
+                | FileType::Zip
+                | FileType::Xml
         )
     }
 }
@@ -150,6 +179,12 @@ pub struct ParseResult {
     pub docx_metadata: Option<crate::results::DocumentMetadata>,
     /// SQLite metadata (for SQLite database files)
     pub sqlite_metadata: Option<crate::results::SqliteMetadata>,
+    /// TOML metadata (for TOML config files)
+    pub toml_metadata: Option<crate::results::TomlMetadata>,
+    /// ZIP metadata (for ZIP archives)
+    pub zip_metadata: Option<crate::results::ZipMetadata>,
+    /// XML metadata (for XML files)
+    pub xml_metadata: Option<crate::results::XmlMetadata>,
 }
 
 impl ParseResult {
@@ -162,6 +197,9 @@ impl ParseResult {
         output.pdf_metadata = self.pdf_metadata.clone();
         output.docx_metadata = self.docx_metadata.clone();
         output.sqlite_metadata = self.sqlite_metadata.clone();
+        output.toml_metadata = self.toml_metadata.clone();
+        output.zip_metadata = self.zip_metadata.clone();
+        output.xml_metadata = self.xml_metadata.clone();
     }
 
     /// Convert parse result to Output object
@@ -340,6 +378,9 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
         pdf_metadata: None,
         docx_metadata: None,
         sqlite_metadata: None,
+        toml_metadata: None,
+        zip_metadata: None,
+        xml_metadata: None,
     })
 }
 
@@ -448,6 +489,42 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
             }
             // Extract templates
             sqlite::extract_sqlite_templates(&mmap, stats, config)
+        }
+        FileType::Toml => {
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                toml::extract_toml_metadata,
+                toml::extract_toml_templates,
+                toml_metadata,
+                crate::results::TomlMetadata,
+                FileType::Toml
+            )
+        }
+        FileType::Zip => {
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                zip::extract_zip_metadata,
+                zip::extract_zip_templates,
+                zip_metadata,
+                crate::results::ZipMetadata,
+                FileType::Zip
+            )
+        }
+        FileType::Xml => {
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                xml::extract_xml_metadata,
+                xml::extract_xml_templates,
+                xml_metadata,
+                crate::results::XmlMetadata,
+                FileType::Xml
+            )
         }
         _ => {
             // Skip binary files (non-images, videos, audio, CSV, PDF, etc)

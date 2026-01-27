@@ -17,7 +17,7 @@ pub use core::{FileMetadata, MiningResult, Output, OutputMode, Template};
 pub use metadata::{
     AudioMetadata, BlobStats, BooleanStats, ColumnInfo, CsvMetadata, DateStats, DocumentMetadata,
     ForeignKeyInfo, ImageMetadata, IndexInfo, NumericStats, PdfMetadata, SqliteMetadata, TableInfo,
-    TextStats, VideoMetadata,
+    TextStats, TomlMetadata, VideoMetadata, XmlMetadata, ZipEntry, ZipMetadata,
 };
 pub use writing::{CompressionStats, PunctuationMetrics, SVOAnalysis, WritingFootprint};
 

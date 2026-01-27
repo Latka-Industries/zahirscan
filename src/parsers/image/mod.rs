@@ -12,7 +12,7 @@ mod webp;
 
 use crate::config::Config;
 use crate::parsers::ParseResult;
-use crate::results::{ImageMetadata, MiningResult};
+use crate::results::ImageMetadata;
 use anyhow::Result;
 use image::ImageReader;
 use metadata::{FormatMetadata, format_from_string};
@@ -106,12 +106,7 @@ pub fn extract_image_metadata(
     }
 }
 
-/// Extract templates from image files (images don't have templates, return empty result)
-pub fn extract_image_templates(
-    _content: &[u8],
-    stats: &ParseResult,
-    _config: &Config,
-) -> Result<MiningResult> {
-    // Images don't have templates, return empty result
-    Ok(crate::parsers::traits::empty_mining_result(stats))
-}
+crate::no_template_mining!(
+    extract_image_templates,
+    "Images don't have templates, return empty result."
+);

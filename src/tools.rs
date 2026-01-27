@@ -59,6 +59,10 @@ const FILE_EXTENSION_MAP: &[(&str, FileType)] = &[
     ("db", FileType::Sqlite),
     ("sqlite", FileType::Sqlite),
     ("sqlite3", FileType::Sqlite),
+    ("toml", FileType::Toml),
+    ("lock", FileType::Toml),
+    ("zip", FileType::Zip),
+    ("xml", FileType::Xml),
 ];
 
 /// Get FileType from extension using linear search

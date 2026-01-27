@@ -26,6 +26,9 @@ fn get_test_stats() -> ParseResult {
         pdf_metadata: None,
         docx_metadata: None,
         sqlite_metadata: None,
+        toml_metadata: None,
+        zip_metadata: None,
+        xml_metadata: None,
     }
 }
 

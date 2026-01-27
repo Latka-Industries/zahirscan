@@ -63,12 +63,7 @@ pub fn extract_pdf_metadata(
     Ok(metadata)
 }
 
-/// Extract templates from PDF files (PDFs don't have templates, return empty result)
-pub fn extract_pdf_templates(
-    _content: &[u8],
-    stats: &ParseResult,
-    _config: &Config,
-) -> Result<crate::parsers::MiningResult> {
-    // PDFs are binary files, don't have templates, return empty result
-    Ok(crate::parsers::traits::empty_mining_result(stats))
-}
+crate::no_template_mining!(
+    extract_pdf_templates,
+    "PDFs are binary files, don't have templates, return empty result."
+);

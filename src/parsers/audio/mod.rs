@@ -4,7 +4,7 @@ mod mp3;
 
 use crate::config::Config;
 use crate::parsers::{CompressionMode, FileType, ParseResult, image, media_helpers};
-use crate::results::{AudioMetadata as OutputAudioMetadata, ImageMetadata, MiningResult};
+use crate::results::{AudioMetadata as OutputAudioMetadata, ImageMetadata};
 use crate::tools::get_extensions_for_file_type;
 
 /// Lossless audio codec extensions
@@ -301,6 +301,9 @@ fn analyze_image_data(image_data: &[u8]) -> Option<ImageMetadata> {
         video_metadata: None,
         audio_metadata: None,
         sqlite_metadata: None,
+        toml_metadata: None,
+        zip_metadata: None,
+        xml_metadata: None,
     };
 
     // Use the existing image parser
@@ -314,12 +317,7 @@ fn analyze_image_data(image_data: &[u8]) -> Option<ImageMetadata> {
     }
 }
 
-/// Extract templates from audio files (audio files don't have templates, return empty result)
-pub fn extract_audio_templates(
-    _content: &[u8],
-    stats: &ParseResult,
-    _config: &Config,
-) -> Result<MiningResult> {
-    // Audio files don't have templates, return empty result
-    Ok(crate::parsers::traits::empty_mining_result(stats))
-}
+crate::no_template_mining!(
+    extract_audio_templates,
+    "Audio files don't have templates, return empty result."
+);

@@ -3,8 +3,9 @@
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 
-use super::{BlobStats, BooleanStats, DateStats, NumericStats, TextStats};
 use crate::results::MinimalFallback;
+
+use super::{BlobStats, BooleanStats, DateStats, NumericStats, TextStats};
 
 /// Column information for SQLite tables
 #[derive(Debug, Clone, Deserialize, Default)]

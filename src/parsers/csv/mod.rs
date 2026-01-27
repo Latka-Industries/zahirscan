@@ -6,7 +6,7 @@ use crate::config::Config;
 use crate::parsers::ParseResult;
 use crate::parsers::column_stats;
 use crate::parsers::traits::AdaptiveParallel;
-use crate::results::{BooleanStats, CsvMetadata, DateStats, MiningResult, NumericStats};
+use crate::results::{BooleanStats, CsvMetadata, DateStats, NumericStats};
 use ::csv::ReaderBuilder;
 use anyhow::Result;
 use dashmap::DashMap;
@@ -279,12 +279,7 @@ fn compute_boolean_stats(
     column_stats::compute_boolean_stats_from_strings(&values, config)
 }
 
-/// Extract templates from CSV files (CSV files don't have templates, return empty result)
-pub fn extract_csv_templates(
-    _content: &[u8],
-    stats: &ParseResult,
-    _config: &Config,
-) -> Result<MiningResult> {
-    // CSV files don't have templates, return empty result
-    Ok(crate::parsers::traits::empty_mining_result(stats))
-}
+crate::no_template_mining!(
+    extract_csv_templates,
+    "CSV files don't have templates, return empty result."
+);

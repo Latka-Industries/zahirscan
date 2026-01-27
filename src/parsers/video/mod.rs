@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::parsers::{ParseResult, media_helpers};
-use crate::results::{MiningResult, VideoMetadata as OutputVideoMetadata};
+use crate::results::VideoMetadata as OutputVideoMetadata;
 use crate::tools::{check_ffprobe_available, run_ffprobe_safe};
 use anyhow::Result;
 use ffprobe::Stream;
@@ -236,12 +236,7 @@ fn parse_frame_rate(fr_str: &str) -> Option<f64> {
     }
 }
 
-/// Extract templates from video files (videos don't have templates, return empty result)
-pub fn extract_video_templates(
-    _content: &[u8],
-    stats: &ParseResult,
-    _config: &Config,
-) -> Result<MiningResult> {
-    // Videos don't have templates, return empty result
-    Ok(crate::parsers::traits::empty_mining_result(stats))
-}
+crate::no_template_mining!(
+    extract_video_templates,
+    "Videos don't have templates, return empty result."
+);

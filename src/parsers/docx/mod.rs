@@ -4,7 +4,6 @@
 mod utils;
 
 use super::ParseResult;
-use super::traits::empty_mining_result;
 use crate::config::Config;
 use crate::results::DocumentMetadata;
 use anyhow::Result;
@@ -199,14 +198,7 @@ fn extract_text_from_document_xml(xml: &str) -> (String, usize, usize, usize, us
     )
 }
 
-/// Extract templates from DOCX files
-/// DOCX files don't need template extraction - we only extract metadata
-pub fn extract_docx_templates(
-    _content: &[u8],
-    stats: &ParseResult,
-    _config: &Config,
-) -> Result<super::MiningResult> {
-    // DOCX files don't need template mining - return empty result
-    // Only metadata is extracted (word count, character count, core properties, etc.)
-    Ok(empty_mining_result(stats))
-}
+crate::no_template_mining!(
+    extract_docx_templates,
+    "DOCX files don't need template mining - return empty result. Only metadata is extracted (word count, character count, core properties, etc.)."
+);

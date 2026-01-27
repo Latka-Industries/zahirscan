@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
 
 use super::metadata::{
-    AudioMetadata, DocumentMetadata, ImageMetadata, SqliteMetadata, VideoMetadata,
+    AudioMetadata, DocumentMetadata, ImageMetadata, SqliteMetadata, TomlMetadata, VideoMetadata,
+    XmlMetadata, ZipMetadata,
 };
 use super::writing::{CompressionStats, WritingFootprint};
 
@@ -81,6 +82,12 @@ pub struct Output {
     pub docx_metadata: Option<DocumentMetadata>,
     /// SQLite metadata (Mode 2 only, for SQLite database files)
     pub sqlite_metadata: Option<SqliteMetadata>,
+    /// TOML metadata (Mode 2 only, for TOML config files)
+    pub toml_metadata: Option<TomlMetadata>,
+    /// ZIP metadata (Mode 2 only, for ZIP archives)
+    pub zip_metadata: Option<ZipMetadata>,
+    /// XML metadata (Mode 2 only, for XML files)
+    pub xml_metadata: Option<XmlMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -100,8 +107,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 17 fields: 1 required (templates) + 16 optional fields
-        let mut state = serializer.serialize_struct("Output", 17)?;
+        // Maximum 20 fields: 1 required (templates) + 19 optional fields
+        let mut state = serializer.serialize_struct("Output", 20)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -123,6 +130,9 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.pdf_metadata, "pdf_metadata");
         crate::serialize_optional!(state, self.docx_metadata, "docx_metadata");
         crate::serialize_optional!(state, self.sqlite_metadata, "sqlite_metadata");
+        crate::serialize_optional!(state, self.toml_metadata, "toml_metadata");
+        crate::serialize_optional!(state, self.zip_metadata, "zip_metadata");
+        crate::serialize_optional!(state, self.xml_metadata, "xml_metadata");
 
         state.end()
     }
@@ -155,6 +165,9 @@ impl Output {
             pdf_metadata: None,
             docx_metadata: None,
             sqlite_metadata: None,
+            toml_metadata: None,
+            zip_metadata: None,
+            xml_metadata: None,
         }
     }
 
@@ -184,6 +197,9 @@ impl Output {
             pdf_metadata: None,
             docx_metadata: None,
             sqlite_metadata: None,
+            toml_metadata: None,
+            zip_metadata: None,
+            xml_metadata: None,
         }
     }
 }

@@ -21,6 +21,9 @@ fn create_test_task(byte_count: usize, file_type: FileType) -> ProcessingTask {
             pdf_metadata: None,
             docx_metadata: None,
             sqlite_metadata: None,
+            toml_metadata: None,
+            zip_metadata: None,
+            xml_metadata: None,
         },
         output_path: "test.out".to_string(),
     }

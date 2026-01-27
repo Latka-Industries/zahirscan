@@ -29,6 +29,9 @@ fn get_test_stats(file_path: &str, byte_count: usize) -> ParseResult {
         pdf_metadata: None,
         docx_metadata: None,
         sqlite_metadata: None,
+        toml_metadata: None,
+        zip_metadata: None,
+        xml_metadata: None,
     }
 }
 
@@ -462,16 +465,16 @@ fn test_indexed_database_indexes() {
 
     // Find products table
     let products_table = tables.iter().find(|t| t.name == "products");
-    if let Some(products) = products_table {
-        if let Some(indexes) = &products.indexes {
-            assert!(!indexes.is_empty());
+    if let Some(products) = products_table
+        && let Some(indexes) = &products.indexes
+    {
+        assert!(!indexes.is_empty());
 
-            // Check for unique index on sku
-            let sku_index = indexes
-                .iter()
-                .find(|idx| idx.columns.contains(&"sku".to_string()) && idx.unique == Some(true));
-            assert!(sku_index.is_some());
-        }
+        // Check for unique index on sku
+        let sku_index = indexes
+            .iter()
+            .find(|idx| idx.columns.contains(&"sku".to_string()) && idx.unique == Some(true));
+        assert!(sku_index.is_some());
     }
 }
 
@@ -542,7 +545,7 @@ fn test_types_database_null_percentages() {
     for col in columns {
         assert!(col.null_percentage.is_some());
         let null_pct = col.null_percentage.unwrap();
-        assert!(null_pct >= 0.0 && null_pct <= 100.0);
+        assert!((0.0..=100.0).contains(&null_pct));
     }
 }
 
