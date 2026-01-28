@@ -4,54 +4,33 @@ use std::collections::BTreeMap;
 use std::io::Cursor;
 
 use crate::engine::config::Config;
-use crate::engine::tools::detect_file_type;
+use crate::engine::tools::{detect_file_type, should_ignore_path};
 use crate::parsers::ParseResult;
 use crate::results::metadata::{ZipEntry, ZipMetadata};
 use anyhow::Result;
 use zip::ZipArchive;
 
-/// OS hidden/junk paths to omit from ZIP entries and totals.
-/// Add path prefixes, filename prefixes, or exact filenames here; matching is case-insensitive for exact filenames.
+/// Path-prefix rules not covered by `[filter]` (e.g. __MACOSX/). Basename-based
+/// filtering uses `should_ignore_path` from config.
 pub(crate) struct ZipOmit;
 
 impl ZipOmit {
     /// Path prefixes: entry path starting with any of these is ignored.
     const PATH_PREFIXES: &[&str] = &["__MACOSX/"];
 
-    /// Filename prefixes: basename starting with any of these is ignored.
-    const FILENAME_PREFIXES: &[&str] = &["._", "~$"];
-
-    /// Exact filenames (case-insensitive): e.g. .DS_Store, Thumbs.db, Desktop.ini.
-    const FILENAMES: &[&str] = &[".DS_Store", "Thumbs.db", "Desktop.ini", "ehthumbs.db"];
-
-    /// Returns true if `path` should be excluded from the ZIP listing.
-    pub(crate) fn should_ignore(path: &str) -> bool {
-        for p in Self::PATH_PREFIXES {
-            if path.starts_with(p) {
-                return true;
-            }
-        }
-        let name = path.trim_end_matches('/').rsplit('/').next().unwrap_or("");
-        for p in Self::FILENAME_PREFIXES {
-            if name.starts_with(p) {
-                return true;
-            }
-        }
-        for f in Self::FILENAMES {
-            if name.eq_ignore_ascii_case(f) {
-                return true;
-            }
-        }
-        false
+    /// Returns true if the entry path starts with a known junk prefix.
+    pub(crate) fn should_ignore_path_prefix(path: &str) -> bool {
+        Self::PATH_PREFIXES.iter().any(|p| path.starts_with(p))
     }
 }
 
 /// Extract ZIP metadata from archive bytes.
-/// Excludes OS hidden/junk entries (e.g. __MACOSX/, ._*, .DS_Store, Thumbs.db, Desktop.ini, ~$*) from the entries list and totals.
+/// Excludes entries via ZipOmit path prefixes (e.g. __MACOSX/) and `[filter]` (should_ignore_path:
+/// .DS_Store, Thumbs.db, desktop.ini, ehthumbs.db, *.swp, *~, ~$*, hidden files, etc.).
 pub fn extract_zip_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    config: &Config,
 ) -> Result<ZipMetadata> {
     let mut archive = ZipArchive::new(Cursor::new(content))
         .map_err(|e| anyhow::anyhow!("ZIP parse error: {}", e))?;
@@ -66,7 +45,7 @@ pub fn extract_zip_metadata(
             .by_index(i)
             .map_err(|e| anyhow::anyhow!("ZIP entry {}: {}", i, e))?;
         let path = entry.name().to_string();
-        if ZipOmit::should_ignore(&path) {
+        if ZipOmit::should_ignore_path_prefix(&path) || should_ignore_path(&path, config) {
             continue;
         }
         if !entry.is_file() {
@@ -104,7 +83,7 @@ pub fn extract_zip_metadata(
         total_uncompressed: Some(total_uncompressed),
         total_compressed: Some(total_compressed),
         entry_type_counts: Some(entry_type_counts),
-        comment: None,
+        ..Default::default()
     })
 }
 

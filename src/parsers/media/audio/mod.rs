@@ -4,7 +4,8 @@ mod mp3;
 
 use crate::engine::config::Config;
 use crate::engine::tools::{get_extensions_for_file_type, is_codec_for_file_type};
-use crate::parsers::{CompressionMode, FileType, ParseResult, image, media_helpers};
+use crate::parsers::media::image;
+use crate::parsers::{CompressionMode, FileType, ParseResult, media_helpers};
 use crate::results::{AudioMetadata as OutputAudioMetadata, ImageMetadata};
 
 /// Lossless audio codec extensions
@@ -36,6 +37,7 @@ use lofty::{
 };
 
 /// Rich tag metadata extracted from audio files
+#[derive(Default)]
 struct RichTags {
     title: Option<String>,
     artist: Option<String>,
@@ -170,18 +172,7 @@ fn extract_rich_tags(file_path: &str) -> RichTags {
         Err(e) => {
             // Silently fail - not all files have tags, or lofty might not support the format
             log::debug!("Failed to read tags from {}: {}", file_path, e);
-            return RichTags {
-                title: None,
-                artist: None,
-                album: None,
-                album_artist: None,
-                track: None,
-                track_total: None,
-                year: None,
-                genre: None,
-                comments: None,
-                artwork: None,
-            };
+            return RichTags::default();
         }
     };
 
@@ -193,18 +184,7 @@ fn extract_rich_tags(file_path: &str) -> RichTags {
             match tagged_file.first_tag() {
                 Some(t) => t,
                 None => {
-                    return RichTags {
-                        title: None,
-                        artist: None,
-                        album: None,
-                        album_artist: None,
-                        track: None,
-                        track_total: None,
-                        year: None,
-                        genre: None,
-                        comments: None,
-                        artwork: None,
-                    };
+                    return RichTags::default();
                 }
             }
         }
@@ -292,19 +272,7 @@ fn analyze_image_data(image_data: &[u8]) -> Option<ImageMetadata> {
         token_count: 0,
         duration: std::time::Duration::ZERO,
         is_binary: true,
-        csv_metadata: None,
-        pdf_metadata: None,
-        docx_metadata: None,
-        mining_result: None,
-        image_metadata: None,
-        video_metadata: None,
-        audio_metadata: None,
-        sqlite_metadata: None,
-        toml_metadata: None,
-        zip_metadata: None,
-        xml_metadata: None,
-        html_metadata: None,
-        yaml_metadata: None,
+        ..Default::default()
     };
 
     // Use the existing image parser

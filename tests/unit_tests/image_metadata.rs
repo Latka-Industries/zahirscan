@@ -1,6 +1,6 @@
 //! Tests for image metadata extraction
 
-use zahirscan::parsers::image::metadata::{FormatMetadata, ImageFormat, format_from_string};
+use zahirscan::parsers::media::image::metadata::{FormatMetadata, ImageFormat, format_from_string};
 
 #[test]
 fn test_format_from_string_jpeg() {

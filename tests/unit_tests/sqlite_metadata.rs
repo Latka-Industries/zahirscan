@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use std::fs;
 use std::time::Duration;
 use tempfile::NamedTempFile;
-use zahirscan::config::Config;
+use zahirscan::engine::config::Config;
 use zahirscan::parsers::sqlite::extract_sqlite_metadata;
 use zahirscan::parsers::{FileType, ParseResult};
 
@@ -21,19 +21,7 @@ fn get_test_stats(file_path: &str, byte_count: usize) -> ParseResult {
         token_count: 0,
         duration: Duration::ZERO,
         is_binary: true,
-        mining_result: None,
-        image_metadata: None,
-        video_metadata: None,
-        audio_metadata: None,
-        csv_metadata: None,
-        pdf_metadata: None,
-        docx_metadata: None,
-        sqlite_metadata: None,
-        toml_metadata: None,
-        zip_metadata: None,
-        xml_metadata: None,
-        html_metadata: None,
-        yaml_metadata: None,
+        ..Default::default()
     }
 }
 

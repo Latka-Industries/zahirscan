@@ -158,7 +158,7 @@ pub(crate) fn extract_bitrate_mode_from_metadata(
     // First, check if it's a lossless codec (not CBR/VBR)
     codec
         .and_then(|codec_str| {
-            use crate::parsers::audio;
+            use crate::parsers::media::audio;
             // Check if it's a lossless codec using the helper from audio module
             if audio::is_lossless_codec(codec_str) {
                 Some(BitrateMode::Lossless)
@@ -179,7 +179,7 @@ pub(crate) fn extract_bitrate_mode_from_metadata(
                 } else if enc_lower.contains("vbr") {
                     Some(BitrateMode::Vbr)
                 } else {
-                    use crate::parsers::audio;
+                    use crate::parsers::media::audio;
                     // Opus is typically VBR
                     if audio::is_opus_codec(enc)
                         || codec.map(|c| audio::is_opus_codec(c)).unwrap_or(false)
@@ -194,7 +194,7 @@ pub(crate) fn extract_bitrate_mode_from_metadata(
         .or_else(|| {
             // Codec-specific heuristics
             codec.and_then(|codec_str| {
-                use crate::parsers::audio;
+                use crate::parsers::media::audio;
                 // Opus is almost always VBR
                 if audio::is_opus_codec(codec_str) {
                     Some(BitrateMode::Vbr)

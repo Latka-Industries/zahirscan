@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
 
 use super::metadata::{
-    AudioMetadata, DocumentMetadata, HtmlMetadata, ImageMetadata, SqliteMetadata, TomlMetadata,
-    VideoMetadata, XmlMetadata, YamlMetadata, ZipMetadata,
+    ArchiveMetadata, AudioMetadata, DocumentMetadata, EpubMetadata, HtmlMetadata, ImageMetadata,
+    IniMetadata, PptxMetadata, SqliteMetadata, TomlMetadata, VideoMetadata, XmlMetadata,
+    YamlMetadata, ZipMetadata,
 };
 use super::writing::{CompressionStats, WritingFootprint};
 
@@ -44,7 +45,7 @@ pub struct MiningResult {
 }
 
 /// Unified output structure - can represent both modes
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct Output {
     /// Templates (always present)
     pub templates: Vec<Template>,
@@ -92,6 +93,14 @@ pub struct Output {
     pub html_metadata: Option<HtmlMetadata>,
     /// YAML metadata (Mode 2 only, for YAML files)
     pub yaml_metadata: Option<YamlMetadata>,
+    /// INI metadata (Mode 2 only, for INI/.cfg config files)
+    pub ini_metadata: Option<IniMetadata>,
+    /// PPTX metadata (Mode 2 only, for PowerPoint files)
+    pub pptx_metadata: Option<PptxMetadata>,
+    /// EPUB metadata (Mode 2 only, for e-book files)
+    pub epub_metadata: Option<EpubMetadata>,
+    /// Archive metadata (Mode 2 only, for TAR / tar.gz / tar.bz2 / tar.xz)
+    pub archive_metadata: Option<ArchiveMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -111,8 +120,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 22 fields: 1 required (templates) + 21 optional fields
-        let mut state = serializer.serialize_struct("Output", 22)?;
+        // Maximum 26 fields: 1 required (templates) + 25 optional fields
+        let mut state = serializer.serialize_struct("Output", 26)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -139,6 +148,10 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.xml_metadata, "xml_metadata");
         crate::serialize_optional!(state, self.html_metadata, "html_metadata");
         crate::serialize_optional!(state, self.yaml_metadata, "yaml_metadata");
+        crate::serialize_optional!(state, self.ini_metadata, "ini_metadata");
+        crate::serialize_optional!(state, self.pptx_metadata, "pptx_metadata");
+        crate::serialize_optional!(state, self.epub_metadata, "epub_metadata");
+        crate::serialize_optional!(state, self.archive_metadata, "archive_metadata");
 
         state.end()
     }
@@ -153,29 +166,9 @@ impl Output {
     ) -> Self {
         Self {
             templates,
-            // Source and file_type are included in both modes
             source,
             file_type,
-            line_count: None,
-            byte_count: None,
-            token_count: None,
-            processing_time_ms: None,
-            is_binary: None,
-            compression: None,
-            // These are set by caller if available
-            writing_footprint: None,
-            image_metadata: None,
-            video_metadata: None,
-            audio_metadata: None,
-            csv_metadata: None,
-            pdf_metadata: None,
-            docx_metadata: None,
-            sqlite_metadata: None,
-            toml_metadata: None,
-            zip_metadata: None,
-            xml_metadata: None,
-            html_metadata: None,
-            yaml_metadata: None,
+            ..Default::default()
         }
     }
 
@@ -187,7 +180,6 @@ impl Output {
     ) -> Self {
         Self {
             templates,
-            // Mode 2 fields from FileMetadata
             source: Some(metadata.source),
             file_type: Some(metadata.file_type),
             line_count: Some(metadata.line_count),
@@ -196,20 +188,7 @@ impl Output {
             processing_time_ms: Some(metadata.processing_time_ms),
             is_binary: Some(metadata.is_binary),
             compression: Some(compression),
-            // These are set by caller if available
-            writing_footprint: None,
-            image_metadata: None,
-            video_metadata: None,
-            audio_metadata: None,
-            csv_metadata: None,
-            pdf_metadata: None,
-            docx_metadata: None,
-            sqlite_metadata: None,
-            toml_metadata: None,
-            zip_metadata: None,
-            xml_metadata: None,
-            html_metadata: None,
-            yaml_metadata: None,
+            ..Default::default()
         }
     }
 }

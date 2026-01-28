@@ -147,13 +147,7 @@ pub(super) fn get_table_columns(
             default_value,
             is_primary_key: Some(is_pk),
             is_foreign_key: Some(false),
-            null_percentage: None,
-            unique_count: None,
-            numeric_stats: None,
-            date_stats: None,
-            boolean_stats: None,
-            text_stats: None,
-            blob_stats: None,
+            ..Default::default()
         });
     }
     pk_order.sort_by_key(|(_, pk)| *pk);

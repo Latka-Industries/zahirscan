@@ -2,6 +2,8 @@
 
 mod utils;
 
+pub(crate) use utils::infer_value_type;
+
 use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::parsers::column_stats;
@@ -35,20 +37,8 @@ pub fn extract_csv_metadata(
         Err(_) => {
             // If not UTF-8, return minimal metadata with encoding info
             return Ok(CsvMetadata {
-                row_count: 0,
-                column_count: 0,
-                column_names: None,
                 encoding,
-                column_types: None,
-                delimiter: None,
-                quote_character: None,
-                escape_character: None,
-                has_header: None,
-                null_percentages: None,
-                unique_counts: None,
-                numeric_stats: None,
-                date_stats: None,
-                boolean_stats: None,
+                ..Default::default()
             });
         }
     };

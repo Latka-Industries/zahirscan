@@ -1,6 +1,6 @@
 //! Tests for JPEG subsampling parser (SOF parsing)
 
-use zahirscan::parsers::image::metadata::{FormatMetadata, ImageFormat};
+use zahirscan::parsers::media::image::metadata::{FormatMetadata, ImageFormat};
 
 /// Helper to create a minimal valid JPEG header
 fn create_jpeg_header() -> Vec<u8> {

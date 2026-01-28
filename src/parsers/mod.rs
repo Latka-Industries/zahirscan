@@ -1,23 +1,18 @@
 //! Probabilistic template mining and parsing
 //! Main handler that routes to log or text parsers
 
-mod audio;
 mod column_stats;
-pub mod csv;
-pub mod docx;
-mod html;
-pub mod image;
+pub mod container;
+mod epub;
+pub mod media;
 mod media_helpers;
+mod office;
 pub mod pdf;
+pub mod settings;
 pub mod sqlite;
+pub mod structured;
 pub mod text;
-pub mod toml;
 pub mod traits;
-mod video;
-pub mod xlsx;
-pub mod xml;
-mod yaml;
-pub mod zip;
 pub use media_helpers::{BitrateMode, CompressionMode};
 
 use crate::engine::config::Config;
@@ -91,7 +86,7 @@ macro_rules! no_template_mining {
 }
 
 /// Supported file types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FileType {
     Log,
     Json,
@@ -110,6 +105,11 @@ pub enum FileType {
     Xml,
     Html,
     Yaml,
+    Ini,
+    Pptx,
+    Epub,
+    Archive,
+    #[default]
     Unknown,
 }
 
@@ -130,6 +130,10 @@ impl FileType {
             FileType::Xml => "XML",
             FileType::Html => "HTML",
             FileType::Yaml => "YAML",
+            FileType::Ini => "INI",
+            FileType::Pptx => "PPTX",
+            FileType::Epub => "EPUB",
+            FileType::Archive => "Archive",
             FileType::Log => "Log",
             FileType::Json => "JSON",
             FileType::Text => "Text",
@@ -155,12 +159,16 @@ impl FileType {
                 | FileType::Xml
                 | FileType::Html
                 | FileType::Yaml
+                | FileType::Ini
+                | FileType::Pptx
+                | FileType::Epub
+                | FileType::Archive
         )
     }
 }
 
 /// Parse result containing file statistics and metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ParseResult {
     pub file_path: String,
     pub file_type: FileType,
@@ -197,6 +205,14 @@ pub struct ParseResult {
     pub html_metadata: Option<crate::results::HtmlMetadata>,
     /// YAML metadata (for YAML files)
     pub yaml_metadata: Option<crate::results::YamlMetadata>,
+    /// INI metadata (for INI/.cfg config files)
+    pub ini_metadata: Option<crate::results::IniMetadata>,
+    /// PPTX metadata (for PowerPoint files)
+    pub pptx_metadata: Option<crate::results::PptxMetadata>,
+    /// EPUB metadata (for e-book files)
+    pub epub_metadata: Option<crate::results::EpubMetadata>,
+    /// Archive metadata (for TAR / tar.gz / tar.bz2 / tar.xz)
+    pub archive_metadata: Option<crate::results::ArchiveMetadata>,
 }
 
 impl ParseResult {
@@ -214,6 +230,10 @@ impl ParseResult {
         output.xml_metadata = self.xml_metadata.clone();
         output.html_metadata = self.html_metadata.clone();
         output.yaml_metadata = self.yaml_metadata.clone();
+        output.ini_metadata = self.ini_metadata.clone();
+        output.pptx_metadata = self.pptx_metadata.clone();
+        output.epub_metadata = self.epub_metadata.clone();
+        output.archive_metadata = self.archive_metadata.clone();
     }
 
     /// Convert parse result to Output object
@@ -384,19 +404,7 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
         token_count,
         duration: std::time::Duration::ZERO, // Will be set in Phase 2
         is_binary,
-        mining_result: None,
-        image_metadata: None,
-        video_metadata: None,
-        audio_metadata: None,
-        csv_metadata: None,
-        pdf_metadata: None,
-        docx_metadata: None,
-        sqlite_metadata: None,
-        toml_metadata: None,
-        zip_metadata: None,
-        xml_metadata: None,
-        html_metadata: None,
-        yaml_metadata: None,
+        ..Default::default()
     })
 }
 
@@ -413,8 +421,8 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 stats,
                 &mmap,
                 config,
-                image::extract_image_metadata,
-                image::extract_image_templates,
+                media::extract_image_metadata,
+                media::extract_image_templates,
                 image_metadata,
                 crate::results::ImageMetadata,
                 FileType::Image
@@ -425,8 +433,8 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 stats,
                 &mmap,
                 config,
-                video::extract_video_metadata,
-                video::extract_video_templates,
+                media::extract_video_metadata,
+                media::extract_video_templates,
                 video_metadata,
                 crate::results::VideoMetadata,
                 FileType::Video
@@ -437,8 +445,8 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 stats,
                 &mmap,
                 config,
-                audio::extract_audio_metadata,
-                audio::extract_audio_templates,
+                media::extract_audio_metadata,
+                media::extract_audio_templates,
                 audio_metadata,
                 crate::results::AudioMetadata,
                 FileType::Audio
@@ -449,8 +457,8 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 stats,
                 &mmap,
                 config,
-                csv::extract_csv_metadata,
-                csv::extract_csv_templates,
+                structured::extract_csv_metadata,
+                structured::extract_csv_templates,
                 csv_metadata,
                 crate::results::CsvMetadata,
                 FileType::Csv
@@ -473,8 +481,8 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 stats,
                 &mmap,
                 config,
-                docx::extract_docx_metadata,
-                docx::extract_docx_templates,
+                office::extract_docx_metadata,
+                office::extract_docx_templates,
                 docx_metadata,
                 crate::results::DocumentMetadata,
                 FileType::Docx
@@ -485,8 +493,8 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 stats,
                 &mmap,
                 config,
-                xlsx::extract_xlsx_metadata,
-                xlsx::extract_xlsx_templates,
+                office::extract_xlsx_metadata,
+                office::extract_xlsx_templates,
                 docx_metadata,
                 crate::results::DocumentMetadata,
                 FileType::Xlsx
@@ -511,8 +519,8 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 stats,
                 &mmap,
                 config,
-                toml::extract_toml_metadata,
-                toml::extract_toml_templates,
+                settings::extract_toml_metadata,
+                settings::extract_toml_templates,
                 toml_metadata,
                 crate::results::TomlMetadata,
                 FileType::Toml
@@ -523,8 +531,8 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 stats,
                 &mmap,
                 config,
-                zip::extract_zip_metadata,
-                zip::extract_zip_templates,
+                container::zip::extract_zip_metadata,
+                container::zip::extract_zip_templates,
                 zip_metadata,
                 crate::results::ZipMetadata,
                 FileType::Zip
@@ -535,8 +543,8 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 stats,
                 &mmap,
                 config,
-                xml::extract_xml_metadata,
-                xml::extract_xml_templates,
+                settings::extract_xml_metadata,
+                settings::extract_xml_templates,
                 xml_metadata,
                 crate::results::XmlMetadata,
                 FileType::Xml
@@ -547,8 +555,8 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 stats,
                 &mmap,
                 config,
-                html::extract_html_metadata,
-                html::extract_html_templates,
+                structured::extract_html_metadata,
+                structured::extract_html_templates,
                 html_metadata,
                 crate::results::HtmlMetadata,
                 FileType::Html
@@ -559,11 +567,59 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 stats,
                 &mmap,
                 config,
-                yaml::extract_yaml_metadata,
-                yaml::extract_yaml_templates,
+                settings::extract_yaml_metadata,
+                settings::extract_yaml_templates,
                 yaml_metadata,
                 crate::results::YamlMetadata,
                 FileType::Yaml
+            )
+        }
+        FileType::Ini => {
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                settings::extract_ini_metadata,
+                settings::extract_ini_templates,
+                ini_metadata,
+                crate::results::IniMetadata,
+                FileType::Ini
+            )
+        }
+        FileType::Pptx => {
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                office::extract_pptx_metadata,
+                office::extract_pptx_templates,
+                pptx_metadata,
+                crate::results::PptxMetadata,
+                FileType::Pptx
+            )
+        }
+        FileType::Epub => {
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                epub::extract_epub_metadata,
+                epub::extract_epub_templates,
+                epub_metadata,
+                crate::results::EpubMetadata,
+                FileType::Epub
+            )
+        }
+        FileType::Archive => {
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                container::archive::extract_archive_metadata,
+                container::archive::extract_archive_templates,
+                archive_metadata,
+                crate::results::ArchiveMetadata,
+                FileType::Archive
             )
         }
         _ => {

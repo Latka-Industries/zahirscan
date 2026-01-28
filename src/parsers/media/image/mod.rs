@@ -78,13 +78,13 @@ pub fn extract_image_metadata(
                     Ok(ImageMetadata {
                         width: 0,
                         height: 0,
-                        aspect_ratio: None,
                         stream_size,
                         color_type,
                         format,
                         chroma_subsampling,
                         compression,
                         bit_depth,
+                        ..Default::default()
                     })
                 }
             }
@@ -92,15 +92,8 @@ pub fn extract_image_metadata(
         Err(_) => {
             // Could not determine format, return empty metadata
             Ok(ImageMetadata {
-                width: 0,
-                height: 0,
-                aspect_ratio: None,
                 stream_size,
-                color_type: None,
-                format: None,
-                chroma_subsampling: None,
-                compression: None,
-                bit_depth: None,
+                ..Default::default()
             })
         }
     }

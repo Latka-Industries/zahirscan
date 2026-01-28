@@ -30,6 +30,8 @@ struct TomlConfig {
     concurrency: ConcurrencyConfig,
     #[serde(default)]
     mining: MiningConfig,
+    #[serde(default)]
+    filter: FilterConfig,
 }
 
 impl Default for TomlConfig {
@@ -38,6 +40,33 @@ impl Default for TomlConfig {
             binary_name: default_binary_name(),
             concurrency: ConcurrencyConfig::default(),
             mining: MiningConfig::default(),
+            filter: FilterConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+struct FilterConfig {
+    ignore_patterns: Vec<String>,
+    ignore_hidden_files: bool,
+}
+
+impl Default for FilterConfig {
+    fn default() -> Self {
+        Self {
+            ignore_patterns: vec![
+                ".DS_Store".into(),
+                "Thumbs.db".into(),
+                "desktop.ini".into(),
+                "ehthumbs.db".into(),
+                "*.swp".into(),
+                "*.swo".into(),
+                "*.tmp".into(),
+                "*~".into(),
+                "~$*".into(),
+            ],
+            ignore_hidden_files: true,
         }
     }
 }
@@ -231,6 +260,10 @@ pub struct Config {
     pub skip_media_metadata: bool,
     /// Whether to show progress bars during processing
     pub show_progress: bool,
+    /// File basename patterns to skip before Phase 1 (exact, *suffix, or prefix*)
+    pub ignore_patterns: Vec<String>,
+    /// Skip Unix hidden files (basename starts with .)
+    pub ignore_hidden_files: bool,
 }
 
 impl Config {
@@ -315,6 +348,8 @@ impl Config {
             redact_paths: false,
             skip_media_metadata: false,
             show_progress: false,
+            ignore_patterns: toml_config.filter.ignore_patterns,
+            ignore_hidden_files: toml_config.filter.ignore_hidden_files,
         }
     }
 

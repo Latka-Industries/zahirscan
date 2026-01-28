@@ -37,7 +37,7 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
-mod engine;
+pub mod engine;
 pub mod parsers;
 pub mod results;
 

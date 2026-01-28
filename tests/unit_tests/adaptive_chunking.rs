@@ -1,6 +1,8 @@
 //! Tests for adaptive chunking calculations (edge cases)
 
-use zahirscan::chunking::{ProcessingTask, calculate_adaptive_chunking, optimal_chunk_size};
+use zahirscan::engine::chunking::{
+    ProcessingTask, calculate_adaptive_chunking, optimal_chunk_size,
+};
 use zahirscan::{Config, parsers::FileType, parsers::ParseResult};
 
 fn create_test_task(byte_count: usize, file_type: FileType) -> ProcessingTask {
@@ -13,19 +15,7 @@ fn create_test_task(byte_count: usize, file_type: FileType) -> ProcessingTask {
             token_count: 0,
             duration: std::time::Duration::from_secs(0),
             is_binary: false,
-            mining_result: None,
-            image_metadata: None,
-            video_metadata: None,
-            audio_metadata: None,
-            csv_metadata: None,
-            pdf_metadata: None,
-            docx_metadata: None,
-            sqlite_metadata: None,
-            toml_metadata: None,
-            zip_metadata: None,
-            xml_metadata: None,
-            html_metadata: None,
-            yaml_metadata: None,
+            ..Default::default()
         },
         output_path: "test.out".to_string(),
     }

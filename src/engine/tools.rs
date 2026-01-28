@@ -8,66 +8,45 @@ use chrono::{DateTime, NaiveDateTime};
 use ffprobe::{Config as FfprobeConfig, FfProbe, ffprobe_config};
 use log::debug;
 
-/// File extension to FileType mapping
-/// Organized by file type for easy maintenance
-const FILE_EXTENSION_MAP: &[(&str, FileType)] = &[
-    // Text formats
-    ("log", FileType::Log),
-    ("json", FileType::Json),
-    ("txt", FileType::Text),
-    ("md", FileType::Markdown),
-    ("markdown", FileType::Markdown),
-    // Image formats
-    ("jpg", FileType::Image),
-    ("jpeg", FileType::Image),
-    ("png", FileType::Image),
-    ("gif", FileType::Image),
-    ("bmp", FileType::Image),
-    ("tiff", FileType::Image),
-    ("tif", FileType::Image),
-    ("webp", FileType::Image),
-    ("ico", FileType::Image),
-    ("svg", FileType::Image),
-    // Video formats
-    ("mp4", FileType::Video),
-    ("mkv", FileType::Video),
-    ("avi", FileType::Video),
-    ("mov", FileType::Video),
-    ("wmv", FileType::Video),
-    ("flv", FileType::Video),
-    ("webm", FileType::Video),
-    ("m4v", FileType::Video),
-    ("3gp", FileType::Video),
-    ("ogv", FileType::Video),
-    // Audio formats
-    ("mp3", FileType::Audio),
-    ("flac", FileType::Audio),
-    ("wav", FileType::Audio),
-    ("m4a", FileType::Audio),
-    ("aac", FileType::Audio),
-    ("ogg", FileType::Audio),
-    ("opus", FileType::Audio),
-    ("wma", FileType::Audio),
-    ("ape", FileType::Audio),
-    ("dsd", FileType::Audio),
-    ("dsf", FileType::Audio),
-    // Other formats
-    ("csv", FileType::Csv),
-    ("pdf", FileType::Pdf),
-    ("docx", FileType::Docx),
-    ("xlsx", FileType::Xlsx),
-    ("db", FileType::Sqlite),
-    ("sqlite", FileType::Sqlite),
-    ("sqlite3", FileType::Sqlite),
-    ("toml", FileType::Toml),
-    ("lock", FileType::Toml),
-    ("zip", FileType::Zip),
-    ("xml", FileType::Xml),
-    ("html", FileType::Html),
-    ("htm", FileType::Html),
-    ("yaml", FileType::Yaml),
-    ("yml", FileType::Yaml),
-];
+/// Expands to the full `[(ext, FileType), ...]` array. Each `Variant: "a", "b"` becomes
+/// `("a", FileType::Variant), ("b", FileType::Variant)`. Macros must expand to a complete
+/// expression, so everything is in one macro.
+macro_rules! file_extension_map {
+    (
+        $(
+            $ft:ident: $($e:literal),+ $(,)?
+        );+ $(;)?
+    ) => {
+        &[
+            $( $( ( $e, FileType::$ft ) ),+ ),+
+        ]
+    };
+}
+
+/// File extension to FileType mapping. Grouped by FileType for easier maintenance.
+const FILE_EXTENSION_MAP: &[(&str, FileType)] = file_extension_map! {
+    Log: "log";
+    Json: "json";
+    Text: "txt";
+    Markdown: "md", "markdown";
+    Image: "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "ico", "svg";
+    Video: "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ogv";
+    Audio: "mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma", "ape", "dsd", "dsf";
+    Csv: "csv";
+    Html: "html", "htm";
+    Docx: "docx";
+    Xlsx: "xlsx";
+    Pptx: "pptx";
+    Sqlite: "db", "sqlite", "sqlite3";
+    Toml: "toml", "lock";
+    Ini: "ini", "cfg";
+    Xml: "xml";
+    Yaml: "yaml", "yml";
+    Zip: "zip";
+    Archive: "tar", "gz", "bz2", "xz", "tgz";
+    Epub: "epub";
+    Pdf: "pdf";
+};
 
 /// Get FileType from extension using linear search
 /// Returns FileType::Unknown if extension is not recognized
@@ -99,7 +78,7 @@ pub fn get_extensions_for_file_type(file_type: FileType) -> Vec<&'static str> {
 ///
 /// Example:
 /// ```
-/// use zahirscan::tools::is_codec_for_file_type;
+/// use zahirscan::engine::tools::is_codec_for_file_type;
 /// use zahirscan::parsers::FileType;
 ///
 /// assert!(is_codec_for_file_type("mp3", FileType::Audio));
@@ -113,8 +92,18 @@ pub fn is_codec_for_file_type(codec: &str, file_type: FileType) -> bool {
         .any(|(ext, ft)| *ft == file_type && codec_lower.contains(ext))
 }
 
-/// Detect file type from extension
+/// Detect file type from extension.
+/// Compound extensions (e.g. .tar.gz, .tar.bz2, .tgz, .tar.xz) are checked first.
 pub fn detect_file_type(path: &str) -> FileType {
+    let lo = path.to_lowercase();
+    if lo.ends_with(".tar.xz")
+        || lo.ends_with(".tar.bz2")
+        || lo.ends_with(".tar.gz")
+        || lo.ends_with(".tgz")
+    {
+        return FileType::Archive;
+    }
+
     let extension = Path::new(path)
         .extension()
         .and_then(|ext| ext.to_str())
@@ -182,6 +171,39 @@ pub fn redact_path(path: &str) -> String {
         .and_then(|n| n.to_str())
         .unwrap_or("unknown");
     format!("***/{}", filename)
+}
+
+/// Whether to skip a path based on `[filter]` ignore_patterns and ignore_hidden_files.
+/// Patterns: exact basename (case-insensitive), `*suffix` (ends with), or `prefix*` (starts with).
+/// Used for both top-level file paths and ZIP entry paths.
+pub(crate) fn should_ignore_path(path: &str, config: &Config) -> bool {
+    let basename = Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    if basename.is_empty() {
+        return false;
+    }
+    if config.ignore_hidden_files && basename.starts_with('.') {
+        return true;
+    }
+    for pat in &config.ignore_patterns {
+        if pat.is_empty() {
+            continue;
+        }
+        if pat.starts_with('*') {
+            if basename.ends_with(pat.get(1..).unwrap_or("")) {
+                return true;
+            }
+        } else if pat.ends_with('*') && pat.len() > 1 {
+            if basename.starts_with(pat.get(..pat.len() - 1).unwrap_or("")) {
+                return true;
+            }
+        } else if basename.eq_ignore_ascii_case(pat) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Get temporary output path for a file
@@ -511,4 +533,69 @@ pub fn print_progress_handler(message: &str, show_progress: bool) {
 /// Check if stderr is a TTY
 pub fn is_stderr_tty() -> bool {
     std::io::IsTerminal::is_terminal(&std::io::stderr())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_ignore_path;
+    use crate::engine::config::Config;
+
+    fn config_with(ignore_patterns: Vec<&str>, ignore_hidden_files: bool) -> Config {
+        let mut c = Config::default();
+        c.ignore_patterns = ignore_patterns.into_iter().map(String::from).collect();
+        c.ignore_hidden_files = ignore_hidden_files;
+        c
+    }
+
+    #[test]
+    fn should_ignore_path_exact() {
+        let c = config_with(vec![".DS_Store", "Thumbs.db"], false);
+        assert!(should_ignore_path("/a/.DS_Store", &c));
+        assert!(should_ignore_path("/x/y/Thumbs.db", &c));
+        assert!(!should_ignore_path("/a/.DS_Storex", &c));
+        assert!(!should_ignore_path("/a/DS_Store", &c));
+    }
+
+    #[test]
+    fn should_ignore_path_exact_case_insensitive() {
+        let c = config_with(vec!["desktop.ini"], false);
+        assert!(should_ignore_path("/a/desktop.ini", &c));
+        assert!(should_ignore_path("/a/Desktop.ini", &c));
+    }
+
+    #[test]
+    fn should_ignore_path_tilda_dollar_prefix() {
+        let c = config_with(vec!["~$*"], false);
+        assert!(should_ignore_path("/a/~$foo.xlsx", &c));
+    }
+
+    #[test]
+    fn should_ignore_path_suffix_glob() {
+        let c = config_with(vec!["*.swp", "*~"], false);
+        assert!(should_ignore_path("/a/foo.swp", &c));
+        assert!(should_ignore_path("/b/bar~", &c));
+        assert!(!should_ignore_path("/a/foo.swp.bak", &c));
+    }
+
+    #[test]
+    fn should_ignore_path_prefix_glob() {
+        let c = config_with(vec![".git*"], false);
+        assert!(should_ignore_path("/a/.git", &c));
+        assert!(should_ignore_path("/a/.gitignore", &c));
+        assert!(!should_ignore_path("/a/git", &c));
+    }
+
+    #[test]
+    fn should_ignore_path_hidden() {
+        let c = config_with(vec![], true);
+        assert!(should_ignore_path("/a/.hidden", &c));
+        assert!(should_ignore_path("/.bashrc", &c));
+        assert!(!should_ignore_path("/a/normal", &c));
+    }
+
+    #[test]
+    fn should_ignore_path_hidden_disabled() {
+        let c = config_with(vec![], false);
+        assert!(!should_ignore_path("/a/.hidden", &c));
+    }
 }

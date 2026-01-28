@@ -3,13 +3,16 @@
 use super::chunking::{AdaptiveChunking, ProcessingTask};
 use super::config::Config;
 use super::progress::{ProgressBarConfig, create_progress_bar};
-use super::tools::{determine_output_path, format_bytes, print_progress_handler};
+use super::tools::{
+    determine_output_path, format_bytes, print_progress_handler, should_ignore_path,
+};
 use crate::parsers::{extract_templates, initial_file_scan};
 use crate::results::Output;
 use anyhow::Result;
 use kdam::Animation;
-use log::{debug, error};
+use log::{debug, error, info};
 use rayon::prelude::*;
+use std::path::Path;
 use std::time::Duration;
 
 /// Log Phase 1 processing metrics
@@ -72,6 +75,19 @@ fn log_phase2_metrics(
     );
 }
 
+/// Filter input paths for Phase 1: skip directories and paths that match ignore patterns
+fn phase1_path_filter(p: &str, config: &Config) -> bool {
+    if Path::new(p).is_dir() {
+        info!("Skipping directory: {}", p);
+        false
+    } else if should_ignore_path(p, config) {
+        debug!("Skipping {} (matches ignore filter)", p);
+        false
+    } else {
+        true
+    }
+}
+
 /// Phase 1: Initial scan to collect stats and prepare for template mining
 pub fn phase1_scan(
     input_paths: &[String],
@@ -80,6 +96,12 @@ pub fn phase1_scan(
     config: &Config,
 ) -> Vec<ProcessingTask> {
     use std::time::Instant;
+
+    let input_paths: Vec<String> = input_paths
+        .iter()
+        .filter(|p| phase1_path_filter(p, config))
+        .cloned()
+        .collect();
 
     let phase1_start = Instant::now();
     debug!(
