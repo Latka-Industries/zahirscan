@@ -1,0 +1,3 @@
+photon_id,spin,timing_ns,entangled_pair_id
+A,up,0.42,EPR-1
+B,down,0.42,EPR-1

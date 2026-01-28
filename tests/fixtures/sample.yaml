@@ -1,0 +1,9 @@
+subject: slothrop
+conditioning:
+  stimulus: imipolex
+  response: map
+  experimenter: jamf
+
+stimuli:
+  - stimulus
+  - response

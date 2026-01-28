@@ -26,3 +26,6 @@ mod image_metadata;
 
 #[path = "unit_tests/sqlite_metadata.rs"]
 mod sqlite_metadata;
+
+#[path = "unit_tests/should_ignore_path.rs"]
+mod should_ignore_path;

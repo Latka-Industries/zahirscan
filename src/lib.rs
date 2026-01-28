@@ -62,7 +62,7 @@ pub use results::{
 // Re-export utility functions
 pub use engine::tools::{
     detect_file_type, determine_output_path, format_bytes, format_duration, get_temp_output_path,
-    is_stderr_tty, print_progress_handler, sanitize_filename,
+    is_stderr_tty, print_progress_handler, sanitize_filename, should_ignore_path,
 };
 
 // Simple API wrapper functions

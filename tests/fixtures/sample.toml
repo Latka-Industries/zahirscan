@@ -1,0 +1,7 @@
+[project]
+name = "zahir"
+seek = true
+template_mining = true
+
+[quest]
+forgotten = false

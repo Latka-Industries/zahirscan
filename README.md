@@ -38,6 +38,8 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 - **Adaptive Parallelization**: Automatically optimizes chunk sizes based on file statistics and CPU resources
 - **Size Reduction**: Typically reduces content size by 80-95% while preserving essential information
 
+### Metadata extraction by format
+
 | **Metadata**         | **Extracts**                                                                                                                                                                                                                                                                                                    |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Media                | Dimensions, codecs, bitrates for images, videos, audio                                                                                                                                                                                                                                                          |
@@ -138,14 +140,14 @@ cargo run --example basic_usage -- <input-file>
 
 The `extract_schema()` function returns `Result<Vec<Output>>`. Each `Output` object contains:
 
-**Always Present:**
+**Always present (both modes):**
 
 - `templates: Vec<Template>` - Extracted template patterns
+- `source: String` - Source file path
+- `file_type: String` - Detected file type (e.g., "Log", "Text", "Sqlite", "Image")
 
-**Mode 2 (Full) Only (all optional):**
+**Mode 2 (Full) only (all optional):**
 
-- `source: Option<String>` - Source file path
-- `file_type: Option<String>` - Detected file type (e.g., "log", "text", "image", "video")
 - `line_count: Option<usize>` - Number of lines in file
 - `byte_count: Option<usize>` - File size in bytes
 - `token_count: Option<usize>` - Estimated token count
@@ -224,12 +226,7 @@ See [`config.toml`](config.toml) for configuration.
 
 ### Phase 2: Template Mining and Metadata Extraction
 
-- **Media** (audio, image, video): images via `image` crate in `parsers/media/image/`; videos/audio via `ffprobe` in `parsers/media/video/`, `parsers/media/audio/`; shared `media_helpers` for bitrate/stream metadata
-- **Document Metadata**: Extracts metadata from DOCX/XLSX files (via `zip` and `quick_xml` crates, `calamine` for XLSX row/column counts)
-- **Database Metadata**: Extracts SQLite database schema and statistics (via `rusqlite` crate)
-- **Settings** (INI, TOML, YAML, XML): INI/.cfg (custom), TOML (`toml`), YAML (`serde_yaml`), XML (`quick_xml`) in `parsers/settings/`
-- **Structured** (CSV, HTML): CSV (`csv`), HTML (`scraper`) in `parsers/structured/`
-- **Archives**: ZIP (`zip`); TAR and compressed TAR (`.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`). Plain `.tar`: zero-copy header seek, full listing. Compressed (`.tar.gz`/`.xz`/`.bz2`): zero-copy, no decompression—`.tar.gz` reports uncompressed size from gzip trailer; `file_count` and `entries` are not available for compressed TAR.
+- **Metadata extraction** (media, document, database, settings, structured, archives): see the [Metadata extraction by format](#metadata-extraction-by-format) table above for what is extracted per format.
 - **Template Mining**: Frequency-based analysis to identify static vs. dynamic fields, extracts patterns as templates
 - **Tokenization**: Content-aware (whitespace for logs, JSON structure for JSON logs, sentence/paragraph for text/markdown)
 - **Writing Footprint**: Calculates vocabulary richness, sentence structure, punctuation metrics, template diversity for text/markdown
