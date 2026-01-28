@@ -1,7 +1,7 @@
 //! Shared column statistics computation utilities
 //! Used by both CSV and SQLite parsers for consistent statistics calculation
 
-use crate::config::Config;
+use crate::engine::config::Config;
 use crate::parsers::traits::AdaptiveParallel;
 use crate::results::{BooleanStats, DateStats, NumericStats};
 use chrono::DateTime;
@@ -144,8 +144,8 @@ pub fn compute_date_stats_from_strings(values: &[String]) -> Option<DateStats> {
         .filter_map(|val| {
             // First try parsing as Unix timestamp (if it's a numeric timestamp)
             // Otherwise try parsing as date string
-            crate::tools::parse_timestamp_to_seconds(val)
-                .or_else(|| crate::tools::parse_date_to_timestamp(val))
+            crate::engine::tools::parse_timestamp_to_seconds(val)
+                .or_else(|| crate::engine::tools::parse_date_to_timestamp(val))
         })
         .collect();
 

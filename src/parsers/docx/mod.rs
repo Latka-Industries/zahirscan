@@ -4,7 +4,7 @@
 mod utils;
 
 use super::ParseResult;
-use crate::config::Config;
+use crate::engine::config::Config;
 use crate::results::DocumentMetadata;
 use anyhow::Result;
 use log::warn;

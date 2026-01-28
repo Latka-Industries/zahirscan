@@ -2,7 +2,7 @@
 
 mod utils;
 
-use crate::config::Config;
+use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::PdfMetadata;
 use anyhow::Result;

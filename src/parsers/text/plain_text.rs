@@ -1,6 +1,9 @@
 //! Text file template extraction using sentence-level analysis and n-gram/phrase-based patterns
 
-use crate::config::Config;
+use crate::engine::config::Config;
+use crate::engine::tools::{
+    PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed,
+};
 use crate::parsers::ParseResult;
 use crate::parsers::text::writing_analysis::{
     analyze_svo_structure, calculate_template_entropy, calculate_writing_footprint,
@@ -8,7 +11,6 @@ use crate::parsers::text::writing_analysis::{
 };
 use crate::parsers::traits::{AdaptiveParallel, DefaultSentenceAnalyzer, SentenceAnalyzer};
 use crate::results::{MiningResult, Template};
-use crate::tools::{PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed};
 use anyhow::Result;
 use dashmap::DashMap;
 use log::debug;
@@ -418,7 +420,7 @@ fn build_text_pattern(
     tokens: &[&str],
     frequent_ngrams: &[(String, usize)],
     frequent_phrases: &[(String, usize)],
-    config: &crate::config::Config,
+    config: &crate::engine::config::Config,
 ) -> String {
     if tokens.is_empty() {
         return String::new();
@@ -476,7 +478,7 @@ fn extract_text_examples(
     frequent_ngrams: &[(String, usize)],
     frequent_phrases: &[(String, usize)],
     examples: &mut BTreeMap<String, Vec<String>>,
-    config: &crate::config::Config,
+    config: &crate::engine::config::Config,
 ) {
     let mut i = 0;
     let mut placeholder_idx = 0;

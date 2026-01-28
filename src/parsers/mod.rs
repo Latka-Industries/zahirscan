@@ -20,9 +20,9 @@ mod yaml;
 pub mod zip;
 pub use media_helpers::{BitrateMode, CompressionMode};
 
-use crate::config::Config;
+use crate::engine::config::Config;
+use crate::engine::tools::{detect_file_type, redact_path};
 use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
-use crate::tools::{detect_file_type, redact_path};
 use anyhow::Result;
 use log::debug;
 use memmap2::Mmap;
@@ -83,7 +83,7 @@ macro_rules! no_template_mining {
         pub fn $name(
             _content: &[u8],
             stats: &$crate::parsers::ParseResult,
-            _config: &$crate::config::Config,
+            _config: &$crate::engine::config::Config,
         ) -> anyhow::Result<$crate::results::MiningResult> {
             Ok($crate::parsers::traits::empty_mining_result(stats))
         }
@@ -217,7 +217,7 @@ impl ParseResult {
     }
 
     /// Convert parse result to Output object
-    pub fn to_output(&self, mode: OutputMode, config: &crate::config::Config) -> Output {
+    pub fn to_output(&self, mode: OutputMode, config: &crate::engine::config::Config) -> Output {
         if let Some(ref mining) = self.mining_result {
             match mode {
                 OutputMode::Templates => {
@@ -327,7 +327,7 @@ impl ParseResult {
         &self,
         output_path: &str,
         mode: OutputMode,
-        config: &crate::config::Config,
+        config: &crate::engine::config::Config,
     ) -> Result<()> {
         let mut output_file = OpenOptions::new()
             .create(true)
@@ -593,7 +593,7 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
 pub(crate) fn estimate_compressed_tokens_with_footprint(
     templates: &[Template],
     _total_lines: usize,
-    config: &crate::config::Config,
+    config: &crate::engine::config::Config,
     writing_footprint: Option<&crate::results::WritingFootprint>,
 ) -> usize {
     // Rough estimate: template patterns + examples

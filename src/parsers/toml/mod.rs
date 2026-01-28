@@ -1,6 +1,6 @@
 //! TOML file metadata extraction
 
-use crate::config::Config;
+use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::TomlMetadata;
 use crate::results::metadata::toml::TomlTypeInfo;

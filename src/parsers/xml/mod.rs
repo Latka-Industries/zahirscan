@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
-use crate::config::Config;
+use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::XmlMetadata;
 use crate::results::metadata::xml::XmlTypeInfo;

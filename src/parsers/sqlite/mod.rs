@@ -7,7 +7,7 @@ use anyhow::Result;
 use log::debug;
 use rusqlite::Connection;
 
-use crate::config::Config;
+use crate::engine::config::Config;
 use crate::parsers::column_stats;
 use crate::results::{ColumnInfo, SqliteMetadata, TableInfo};
 

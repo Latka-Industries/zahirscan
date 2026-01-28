@@ -3,10 +3,10 @@
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
-use crate::config::Config;
+use crate::engine::config::Config;
+use crate::engine::tools::detect_file_type;
 use crate::parsers::ParseResult;
 use crate::results::metadata::{ZipEntry, ZipMetadata};
-use crate::tools::detect_file_type;
 use anyhow::Result;
 use zip::ZipArchive;
 

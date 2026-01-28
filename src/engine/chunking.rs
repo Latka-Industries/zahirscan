@@ -3,9 +3,9 @@
 //! This module provides functions for calculating optimal chunk sizes
 //! and adaptive chunking strategies based on file statistics.
 
-use crate::config::Config;
+use super::config::Config;
+use super::tools::format_bytes;
 use crate::parsers::{FileType, ParseResult};
-use crate::tools::format_bytes;
 use log::debug;
 
 /// File processing task with stats and output path

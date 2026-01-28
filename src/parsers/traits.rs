@@ -1,6 +1,6 @@
 //! Common utilities for parsers
 
-use crate::config::Config;
+use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::{MiningResult, Template};
 use rayon::prelude::*;
@@ -107,7 +107,7 @@ pub fn sort_templates_by_count(templates: &mut [Template]) {
 // ============================================================================
 
 // Re-export optimal_chunk_size from chunking module for convenience
-pub use crate::chunking::optimal_chunk_size;
+pub use crate::engine::chunking::optimal_chunk_size;
 
 /// Extension trait for collections to enable adaptive parallel iteration
 /// Combines chunk size calculation with parallel iteration setup

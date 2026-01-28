@@ -1,11 +1,11 @@
 //! Markdown file template extraction with markdown structure awareness and sentence analysis
 
-use crate::config::Config;
+use crate::engine::config::Config;
+use crate::engine::tools::{PlaceholderType, format_placeholder_bracketed_typed};
 use crate::parsers::ParseResult;
 use crate::parsers::text::writing_analysis::calculate_writing_footprint;
 use crate::parsers::traits::{AdaptiveParallel, DefaultSentenceAnalyzer, SentenceAnalyzer};
 use crate::results::{MiningResult, Template};
-use crate::tools::{PlaceholderType, format_placeholder_bracketed_typed};
 use anyhow::Result;
 use dashmap::DashMap;
 use rayon::prelude::*;

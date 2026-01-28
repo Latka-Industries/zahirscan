@@ -10,7 +10,7 @@ mod png;
 mod tiff;
 mod webp;
 
-use crate::config::Config;
+use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::ImageMetadata;
 use anyhow::Result;

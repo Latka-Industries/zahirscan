@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::config::Config;
+use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::YamlMetadata;
 use crate::results::metadata::yaml::YamlTypeInfo;

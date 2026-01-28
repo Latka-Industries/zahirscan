@@ -50,7 +50,7 @@ macro_rules! with_progress {
     ($pb:expr, $func:expr) => {{
         let result = $func;
         if $pb.is_some() {
-            $crate::progress::update_progress_bar($pb);
+            $crate::engine::progress::update_progress_bar($pb);
         }
         result
     }};

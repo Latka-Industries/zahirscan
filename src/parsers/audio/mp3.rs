@@ -1,14 +1,13 @@
 //! MP3-specific parsing utilities, including LAME tag reading
 
+use crate::engine::tools::is_codec_for_file_type;
 use crate::parsers::FileType;
 use crate::parsers::media_helpers::BitrateMode;
-use crate::tools::get_extensions_for_file_type;
 
 /// Check if a codec string represents MP3
-/// Verifies against extension map from tools.rs for consistency
+/// Verifies against FILE_EXTENSION_MAP so we only treat known audio codecs as MP3.
 pub fn is_mp3_codec(codec: &str) -> bool {
-    let audio_extensions = get_extensions_for_file_type(FileType::Audio);
-    audio_extensions.contains(&"mp3") && codec.to_lowercase().contains("mp3")
+    is_codec_for_file_type(codec, FileType::Audio) && codec.to_lowercase().contains("mp3")
 }
 
 /// MP3 frame header constants

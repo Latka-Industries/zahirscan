@@ -2,7 +2,7 @@
 
 mod utils;
 
-use crate::config::Config;
+use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::parsers::column_stats;
 use crate::parsers::traits::AdaptiveParallel;

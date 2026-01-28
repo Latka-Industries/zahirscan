@@ -1,11 +1,11 @@
 //! Orchestration logic for processing multiple files
 
-use crate::chunking::{AdaptiveChunking, ProcessingTask};
-use crate::config::Config;
+use super::chunking::{AdaptiveChunking, ProcessingTask};
+use super::config::Config;
+use super::progress::{ProgressBarConfig, create_progress_bar};
+use super::tools::{determine_output_path, format_bytes, print_progress_handler};
 use crate::parsers::{extract_templates, initial_file_scan};
-use crate::progress::{ProgressBarConfig, create_progress_bar};
 use crate::results::Output;
-use crate::tools::{determine_output_path, format_bytes, print_progress_handler};
 use anyhow::Result;
 use kdam::Animation;
 use log::{debug, error};

@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::config::Config;
+use super::config::Config;
 use crate::parsers::FileType;
 use anyhow::Result;
 use chrono::{DateTime, NaiveDateTime};

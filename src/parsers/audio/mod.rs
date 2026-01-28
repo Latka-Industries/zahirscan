@@ -2,10 +2,10 @@
 
 mod mp3;
 
-use crate::config::Config;
+use crate::engine::config::Config;
+use crate::engine::tools::{get_extensions_for_file_type, is_codec_for_file_type};
 use crate::parsers::{CompressionMode, FileType, ParseResult, image, media_helpers};
 use crate::results::{AudioMetadata as OutputAudioMetadata, ImageMetadata};
-use crate::tools::get_extensions_for_file_type;
 
 /// Lossless audio codec extensions
 /// Maps codec extensions to their compression mode
@@ -22,12 +22,11 @@ pub(crate) fn is_lossless_codec(codec: &str) -> bool {
 }
 
 /// Check if a string contains "opus" (case-insensitive)
-/// Verifies that "opus" is in our extension map for safety
+/// Verifies against FILE_EXTENSION_MAP so we only treat known audio codecs as opus.
 pub fn is_opus_codec(s: &str) -> bool {
-    let audio_extensions = get_extensions_for_file_type(FileType::Audio);
-    audio_extensions.contains(&"opus") && s.to_lowercase().contains("opus")
+    is_codec_for_file_type(s, FileType::Audio) && s.to_lowercase().contains("opus")
 }
-use crate::tools::{check_ffprobe_available, run_ffprobe_safe};
+use crate::engine::tools::{check_ffprobe_available, run_ffprobe_safe};
 use anyhow::Result;
 use lofty::{
     file::TaggedFileExt,

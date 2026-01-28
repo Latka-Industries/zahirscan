@@ -1,7 +1,7 @@
 //! Writing footprint and SVO analysis utilities
 //! Shared analysis functions for text and markdown parsers
 
-use crate::config::Config;
+use crate::engine::config::Config;
 use crate::parsers::traits::AdaptiveParallel;
 use crate::results::{PunctuationMetrics, SVOAnalysis, Template, WritingFootprint};
 use dashmap::DashMap;

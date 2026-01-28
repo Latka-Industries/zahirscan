@@ -144,10 +144,12 @@ pub(crate) fn infer_value_type(value: &str) -> String {
         {
             "null".to_string()
         }
-        _ if crate::tools::is_boolean(value) => "boolean".to_string(),
-        _ if crate::tools::parse_timestamp_to_seconds(value).is_some() => "timestamp".to_string(),
-        _ if crate::tools::is_number(value) => "number".to_string(),
-        _ if crate::tools::is_date(value) => "date".to_string(),
+        _ if crate::engine::tools::is_boolean(value) => "boolean".to_string(),
+        _ if crate::engine::tools::parse_timestamp_to_seconds(value).is_some() => {
+            "timestamp".to_string()
+        }
+        _ if crate::engine::tools::is_number(value) => "number".to_string(),
+        _ if crate::engine::tools::is_date(value) => "date".to_string(),
         _ => "string".to_string(),
     }
 }

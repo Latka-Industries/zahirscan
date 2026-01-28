@@ -37,23 +37,18 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
-pub mod chunking;
-pub mod config;
-pub mod orchestrator;
+mod engine;
 pub mod parsers;
-mod path_iter;
-mod progress;
 pub mod results;
-pub mod tools;
 
 // Re-export chunking utilities
-pub use chunking::{ProcessingTask, calculate_adaptive_chunking};
+pub use engine::chunking::{ProcessingTask, calculate_adaptive_chunking};
 
 // Re-export configuration
-pub use config::Config;
+pub use engine::config::Config;
 
 // Re-export orchestrator functions (main entry points)
-pub use orchestrator::{phase1_scan, phase2_mining};
+pub use engine::orchestrator::{phase1_scan, phase2_mining};
 
 // Re-export parser types and functions
 pub use parsers::{FileType, ParseResult, extract_templates, initial_file_scan};
@@ -65,14 +60,14 @@ pub use results::{
 };
 
 // Re-export utility functions
-pub use tools::{
+pub use engine::tools::{
     detect_file_type, determine_output_path, format_bytes, format_duration, get_temp_output_path,
     is_stderr_tty, print_progress_handler, sanitize_filename,
 };
 
 // Simple API wrapper functions
 use anyhow::Result;
-use path_iter::ToPathIter;
+use engine::ToPathIter;
 
 /// Extract schema (templates and metadata) from one or more files
 ///

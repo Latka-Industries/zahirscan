@@ -1,11 +1,11 @@
 //! JSON file template extraction using JSON-aware parsing
 
-use crate::config::Config;
+use crate::engine::config::Config;
+use crate::engine::tools::{PlaceholderType, format_placeholder_typed};
 use crate::parsers::ParseResult;
 use crate::parsers::traits::AdaptiveParallel;
 use crate::results::MiningResult;
 use crate::results::Template;
-use crate::tools::{PlaceholderType, format_placeholder_typed};
 use anyhow::Result;
 use dashmap::DashMap;
 use rayon::prelude::*;

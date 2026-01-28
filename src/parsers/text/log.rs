@@ -1,10 +1,12 @@
 //! Log file template extraction using position-based analysis
 
-use crate::config::Config;
+use crate::engine::config::Config;
+use crate::engine::tools::{
+    PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed,
+};
 use crate::parsers::ParseResult;
 use crate::parsers::traits::AdaptiveParallel;
 use crate::results::{MiningResult, Template};
-use crate::tools::{PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed};
 use anyhow::Result;
 use dashmap::DashMap;
 use rayon::prelude::*;
@@ -145,7 +147,9 @@ fn build_pattern(tokens: &[&str], classifications: &[(usize, bool, Option<String
             }
         } else {
             // Position not in classifications - treat as dynamic
-            pattern_parts.push(crate::tools::format_placeholder_bracketed("POS", pos));
+            pattern_parts.push(crate::engine::tools::format_placeholder_bracketed(
+                "POS", pos,
+            ));
         }
     }
 
