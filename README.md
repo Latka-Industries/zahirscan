@@ -1,4 +1,4 @@
-# ZahirScan: Template-Based Content Compression & Media Metadata Extraction
+# ZahirScan: Template-Based Content Compression & Metadata Extraction
 
 [![Crates.io](https://img.shields.io/crates/v/zahirscan.svg)](https://crates.io/crates/zahirscan)
 [![docs.rs](https://img.shields.io/docsrs/zahirscan)](https://docs.rs/zahirscan)
@@ -7,14 +7,11 @@
 
 > _"Others will dream that I am mad, while I dream of the Zahir."_ — [JL Borges, Labyrinths](https://bookshop.org/p/books/labyrinths-jorge-luis-borges/f14b472a366ed106?ean=9780811216999&next=t&)
 
-A high-performance Rust CLI tool that extracts templates and patterns from unstructured content, converting them into compact structured formats while preserving essential information. Additionally provides comprehensive metadata extraction for media files.
+A high-performance Rust CLI tool that extracts templates and patterns from unstructured content, converting them into compact structured formats while preserving essential information. Provides comprehensive metadata extraction for many file types: media (images, video, audio), documents (DOCX, XLSX, PDF), databases (SQLite), settings (TOML, YAML, INI, XML), archives (ZIP, TAR), and code/scripts (via linguist).
 
 ## Overview
 
-ZahirScan uses probabilistic template mining to extract essential structure and patterns from content. The tool automatically adapts to different content types:
-
-- **Logs & Text**: Identifies static vs. dynamic tokens, groups similar log lines into templates, extracts structural patterns and repeated phrases
-- **Media Files**: Automatically detects and extracts comprehensive metadata for images, videos, and audio
+ZahirScan uses probabilistic template mining to extract essential structure and patterns from content, and extracts metadata for the formats below.
 
 **Supported Formats**:
 
@@ -175,6 +172,8 @@ The `extract_schema()` function returns `Result<Vec<Output>>`. Each `Output` obj
 - `ini_metadata: Option<IniMetadata>` - INI/.cfg metadata (recursive schema section→key→scalar, section/key/comment counts, max depth, multi-line values)
 - `pdf_metadata: Option<PdfMetadata>` - PDF metadata (page count, document properties, etc.)
 - `docx_metadata: Option<DocumentMetadata>` - DOCX/XLSX metadata (word count, sheet count, title, author, dates, etc.)
+- `pptx_metadata: Option<PptxMetadata>` - PPTX metadata (slide count, core properties, etc.)
+- `epub_metadata: Option<EpubMetadata>` - EPUB metadata (title, creator, language, chapter count, etc.)
 
 #### Template Structure
 
@@ -229,7 +228,7 @@ See [`config.toml`](config.toml) for configuration.
 
 ### Phase 2: Template Mining and Metadata Extraction
 
-- **Metadata extraction** (media, document, database, settings, structured, archives): see the [Metadata extraction by format](#metadata-extraction-by-format) table above for what is extracted per format.
+- **Metadata extraction** (media, document, database, settings, structured, archives, code): see the [Metadata extraction by format](#metadata-extraction-by-format) table above for what is extracted per format.
 - **Template Mining**: Frequency-based analysis to identify static vs. dynamic fields, extracts patterns as templates
 - **Tokenization**: Content-aware (whitespace for logs, JSON structure for JSON logs, sentence/paragraph for text/markdown)
 - **Writing Footprint**: Calculates vocabulary richness, sentence structure, punctuation metrics, template diversity for text/markdown

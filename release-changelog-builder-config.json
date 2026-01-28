@@ -14,7 +14,7 @@
     },
     {
       "title": "## Changed",
-      "labels": ["chore", "refactor", "perf", "test", "ci", "build"]
+      "labels": ["chore", "refactor", "perf", "test", "ci", "build", "style"]
     },
     {
       "title": "## Tests",
@@ -23,12 +23,14 @@
   ],
   "ignore_labels": ["ignore"],
   "sort": "ASC",
-  "template": "${{CATEGORIZED_COUNT}} changes since ${{FROM_TAG}}\n\n${{CHANGELOG}}\n\n## Other Updates\n\n${{UNCATEGORIZED}}\n",
-  "pr_template": "- ${{TITLE}} (#${{NUMBER}})",
-  "empty_template": "No Changes",
+  "template": "#{{CATEGORIZED_COUNT}} changes since #{{FROM_TAG}}\n\n#{{CHANGELOG}}\n\n## Other Updates\n\n#{{UNCATEGORIZED}}\n",
+  "pr_template": "- #{{TITLE}} (##{{NUMBER}})",
+  "commit_template": "- #{{TITLE}} (#{{MERGE_SHA}})",
+  "empty_template": "See git log or compare with previous tag for changes.",
   "label_extractor": [
     {
-      "pattern": "(.) (.+)",
+      "pattern": "^([a-z]+)(\\(.+\\))?:",
+      "on_property": "title",
       "target": "$1"
     }
   ],
