@@ -37,6 +37,15 @@ impl TarFormat {
     }
 }
 
+/// Returns true if the TAR entry path should be omitted from the listing (metadata/overhead or directory).
+/// Omits: AppleDouble/resource fork (._*), PAX extended header (PaxHeader), directory entries (path ends with /).
+fn should_omit_tar_entry_path(path: &str) -> bool {
+    path.contains("/._")
+        || path.starts_with("._")
+        || path.contains("PaxHeader")
+        || path.ends_with('/')
+}
+
 /// Detect archive format from file path (lowercased). Check compound extensions first.
 fn detect_archive_format(path: &str) -> TarFormat {
     let lo = path.to_lowercase();
@@ -65,6 +74,13 @@ pub fn extract_archive_metadata(
 
     let (file_count, uncompressed_size, entries) = stream_tar_entries(content, format, config)?;
 
+    let note = match format {
+        TarFormat::Tar => None,
+        TarFormat::TarGz | TarFormat::Tgz | TarFormat::TarBz2 | TarFormat::TarXz => {
+            Some("full listing for .tar only.".to_string())
+        }
+    };
+
     Ok(ArchiveMetadata {
         format: Some(format.as_str().to_string()),
         file_count,
@@ -80,6 +96,7 @@ pub fn extract_archive_metadata(
             None
         },
         truncated: None,
+        note,
     })
 }
 
@@ -161,8 +178,8 @@ fn stream_tar_entries_seek(
     config: &Config,
 ) -> Result<(usize, u64, Vec<ArchiveEntry>)> {
     let mut r = Cursor::new(content);
-    let mut file_count = 0usize;
-    let mut uncompressed_size = 0u64;
+    let mut _raw_count = 0usize;
+    let mut _raw_uncompressed = 0u64;
     let mut info: Vec<(u64, u64, Option<String>)> = Vec::new(); // (offset, size, longname)
     let mut maybe_long_name: Option<String> = None;
 
@@ -181,8 +198,8 @@ fn stream_tar_entries_seek(
         let typeflag = buf.get(156).copied().unwrap_or(0);
         let block_len = size.div_ceil(512) * 512;
 
-        file_count += 1;
-        uncompressed_size = uncompressed_size.saturating_add(size);
+        _raw_count += 1;
+        _raw_uncompressed = _raw_uncompressed.saturating_add(size);
 
         if typeflag == b'L' {
             if size > 0 && size <= 4096 {
@@ -205,7 +222,7 @@ fn stream_tar_entries_seek(
 
     // Second pass: resolve paths (from longname or header)
     let to_resolve = &info[..];
-    let entries = if to_resolve.is_empty() {
+    let mut entries = if to_resolve.is_empty() {
         Vec::new()
     } else if to_resolve.len() >= config.min_collection_size_for_chunking
         && config.target_chunks_per_file > 1
@@ -252,6 +269,10 @@ fn stream_tar_entries_seek(
             })
             .collect()
     };
+
+    entries.retain(|e| !should_omit_tar_entry_path(&e.path));
+    let file_count = entries.len();
+    let uncompressed_size: u64 = entries.iter().map(|e| e.size).sum();
 
     Ok((file_count, uncompressed_size, entries))
 }

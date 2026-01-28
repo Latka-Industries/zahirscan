@@ -32,6 +32,9 @@ pub struct ArchiveMetadata {
     /// Reserved; not currently set (plain .tar is zero-copy, no truncation)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub truncated: Option<bool>,
+    /// Note when full listing is not available (compressed TAR: no decompression; use plain .tar for file_count/entries)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 impl Serialize for ArchiveMetadata {
@@ -39,13 +42,14 @@ impl Serialize for ArchiveMetadata {
     where
         S: Serializer,
     {
-        let mut state = serializer.serialize_struct("ArchiveMetadata", 6)?;
+        let mut state = serializer.serialize_struct("ArchiveMetadata", 7)?;
         crate::serialize_optional!(state, self.format, "format");
         crate::serialize_optional!(state, self.file_count, "file_count");
         crate::serialize_optional!(state, self.entries, "entries");
         crate::serialize_optional!(state, self.compressed_size, "compressed_size");
         crate::serialize_optional!(state, self.uncompressed_size, "uncompressed_size");
         crate::serialize_optional!(state, self.truncated, "truncated");
+        crate::serialize_optional!(state, self.note, "note");
         state.end()
     }
 }
