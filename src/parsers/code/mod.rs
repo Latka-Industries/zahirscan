@@ -6,8 +6,8 @@ use anyhow::Result;
 use memmap2::Mmap;
 
 use crate::engine::config::Config;
-use crate::parsers::ParseResult;
 use crate::parsers::traits::empty_mining_result;
+use crate::parsers::{FileType, ParseResult};
 use crate::results::{CodeMetadata, MiningResult};
 
 /// Byte constants used in zero-copy scan (LF, CR, space, tab, BOM bytes).
@@ -330,4 +330,18 @@ pub fn extract_code_templates(
     _config: &Config,
 ) -> Result<MiningResult> {
     Ok(empty_mining_result(stats))
+}
+
+/// Extract metadata and templates for code/script; single file type in this module.
+pub fn process(stats: &mut ParseResult, mmap: &Mmap, config: &Config) -> Result<MiningResult> {
+    crate::process_with_metadata!(
+        stats,
+        mmap,
+        config,
+        code_metadata,
+        extract_code_metadata(mmap, stats, config),
+        crate::results::CodeMetadata,
+        FileType::Code,
+        extract_code_templates(mmap, stats, config)
+    )
 }

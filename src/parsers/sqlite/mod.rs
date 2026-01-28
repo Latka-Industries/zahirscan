@@ -8,10 +8,9 @@ use log::debug;
 use rusqlite::Connection;
 
 use crate::engine::config::Config;
-use crate::parsers::column_stats;
-use crate::results::{ColumnInfo, SqliteMetadata, TableInfo};
-
-use super::ParseResult;
+use crate::parsers::{FileType, ParseResult, column_stats};
+use crate::results::{ColumnInfo, MiningResult, SqliteMetadata, TableInfo};
+use memmap2::Mmap;
 use type_stats::{
     compute_blob_stats, compute_numeric_and_bool_stats, compute_text_and_date_stats,
     fetch_column_as_strings,
@@ -205,3 +204,17 @@ crate::no_template_mining!(
     extract_sqlite_templates,
     "SQLite files don't need template mining - return empty result. Only metadata is extracted (schema, tables, columns, etc.)."
 );
+
+/// Extract metadata and templates for SQLite; single file type in this module.
+pub fn process(stats: &mut ParseResult, mmap: &Mmap, config: &Config) -> Result<MiningResult> {
+    crate::process_with_metadata!(
+        stats,
+        mmap,
+        config,
+        sqlite_metadata,
+        extract_sqlite_metadata(mmap, stats, config),
+        crate::results::SqliteMetadata,
+        FileType::Sqlite,
+        extract_sqlite_templates(mmap, stats, config)
+    )
+}

@@ -20,7 +20,6 @@ use crate::engine::config::Config;
 use crate::engine::tools::{detect_file_type, redact_path};
 use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
 use anyhow::Result;
-use log::debug;
 use memmap2::Mmap;
 use serde_json;
 use std::fs::{File, OpenOptions};
@@ -28,6 +27,7 @@ use std::io::Write;
 
 /// Macro to extract metadata with error handling and fallback
 /// Usage: extract_metadata_with_fallback!(stats.field, extract_fn, stats, MetadataType, type_name_expr)
+#[macro_export]
 macro_rules! extract_metadata_with_fallback {
     ($field:expr, $extract_fn:expr, $stats:expr, $metadata_type:path, $type_name:expr) => {
         $field = match $extract_fn {
@@ -39,11 +39,13 @@ macro_rules! extract_metadata_with_fallback {
                 } else {
                     format!("{}", e)
                 };
-                debug!(
+                log::debug!(
                     "{} metadata extraction failed for '{}': {}",
-                    $type_name, $stats.file_path, error_msg
+                    $type_name,
+                    $stats.file_path,
+                    error_msg
                 );
-                Some(crate::results::create_minimal_fallback::<$metadata_type>(
+                Some($crate::results::create_minimal_fallback::<$metadata_type>(
                     $stats.byte_count,
                 ))
             }
@@ -51,21 +53,21 @@ macro_rules! extract_metadata_with_fallback {
     };
 }
 
-/// Macro to handle media file processing (metadata + templates)
-/// Usage: process_media_file!(stats, mmap, config, module::extract_X_metadata, module::extract_X_templates, field_name, MetadataType, FileType::X)
-macro_rules! process_media_file {
-    ($stats:expr, $mmap:expr, $config:expr, $extract_metadata_fn:path, $extract_templates_fn:path, $field:ident, $metadata_type:path, $file_type:expr) => {{
-        // Extract metadata in Phase 2 (unless skipped)
+/// Macro to handle metadata extraction (unless skipped) then run templates extractor.
+/// Use from any parser mod: `crate::process_with_metadata!(stats, mmap, config, field_name, extract_meta_call, MetadataType, FileType::X, extract_templates_call)`
+#[macro_export]
+macro_rules! process_with_metadata {
+    ($stats:expr, $mmap:expr, $config:expr, $field:ident, $extract_meta:expr, $metadata_type:path, $file_type:expr, $extract_templates:expr) => {{
         if !$config.skip_media_metadata {
-            extract_metadata_with_fallback!(
+            $crate::extract_metadata_with_fallback!(
                 $stats.$field,
-                $extract_metadata_fn($mmap, $stats, $config),
+                $extract_meta,
                 $stats,
                 $metadata_type,
                 $file_type.as_metadata_name()
             );
         }
-        $extract_templates_fn($mmap, $stats, $config)
+        $extract_templates
     }};
 }
 
@@ -84,6 +86,42 @@ macro_rules! no_template_mining {
             Ok($crate::parsers::traits::empty_mining_result(stats))
         }
     };
+}
+
+/// Parser category: maps to a folder/module and its `process` function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParserCategory {
+    Media,      // Image | Video | Audio -> media::process
+    Office,     // Docx | Xlsx | Pptx -> office::process
+    Structured, // Csv | Html -> structured::process
+    Settings,   // Toml | Yaml | Xml | Ini -> settings::process
+    Container,  // Zip | Archive -> container::process
+    Pdf,
+    Sqlite,
+    Epub,
+    Code,
+}
+
+impl ParserCategory {
+    /// Dispatch to the category's parser module.
+    pub fn process(
+        self,
+        stats: &mut ParseResult,
+        mmap: &Mmap,
+        config: &Config,
+    ) -> Result<MiningResult> {
+        match self {
+            ParserCategory::Media => media::process(stats, mmap, config),
+            ParserCategory::Office => office::process(stats, mmap, config),
+            ParserCategory::Structured => structured::process(stats, mmap, config),
+            ParserCategory::Settings => settings::process(stats, mmap, config),
+            ParserCategory::Container => container::process(stats, mmap, config),
+            ParserCategory::Pdf => pdf::process(stats, mmap, config),
+            ParserCategory::Sqlite => sqlite::process(stats, mmap, config),
+            ParserCategory::Epub => epub::process(stats, mmap, config),
+            ParserCategory::Code => code::process(stats, mmap, config),
+        }
+    }
 }
 
 /// Supported file types
@@ -147,27 +185,25 @@ impl FileType {
 
     /// Check if this is a binary file type that still needs processing (metadata extraction)
     pub fn binary_needs_processing(&self) -> bool {
-        matches!(
-            self,
-            FileType::Image
-                | FileType::Video
-                | FileType::Audio
-                | FileType::Pdf
-                | FileType::Docx
-                | FileType::Xlsx
-                | FileType::Csv
-                | FileType::Sqlite
-                | FileType::Toml
-                | FileType::Zip
-                | FileType::Xml
-                | FileType::Html
-                | FileType::Yaml
-                | FileType::Ini
-                | FileType::Pptx
-                | FileType::Epub
-                | FileType::Archive
-                | FileType::Code
-        )
+        self.parser_category().is_some()
+    }
+
+    /// Category for dispatch to the right parser module (Media -> media::process, etc.).
+    pub fn parser_category(self) -> Option<ParserCategory> {
+        match self {
+            FileType::Image | FileType::Video | FileType::Audio => Some(ParserCategory::Media),
+            FileType::Docx | FileType::Xlsx | FileType::Pptx => Some(ParserCategory::Office),
+            FileType::Csv | FileType::Html => Some(ParserCategory::Structured),
+            FileType::Toml | FileType::Yaml | FileType::Xml | FileType::Ini => {
+                Some(ParserCategory::Settings)
+            }
+            FileType::Zip | FileType::Archive => Some(ParserCategory::Container),
+            FileType::Pdf => Some(ParserCategory::Pdf),
+            FileType::Sqlite => Some(ParserCategory::Sqlite),
+            FileType::Epub => Some(ParserCategory::Epub),
+            FileType::Code => Some(ParserCategory::Code),
+            _ => None,
+        }
     }
 }
 
@@ -415,252 +451,35 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
     })
 }
 
+/// Process file types with no parser category (Log, Json, Text, Markdown, Unknown).
+fn process_text_or_unknown(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &Config,
+) -> Result<MiningResult> {
+    if stats.is_binary {
+        return Ok(traits::empty_mining_result(stats));
+    }
+    let content = std::str::from_utf8(mmap)?;
+    match stats.file_type {
+        FileType::Log => text::log::extract_log_templates(content, stats, config),
+        FileType::Json => text::json::extract_json_templates(content, stats, config),
+        FileType::Markdown => text::markdown::extract_markdown_templates(content, stats, config),
+        FileType::Text => text::plain_text::extract_text_templates(content, stats, config),
+        FileType::Unknown => extract_unknown_templates(content, stats, config),
+        file_type if file_type.binary_needs_processing() => unreachable!(),
+        _ => unreachable!(),
+    }
+}
+
 /// Extract templates from a file using probabilistic template mining
 /// Main handler that routes to log or text parsers
 /// For images, also extracts image metadata
 pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<MiningResult> {
-    // Re-open and memory-map the file
     let mmap = open_mmap(&stats.file_path)?;
-
-    match stats.file_type {
-        FileType::Image => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                media::extract_image_metadata,
-                media::extract_image_templates,
-                image_metadata,
-                crate::results::ImageMetadata,
-                FileType::Image
-            )
-        }
-        FileType::Video => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                media::extract_video_metadata,
-                media::extract_video_templates,
-                video_metadata,
-                crate::results::VideoMetadata,
-                FileType::Video
-            )
-        }
-        FileType::Audio => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                media::extract_audio_metadata,
-                media::extract_audio_templates,
-                audio_metadata,
-                crate::results::AudioMetadata,
-                FileType::Audio
-            )
-        }
-        FileType::Csv => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                structured::extract_csv_metadata,
-                structured::extract_csv_templates,
-                csv_metadata,
-                crate::results::CsvMetadata,
-                FileType::Csv
-            )
-        }
-        FileType::Pdf => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                pdf::extract_pdf_metadata,
-                pdf::extract_pdf_templates,
-                pdf_metadata,
-                crate::results::PdfMetadata,
-                FileType::Pdf
-            )
-        }
-        FileType::Docx => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                office::extract_docx_metadata,
-                office::extract_docx_templates,
-                docx_metadata,
-                crate::results::DocumentMetadata,
-                FileType::Docx
-            )
-        }
-        FileType::Xlsx => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                office::extract_xlsx_metadata,
-                office::extract_xlsx_templates,
-                docx_metadata,
-                crate::results::DocumentMetadata,
-                FileType::Xlsx
-            )
-        }
-        FileType::Sqlite => {
-            // Extract metadata
-            if !config.skip_media_metadata {
-                extract_metadata_with_fallback!(
-                    stats.sqlite_metadata,
-                    sqlite::extract_sqlite_metadata(&mmap, stats, config),
-                    stats,
-                    crate::results::SqliteMetadata,
-                    FileType::Sqlite.as_metadata_name()
-                );
-            }
-            // Extract templates
-            sqlite::extract_sqlite_templates(&mmap, stats, config)
-        }
-        FileType::Toml => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                settings::extract_toml_metadata,
-                settings::extract_toml_templates,
-                toml_metadata,
-                crate::results::TomlMetadata,
-                FileType::Toml
-            )
-        }
-        FileType::Zip => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                container::zip::extract_zip_metadata,
-                container::zip::extract_zip_templates,
-                zip_metadata,
-                crate::results::ZipMetadata,
-                FileType::Zip
-            )
-        }
-        FileType::Xml => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                settings::extract_xml_metadata,
-                settings::extract_xml_templates,
-                xml_metadata,
-                crate::results::XmlMetadata,
-                FileType::Xml
-            )
-        }
-        FileType::Html => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                structured::extract_html_metadata,
-                structured::extract_html_templates,
-                html_metadata,
-                crate::results::HtmlMetadata,
-                FileType::Html
-            )
-        }
-        FileType::Yaml => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                settings::extract_yaml_metadata,
-                settings::extract_yaml_templates,
-                yaml_metadata,
-                crate::results::YamlMetadata,
-                FileType::Yaml
-            )
-        }
-        FileType::Ini => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                settings::extract_ini_metadata,
-                settings::extract_ini_templates,
-                ini_metadata,
-                crate::results::IniMetadata,
-                FileType::Ini
-            )
-        }
-        FileType::Pptx => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                office::extract_pptx_metadata,
-                office::extract_pptx_templates,
-                pptx_metadata,
-                crate::results::PptxMetadata,
-                FileType::Pptx
-            )
-        }
-        FileType::Epub => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                epub::extract_epub_metadata,
-                epub::extract_epub_templates,
-                epub_metadata,
-                crate::results::EpubMetadata,
-                FileType::Epub
-            )
-        }
-        FileType::Archive => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                container::archive::extract_archive_metadata,
-                container::archive::extract_archive_templates,
-                archive_metadata,
-                crate::results::ArchiveMetadata,
-                FileType::Archive
-            )
-        }
-        FileType::Code => {
-            process_media_file!(
-                stats,
-                &mmap,
-                config,
-                code::extract_code_metadata,
-                code::extract_code_templates,
-                code_metadata,
-                crate::results::CodeMetadata,
-                FileType::Code
-            )
-        }
-        _ => {
-            // Skip binary files (non-images, videos, audio, CSV, PDF, etc)
-            if stats.is_binary {
-                return Ok(traits::empty_mining_result(stats));
-            }
-
-            let content = std::str::from_utf8(&mmap)?;
-            match stats.file_type {
-                FileType::Log => text::log::extract_log_templates(content, stats, config),
-                FileType::Json => text::json::extract_json_templates(content, stats, config),
-                FileType::Markdown => {
-                    text::markdown::extract_markdown_templates(content, stats, config)
-                }
-                FileType::Text => text::plain_text::extract_text_templates(content, stats, config),
-                FileType::Unknown => extract_unknown_templates(content, stats, config),
-                file_type if file_type.binary_needs_processing() => unreachable!(),
-                // Catch-all for any other file types
-                _ => unreachable!(),
-            }
-        }
+    match stats.file_type.parser_category() {
+        Some(cat) => cat.process(stats, &mmap, config),
+        None => process_text_or_unknown(stats, &mmap, config),
     }
 }
 

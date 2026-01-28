@@ -3,10 +3,11 @@
 mod utils;
 
 use crate::engine::config::Config;
-use crate::parsers::ParseResult;
-use crate::results::PdfMetadata;
+use crate::parsers::{FileType, ParseResult};
+use crate::results::{MiningResult, PdfMetadata};
 use anyhow::Result;
 use log::warn;
+use memmap2::Mmap;
 use pdf::file::FileOptions;
 
 use self::utils::{extract_pdf_date_to_iso8601, extract_text_str};
@@ -67,3 +68,17 @@ crate::no_template_mining!(
     extract_pdf_templates,
     "PDFs are binary files, don't have templates, return empty result."
 );
+
+/// Extract metadata and templates for PDF; single file type in this module.
+pub fn process(stats: &mut ParseResult, mmap: &Mmap, config: &Config) -> Result<MiningResult> {
+    crate::process_with_metadata!(
+        stats,
+        mmap,
+        config,
+        pdf_metadata,
+        extract_pdf_metadata(mmap, stats, config),
+        crate::results::PdfMetadata,
+        FileType::Pdf,
+        extract_pdf_templates(mmap, stats, config)
+    )
+}

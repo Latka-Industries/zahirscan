@@ -3,10 +3,11 @@
 use std::io::{Cursor, Read};
 
 use crate::engine::config::Config;
-use crate::parsers::ParseResult;
-use crate::results::EpubMetadata;
+use crate::parsers::{FileType, ParseResult};
+use crate::results::{EpubMetadata, MiningResult};
 use anyhow::Result;
 use log::warn;
+use memmap2::Mmap;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 use zip::ZipArchive;
@@ -199,3 +200,17 @@ crate::no_template_mining!(
     extract_epub_templates,
     "EPUB: book structure; no template mining."
 );
+
+/// Extract metadata and templates for EPUB; single file type in this module.
+pub fn process(stats: &mut ParseResult, mmap: &Mmap, config: &Config) -> Result<MiningResult> {
+    crate::process_with_metadata!(
+        stats,
+        mmap,
+        config,
+        epub_metadata,
+        extract_epub_metadata(mmap, stats, config),
+        crate::results::EpubMetadata,
+        FileType::Epub,
+        extract_epub_templates(mmap, stats, config)
+    )
+}
