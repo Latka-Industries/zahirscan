@@ -2,6 +2,7 @@
 
 pub mod archive;
 pub mod audio;
+pub mod code;
 pub mod csv;
 pub mod document;
 pub mod epub;
@@ -21,6 +22,7 @@ pub mod zip;
 // Re-export all metadata types for convenience
 pub use archive::{ArchiveEntry, ArchiveMetadata};
 pub use audio::AudioMetadata;
+pub use code::CodeMetadata;
 pub use csv::CsvMetadata;
 pub use document::DocumentMetadata;
 pub use epub::EpubMetadata;

@@ -25,6 +25,7 @@ ZahirScan uses probabilistic template mining to extract essential structure and 
 - **Settings**: INI (.ini, .cfg), TOML (.toml, .lock), YAML (.yaml, .yml), XML (.xml)
 - **Structured**: CSV, HTML (.html, .htm)
 - **Archives**: ZIP (.zip); TAR and compressed TAR (`.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`).
+- **Code/Scripts**: Detected via [linguist](https://github.com/github-linguist/linguist) (e.g. .py, .rs, .js, .ts, .sh, Makefile, Dockerfile).
 - **Images**: JPEG, PNG, GIF, WebP, BMP, TIFF
 - **Videos**: MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, 3GP, OGV
 - **Audio**: MP3, FLAC, WAV, M4A, AAC, OGG, Opus, WMA, APE, DSD, DSF
@@ -47,6 +48,7 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 | CSV                  | Row/column counts, column names, data types, delimiter, quote/escape characters, null percentages, unique counts; type-specific statistics (numeric: min/max/mean/median/IQR/stdev, date: span/min/max, boolean: true percentage)                                                                               |
 | SQLite               | Schema (tables, columns, types, constraints), primary keys, foreign keys, indexes, row counts, column statistics (null percentages, unique counts, numeric/text/boolean/blob/date)                                                                                                                              |
 | TOML, YAML, INI, CFG | Recursive schema (scalar, table/mapping, array/sequence; INI: section→key→scalar, multi-line values), key count, max depth. TOML: section count. YAML: scalar/sequence/map counts. INI/.cfg: section count, comment count                                                                                       |
+| Code/Scripts         | script_type (linguist + optional shebang), byte_count, line_count; BOM, line_ending, trailing_newline, max_line_length, blank_line_count, indentation (single-pass scan)                                                                                                                                        |
 | ZIP                  | File count, entries (path, uncompressed/compressed size, detected type, modified, compression method), entry_type_counts; filters hidden OS files (e.g. \_\_MACOSX, .DS_Store, Thumbs.db)                                                                                                                       |
 | Archive (TAR family) | File count, entries (path, size), compressed_size, uncompressed_size                                                                                                                                                                                                                                            |
 | XML                  | Recursive schema (root→children with attributes; repeated siblings as arrays with union of all children), element count, attribute count, max depth, has_namespaces                                                                                                                                             |
@@ -114,7 +116,7 @@ Options:
 
 **Output formats:**
 
-- **Mode 1 (Templates)**: Minimal JSON with template patterns & schema, writing footprint (for text/markdown), media metadata (for images/videos/audio), and document metadata (for DOCX/XLSX)
+- **Mode 1 (Templates)**: Minimal JSON with template patterns & schema, writing footprint (for text/markdown), media metadata (for images/videos/audio), code metadata (for code/script files), and document metadata (for DOCX/XLSX)
 - **Mode 2 (Full)**: Mode 1 output plus:
   - File statistics (size, line count, processing time)
   - Size comparison (before/after)
@@ -144,7 +146,7 @@ The `extract_schema()` function returns `Result<Vec<Output>>`. Each `Output` obj
 
 - `templates: Vec<Template>` - Extracted template patterns
 - `source: String` - Source file path
-- `file_type: String` - Detected file type (e.g., "Log", "Text", "Sqlite", "Image")
+- `file_type: String` - Detected file type (e.g., "Log", "Text", "Code", "Sqlite", "Image")
 
 **Mode 2 (Full) only (all optional):**
 
@@ -161,6 +163,7 @@ The `extract_schema()` function returns `Result<Vec<Output>>`. Each `Output` obj
 - `image_metadata: Option<ImageMetadata>` - Image metadata (dimensions, format, etc.)
 - `video_metadata: Option<VideoMetadata>` - Video metadata (codec, resolution, bitrate, etc.)
 - `audio_metadata: Option<AudioMetadata>` - Audio metadata (codec, bitrate, sample rate, etc.)
+- `code_metadata: Option<CodeMetadata>` - Code/script metadata (script_type, byte_count, line_count, BOM, line_ending, trailing_newline, max_line_length, blank_line_count, indentation)
 - `csv_metadata: Option<CsvMetadata>` - CSV metadata (row/column counts, data types, statistics)
 - `sqlite_metadata: Option<SqliteMetadata>` - SQLite database metadata (schema, tables, columns, indexes, statistics)
 - `toml_metadata: Option<TomlMetadata>` - TOML config metadata (recursive schema, section/key counts, depth)
@@ -244,7 +247,6 @@ ZahirScan implements non-invasive file operations:
 
 - [ ] Word universe for enhanced writing analysis (per-document vocabulary corpus with frequency distributions, word length statistics, and visualization data)
 - [ ] Improve template extraction for short literary texts (adaptive thresholds and pattern similarity merging for better pattern recognition in short documents)
-- [ ] Code file analysis (language detection + basic code metadata; decide integrated vs separate library)
 - [ ] Shared lightweight NLP utility layer for logs + writing analysis (normalization/tokenization/stats/redaction; optional similarity/embeddings later)
 
 - [ ] (Optional) Security hardening: output path validation + symlink checks

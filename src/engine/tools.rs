@@ -94,6 +94,7 @@ pub fn is_codec_for_file_type(codec: &str, file_type: FileType) -> bool {
 
 /// Detect file type from extension.
 /// Compound extensions (e.g. .tar.gz, .tar.bz2, .tgz, .tar.xz) are checked first.
+/// If extension is unknown, tries linguist (extension + filename) as fallback for code/script files.
 pub fn detect_file_type(path: &str) -> FileType {
     let lo = path.to_lowercase();
     if lo.ends_with(".tar.xz")
@@ -110,7 +111,25 @@ pub fn detect_file_type(path: &str) -> FileType {
         .map(|s| s.to_lowercase())
         .unwrap_or_default();
 
-    get_file_type_from_extension(&extension)
+    let file_type = get_file_type_from_extension(&extension);
+    if file_type == FileType::Unknown {
+        let p = Path::new(path);
+        if p.exists() {
+            let by_ext = linguist::detect_language_by_extension(p)
+                .ok()
+                .unwrap_or_default();
+            if !by_ext.is_empty() {
+                return FileType::Code;
+            }
+            let by_name = linguist::detect_language_by_filename(p)
+                .ok()
+                .unwrap_or_default();
+            if !by_name.is_empty() {
+                return FileType::Code;
+            }
+        }
+    }
+    file_type
 }
 
 /// Format duration into human-readable format

@@ -63,6 +63,7 @@ rusqlite = "0.38.0"
 tempfile = "3.12.0"
 scraper = "0.25.0"
 serde_yaml = "0.9.34"
+linguist = "0.1.6"
 
 [profile.release]
 opt-level = "s"

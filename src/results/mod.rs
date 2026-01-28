@@ -15,10 +15,11 @@ pub trait MinimalFallback {
 pub use core::{FileMetadata, MiningResult, Output, OutputMode, Template};
 // Re-export all metadata types (now from metadata module)
 pub use metadata::{
-    ArchiveEntry, ArchiveMetadata, AudioMetadata, BlobStats, BooleanStats, ColumnInfo, CsvMetadata,
-    DateStats, DocumentMetadata, EpubMetadata, ForeignKeyInfo, HtmlMetadata, ImageMetadata,
-    IndexInfo, IniMetadata, NumericStats, PdfMetadata, PptxMetadata, SqliteMetadata, TableInfo,
-    TextStats, TomlMetadata, VideoMetadata, XmlMetadata, YamlMetadata, ZipEntry, ZipMetadata,
+    ArchiveEntry, ArchiveMetadata, AudioMetadata, BlobStats, BooleanStats, CodeMetadata,
+    ColumnInfo, CsvMetadata, DateStats, DocumentMetadata, EpubMetadata, ForeignKeyInfo,
+    HtmlMetadata, ImageMetadata, IndexInfo, IniMetadata, NumericStats, PdfMetadata, PptxMetadata,
+    SqliteMetadata, TableInfo, TextStats, TomlMetadata, VideoMetadata, XmlMetadata, YamlMetadata,
+    ZipEntry, ZipMetadata,
 };
 pub use writing::{CompressionStats, PunctuationMetrics, SVOAnalysis, WritingFootprint};
 

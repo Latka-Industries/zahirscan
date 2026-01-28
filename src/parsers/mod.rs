@@ -1,6 +1,7 @@
 //! Probabilistic template mining and parsing
 //! Main handler that routes to log or text parsers
 
+pub mod code;
 mod column_stats;
 pub mod container;
 mod epub;
@@ -109,6 +110,7 @@ pub enum FileType {
     Pptx,
     Epub,
     Archive,
+    Code,
     #[default]
     Unknown,
 }
@@ -134,6 +136,7 @@ impl FileType {
             FileType::Pptx => "PPTX",
             FileType::Epub => "EPUB",
             FileType::Archive => "Archive",
+            FileType::Code => "Code",
             FileType::Log => "Log",
             FileType::Json => "JSON",
             FileType::Text => "Text",
@@ -163,6 +166,7 @@ impl FileType {
                 | FileType::Pptx
                 | FileType::Epub
                 | FileType::Archive
+                | FileType::Code
         )
     }
 }
@@ -213,6 +217,8 @@ pub struct ParseResult {
     pub epub_metadata: Option<crate::results::EpubMetadata>,
     /// Archive metadata (for TAR / tar.gz / tar.bz2 / tar.xz)
     pub archive_metadata: Option<crate::results::ArchiveMetadata>,
+    /// Code/script metadata (for source code files)
+    pub code_metadata: Option<crate::results::CodeMetadata>,
 }
 
 impl ParseResult {
@@ -234,6 +240,7 @@ impl ParseResult {
         output.pptx_metadata = self.pptx_metadata.clone();
         output.epub_metadata = self.epub_metadata.clone();
         output.archive_metadata = self.archive_metadata.clone();
+        output.code_metadata = self.code_metadata.clone();
     }
 
     /// Convert parse result to Output object
@@ -620,6 +627,18 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 archive_metadata,
                 crate::results::ArchiveMetadata,
                 FileType::Archive
+            )
+        }
+        FileType::Code => {
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                code::extract_code_metadata,
+                code::extract_code_templates,
+                code_metadata,
+                crate::results::CodeMetadata,
+                FileType::Code
             )
         }
         _ => {

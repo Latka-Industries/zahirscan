@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
 
 use super::metadata::{
-    ArchiveMetadata, AudioMetadata, DocumentMetadata, EpubMetadata, HtmlMetadata, ImageMetadata,
-    IniMetadata, PptxMetadata, SqliteMetadata, TomlMetadata, VideoMetadata, XmlMetadata,
-    YamlMetadata, ZipMetadata,
+    ArchiveMetadata, AudioMetadata, CodeMetadata, DocumentMetadata, EpubMetadata, HtmlMetadata,
+    ImageMetadata, IniMetadata, PptxMetadata, SqliteMetadata, TomlMetadata, VideoMetadata,
+    XmlMetadata, YamlMetadata, ZipMetadata,
 };
 use super::writing::{CompressionStats, WritingFootprint};
 
@@ -101,6 +101,8 @@ pub struct Output {
     pub epub_metadata: Option<EpubMetadata>,
     /// Archive metadata (Mode 2 only, for TAR / tar.gz / tar.bz2 / tar.xz)
     pub archive_metadata: Option<ArchiveMetadata>,
+    /// Code/script metadata (Mode 2 only, for source code files)
+    pub code_metadata: Option<CodeMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -120,8 +122,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 26 fields: 1 required (templates) + 25 optional fields
-        let mut state = serializer.serialize_struct("Output", 26)?;
+        // Maximum 27 fields: 1 required (templates) + 26 optional fields
+        let mut state = serializer.serialize_struct("Output", 27)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -152,6 +154,7 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.pptx_metadata, "pptx_metadata");
         crate::serialize_optional!(state, self.epub_metadata, "epub_metadata");
         crate::serialize_optional!(state, self.archive_metadata, "archive_metadata");
+        crate::serialize_optional!(state, self.code_metadata, "code_metadata");
 
         state.end()
     }
