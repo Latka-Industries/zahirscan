@@ -304,6 +304,8 @@ fn analyze_image_data(image_data: &[u8]) -> Option<ImageMetadata> {
         toml_metadata: None,
         zip_metadata: None,
         xml_metadata: None,
+        html_metadata: None,
+        yaml_metadata: None,
     };
 
     // Use the existing image parser

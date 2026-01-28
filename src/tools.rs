@@ -63,6 +63,10 @@ const FILE_EXTENSION_MAP: &[(&str, FileType)] = &[
     ("lock", FileType::Toml),
     ("zip", FileType::Zip),
     ("xml", FileType::Xml),
+    ("html", FileType::Html),
+    ("htm", FileType::Html),
+    ("yaml", FileType::Yaml),
+    ("yml", FileType::Yaml),
 ];
 
 /// Get FileType from extension using linear search

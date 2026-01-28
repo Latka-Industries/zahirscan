@@ -29,6 +29,8 @@ fn get_test_stats() -> ParseResult {
         toml_metadata: None,
         zip_metadata: None,
         xml_metadata: None,
+        html_metadata: None,
+        yaml_metadata: None,
     }
 }
 

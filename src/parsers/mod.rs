@@ -5,6 +5,7 @@ mod audio;
 mod column_stats;
 pub mod csv;
 pub mod docx;
+mod html;
 pub mod image;
 mod media_helpers;
 pub mod pdf;
@@ -15,6 +16,7 @@ pub mod traits;
 mod video;
 pub mod xlsx;
 pub mod xml;
+mod yaml;
 pub mod zip;
 pub use media_helpers::{BitrateMode, CompressionMode};
 
@@ -106,6 +108,8 @@ pub enum FileType {
     Toml,
     Zip,
     Xml,
+    Html,
+    Yaml,
     Unknown,
 }
 
@@ -124,6 +128,8 @@ impl FileType {
             FileType::Toml => "TOML",
             FileType::Zip => "ZIP",
             FileType::Xml => "XML",
+            FileType::Html => "HTML",
+            FileType::Yaml => "YAML",
             FileType::Log => "Log",
             FileType::Json => "JSON",
             FileType::Text => "Text",
@@ -147,6 +153,8 @@ impl FileType {
                 | FileType::Toml
                 | FileType::Zip
                 | FileType::Xml
+                | FileType::Html
+                | FileType::Yaml
         )
     }
 }
@@ -185,6 +193,10 @@ pub struct ParseResult {
     pub zip_metadata: Option<crate::results::ZipMetadata>,
     /// XML metadata (for XML files)
     pub xml_metadata: Option<crate::results::XmlMetadata>,
+    /// HTML metadata (for HTML files)
+    pub html_metadata: Option<crate::results::HtmlMetadata>,
+    /// YAML metadata (for YAML files)
+    pub yaml_metadata: Option<crate::results::YamlMetadata>,
 }
 
 impl ParseResult {
@@ -200,6 +212,8 @@ impl ParseResult {
         output.toml_metadata = self.toml_metadata.clone();
         output.zip_metadata = self.zip_metadata.clone();
         output.xml_metadata = self.xml_metadata.clone();
+        output.html_metadata = self.html_metadata.clone();
+        output.yaml_metadata = self.yaml_metadata.clone();
     }
 
     /// Convert parse result to Output object
@@ -381,6 +395,8 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
         toml_metadata: None,
         zip_metadata: None,
         xml_metadata: None,
+        html_metadata: None,
+        yaml_metadata: None,
     })
 }
 
@@ -524,6 +540,30 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
                 xml_metadata,
                 crate::results::XmlMetadata,
                 FileType::Xml
+            )
+        }
+        FileType::Html => {
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                html::extract_html_metadata,
+                html::extract_html_templates,
+                html_metadata,
+                crate::results::HtmlMetadata,
+                FileType::Html
+            )
+        }
+        FileType::Yaml => {
+            process_media_file!(
+                stats,
+                &mmap,
+                config,
+                yaml::extract_yaml_metadata,
+                yaml::extract_yaml_templates,
+                yaml_metadata,
+                crate::results::YamlMetadata,
+                FileType::Yaml
             )
         }
         _ => {

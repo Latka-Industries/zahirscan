@@ -32,6 +32,8 @@ fn get_test_stats(file_path: &str, byte_count: usize) -> ParseResult {
         toml_metadata: None,
         zip_metadata: None,
         xml_metadata: None,
+        html_metadata: None,
+        yaml_metadata: None,
     }
 }
 

@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
 
 use super::metadata::{
-    AudioMetadata, DocumentMetadata, ImageMetadata, SqliteMetadata, TomlMetadata, VideoMetadata,
-    XmlMetadata, ZipMetadata,
+    AudioMetadata, DocumentMetadata, HtmlMetadata, ImageMetadata, SqliteMetadata, TomlMetadata,
+    VideoMetadata, XmlMetadata, YamlMetadata, ZipMetadata,
 };
 use super::writing::{CompressionStats, WritingFootprint};
 
@@ -88,6 +88,10 @@ pub struct Output {
     pub zip_metadata: Option<ZipMetadata>,
     /// XML metadata (Mode 2 only, for XML files)
     pub xml_metadata: Option<XmlMetadata>,
+    /// HTML metadata (Mode 2 only, for HTML files)
+    pub html_metadata: Option<HtmlMetadata>,
+    /// YAML metadata (Mode 2 only, for YAML files)
+    pub yaml_metadata: Option<YamlMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -107,8 +111,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 20 fields: 1 required (templates) + 19 optional fields
-        let mut state = serializer.serialize_struct("Output", 20)?;
+        // Maximum 22 fields: 1 required (templates) + 21 optional fields
+        let mut state = serializer.serialize_struct("Output", 22)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -133,6 +137,8 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.toml_metadata, "toml_metadata");
         crate::serialize_optional!(state, self.zip_metadata, "zip_metadata");
         crate::serialize_optional!(state, self.xml_metadata, "xml_metadata");
+        crate::serialize_optional!(state, self.html_metadata, "html_metadata");
+        crate::serialize_optional!(state, self.yaml_metadata, "yaml_metadata");
 
         state.end()
     }
@@ -168,6 +174,8 @@ impl Output {
             toml_metadata: None,
             zip_metadata: None,
             xml_metadata: None,
+            html_metadata: None,
+            yaml_metadata: None,
         }
     }
 
@@ -200,6 +208,8 @@ impl Output {
             toml_metadata: None,
             zip_metadata: None,
             xml_metadata: None,
+            html_metadata: None,
+            yaml_metadata: None,
         }
     }
 }

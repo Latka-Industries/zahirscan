@@ -11,6 +11,9 @@ use anyhow::Result;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
+/// Attribute name "xmlns" and prefix for namespace declarations (e.g. xmlns, xmlns:foo).
+const ATTR_XMLNS: &[u8] = b"xmlns";
+
 fn local_name_str(b: &[u8]) -> String {
     String::from_utf8_lossy(b).into_owned()
 }
@@ -24,7 +27,7 @@ fn collect_attrs(
     let mut m = BTreeMap::new();
     for a in e.attributes().flatten() {
         *attribute_count += 1;
-        if a.key.as_ref().starts_with(b"xmlns") || a.key.as_ref() == b"xmlns" {
+        if a.key.as_ref().starts_with(ATTR_XMLNS) {
             *has_namespaces = true;
         }
         if a.key.as_namespace_binding().is_some() {

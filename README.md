@@ -20,12 +20,14 @@ ZahirScan uses probabilistic template mining to extract essential structure and 
 
 - **Logs**: Plain text logs, JSON-formatted logs, structured log files
 - **Text Documents**: TXT, Markdown (MD), plain text content
-- **Documents**: DOCX (Word documents), XLSX (Excel spreadsheets), PDF (metadata extraction)
+- **Documents**: DOCX, XLSX, PDF
 - **CSV Files**: CSV
-- **Databases**: SQLite (.db, .sqlite, .sqlite3) - schema, tables, columns, indexes, foreign keys, and column statistics
-- **Config**: TOML (.toml, .lock) - recursive schema (scalar/table/array), section count, key count, max depth
-- **Archives**: ZIP (.zip) - entry list (path, sizes, detected type, modified, compression); entry_type_counts; hidden OS files filtered (e.g. __MACOSX, .DS_Store, Thumbs.db)
-- **Structured**: XML (.xml) - recursive schema (elements, attributes, repeated siblings as arrays), element/attribute counts, max depth, namespace detection
+- **Databases**: SQLite (.db, .sqlite, .sqlite3)
+- **Config**: TOML (.toml, .lock)
+- **Archives**: ZIP (.zip)
+- **Structured**: XML (.xml)
+- **HTML**: (.html, .htm)
+- **YAML**: (.yaml, .yml)
 - **Images**: JPEG, PNG, GIF, WebP, BMP, TIFF
 - **Videos**: MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, 3GP, OGV
 - **Audio**: MP3, FLAC, WAV, M4A, AAC, OGG, Opus, WMA, APE, DSD, DSF
@@ -35,17 +37,21 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 ## Key Features
 
 - **Template Mining**: Automatically identifies repeated patterns in logs/text and extracts them as templates with placeholders
-- **Media Metadata**: Extracts comprehensive metadata for images, videos, and audio (dimensions, codecs, bitrates, etc.)
-- **Document Metadata**: Extracts metadata from DOCX files (word count, character count, paragraph count, title, author, creation/modification dates, revision), XLSX files (sheet count, sheet names, row/column counts per sheet, core properties), and PDF files (page count, title, author, subject, creator, producer, creation/modification dates, PDF version, encryption status)
-- **CSV Metadata**: Extracts row/column counts, column names, data types, delimiter, quote/escape characters, null percentages, unique counts, and type-specific statistics (numeric: min/max/mean/median/IQR/stdev, date: span/min/max, boolean: true percentage)
-- **SQLite Metadata**: Extracts database schema (tables, columns, types, constraints), primary keys, foreign keys, indexes, row counts, and comprehensive column statistics (null percentages, unique counts, numeric/text/boolean/blob/date statistics)
-- **TOML Metadata**: Recursive schema (scalar/table/array), section count, key count, max depth
-- **ZIP Metadata**: File count, entries (path, uncompressed/compressed size, detected type, modified, compression method), entry_type_counts; filters hidden OS files (e.g. __MACOSX, .DS_Store, Thumbs.db)
-- **XML Metadata**: Recursive schema (root→children with attributes; repeated siblings as arrays with union of all children), element count, attribute count, max depth, has_namespaces
-- **Writing Footprint**: For text/markdown files, provides vocabulary richness, sentence structure, template diversity metrics, and word universe analysis (when enabled)
 - **Zero-Copy Processing**: Uses memory-mapped files (`memmap2`) to handle files larger than available RAM
 - **Adaptive Parallelization**: Automatically optimizes chunk sizes based on file statistics and CPU resources
 - **Size Reduction**: Typically reduces content size by 80-95% while preserving essential information
+
+| **Metadata**      | **Extracts**                                                                                                                                                                                                                                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Media             | Dimensions, codecs, bitrates for images, videos, audio                                                                                                                                                                                                                                                          |
+| Document          | DOCX: word count, character count, paragraph count, title, author, creation/modification dates, revision. XLSX: sheet count, sheet names, row/column counts per sheet, core properties. PDF: page count, title, author, subject, creator, producer, creation/modification dates, PDF version, encryption status |
+| CSV               | Row/column counts, column names, data types, delimiter, quote/escape characters, null percentages, unique counts; type-specific statistics (numeric: min/max/mean/median/IQR/stdev, date: span/min/max, boolean: true percentage)                                                                               |
+| SQLite            | Schema (tables, columns, types, constraints), primary keys, foreign keys, indexes, row counts, column statistics (null percentages, unique counts, numeric/text/boolean/blob/date)                                                                                                                              |
+| TOML, YAML        | Recursive schema (scalar, table/mapping, array/sequence), key count, max depth. TOML: section count. YAML: scalar/sequence/map counts                                                                                                                                                                           |
+| ZIP               | File count, entries (path, uncompressed/compressed size, detected type, modified, compression method), entry_type_counts; filters hidden OS files (e.g. \_\_MACOSX, .DS_Store, Thumbs.db)                                                                                                                       |
+| XML               | Recursive schema (root→children with attributes; repeated siblings as arrays with union of all children), element count, attribute count, max depth, has_namespaces                                                                                                                                             |
+| HTML              | Title, meta description, lang, charset, viewport; link/stylesheet/script/style counts; heading (h1–h6) and element counts (img, table, form, p, ul, ol, iframe, article, nav, section, header, footer, main); plain_text_len, word_count; writing footprint from body text                                      |
+| Writing Footprint | For text/markdown/html: vocabulary richness, sentence structure, template diversity, punctuation metrics                                                                                                                                                                                                        |
 
 ## Installation
 
@@ -160,6 +166,8 @@ The `extract_schema()` function returns `Result<Vec<Output>>`. Each `Output` obj
 - `toml_metadata: Option<TomlMetadata>` - TOML config metadata (recursive schema, section/key counts, depth)
 - `zip_metadata: Option<ZipMetadata>` - ZIP archive metadata (entries, sizes, detected types, compression; hidden OS files filtered)
 - `xml_metadata: Option<XmlMetadata>` - XML structure metadata (recursive schema, element/attribute counts, namespaces)
+- `html_metadata: Option<HtmlMetadata>` - HTML metadata (title, meta, lang, charset, element counts, plain text/word count, writing footprint from body)
+- `yaml_metadata: Option<YamlMetadata>` - YAML metadata (recursive schema, key count, max depth, scalar/sequence/map counts)
 - `pdf_metadata: Option<PdfMetadata>` - PDF metadata (page count, document properties, etc.)
 - `docx_metadata: Option<DocumentMetadata>` - DOCX/XLSX metadata (word count, sheet count, title, author, dates, etc.)
 
@@ -181,15 +189,6 @@ Each `Template` contains:
 - `template_diversity: usize` - Number of unique template patterns
 - `avg_entropy: f64` - Average entropy across templates (0.0-1.0)
 - `svo_analysis: Option<SVOAnalysis>` - Sentence structure analysis
-- `word_universe: Option<WordUniverse>` - Per-document vocabulary corpus for enhanced writing analysis (future enhancement)
-
-**Word Universe** (when enabled) provides detailed vocabulary analysis:
-
-- Unique word collection and frequency distributions
-- Word length statistics (min, max, average, median, distribution)
-- Most common and rare words
-- Frequency histograms for visualization
-- Enables better template extraction for short texts by identifying structural vs. content words
 
 #### Compression Stats Structure
 
@@ -223,10 +222,10 @@ See [`config.toml`](config.toml) for configuration.
 - **Media Metadata**: Extracts metadata for images (via `image` crate), videos/audio (via `ffprobe`)
 - **Document Metadata**: Extracts metadata from DOCX/XLSX files (via `zip` and `quick_xml` crates, `calamine` for XLSX row/column counts)
 - **Database Metadata**: Extracts SQLite database schema and statistics (via `rusqlite` crate)
-- **Config/Archive/Structured**: TOML (via `toml` crate), ZIP (via `zip` crate), XML (via `quick_xml` crate)
+- **Config/Archive/Structured**: TOML (via `toml` crate), ZIP (via `zip` crate), XML (via `quick_xml` crate), HTML (via `scraper` crate), YAML (via `serde_yaml` crate)
 - **Template Mining**: Frequency-based analysis to identify static vs. dynamic fields, extracts patterns as templates
 - **Tokenization**: Content-aware (whitespace for logs, JSON structure for JSON logs, sentence/paragraph for text/markdown)
-- **Writing Footprint**: Calculates vocabulary richness, sentence structure, template diversity for text/markdown, with optional word universe analysis for enhanced pattern recognition
+- **Writing Footprint**: Calculates vocabulary richness, sentence structure, punctuation metrics, template diversity for text/markdown
 - **Parallel Processing**: Single Rayon thread pool with adaptive chunk sizing based on Phase 1 statistics
 
 ## Security
@@ -241,17 +240,17 @@ ZahirScan implements non-invasive file operations:
 
 - [ ] Word universe for enhanced writing analysis (per-document vocabulary corpus with frequency distributions, word length statistics, and visualization data)
 - [ ] Improve template extraction for short literary texts (adaptive thresholds and pattern similarity merging for better pattern recognition in short documents)
-- [x] SQLite database metadata extraction (schema information, table/column metadata, database statistics) ✅
+- [x] SQLite database metadata extraction (schema information, table/column metadata, database statistics)
 - [ ] Code file analysis (language detection + basic code metadata; decide integrated vs separate library)
-- [ ] HTML support: extract text content from webpages + metadata (title, meta tags, heading structure)
-- [x] XML structure metadata (recursive schema, element/attribute counts, namespaces, union-merge for same-tag siblings) ✅
+- [x] HTML support: extract text content from webpages + metadata (title, meta tags, heading structure, element counts, plain text/word count, writing footprint)
+- [x] XML structure metadata (recursive schema, element/attribute counts, namespaces, union-merge for same-tag siblings)
 - [ ] EPUB support (ZIP-based): extract metadata + clean text from HTML/XHTML
 - [ ] PPTX metadata extraction (slide count + core properties; PPT optional/lower priority)
 - [ ] RTF support: extract text + basic formatting metadata
-- [x] ZIP: list contents with per-entry metadata (path, sizes, detected_type, modified, compression_method), entry_type_counts, hidden OS files filtered ✅
+- [x] ZIP: list contents with per-entry metadata (path, sizes, detected_type, modified, compression_method), entry_type_counts, hidden OS files filtered
 - [ ] TAR/GZ/BZ2/XZ: list contents + compression stats
-- [x] TOML metadata (recursive schema, section/key counts, depth) ✅
-- [ ] YAML metadata extraction (structure/key counts/type distribution)
+- [x] TOML metadata (recursive schema, section/key counts, depth)
+- [x] YAML metadata extraction (structure/key counts/type distribution, recursive schema)
 - [ ] INI metadata extraction (sections/keys/comments)
 - [ ] Shared lightweight NLP utility layer for logs + writing analysis (normalization/tokenization/stats/redaction; optional similarity/embeddings later)
 - [x] Progress bars/UX using `kdam` (default on; `--progress/-p`, consider `--no-progress`; write to stderr; respect non-TTY)

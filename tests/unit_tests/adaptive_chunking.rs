@@ -24,6 +24,8 @@ fn create_test_task(byte_count: usize, file_type: FileType) -> ProcessingTask {
             toml_metadata: None,
             zip_metadata: None,
             xml_metadata: None,
+            html_metadata: None,
+            yaml_metadata: None,
         },
         output_path: "test.out".to_string(),
     }
