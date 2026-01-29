@@ -1,5 +1,6 @@
 //! End-to-end integration tests for simple fixture files: file on disk → extract_schema → Output.
 use std::path::PathBuf;
+use std::process::Command;
 use zahirscan::{OutputMode, extract_schema};
 
 fn fixture_path(name: &str) -> PathBuf {
@@ -18,6 +19,21 @@ const SIMPLE_FIXTURES: &[(&str, &str)] = &[
     ("sample.md", "Markdown"),
     ("sample.toml", "Toml"),
     ("sample.yaml", "Yaml"),
+];
+
+/// Extended fixtures: PDF, DOCX, Image, Zip, Archive, Sqlite, Epub
+const EXTENDED_FIXTURES: &[(&str, &str)] = &[
+    ("sample.pdf", "Pdf"),
+    ("sample.docx", "Docx"),
+    ("sample.jpg", "Image"),
+    ("sample.epub", "Epub"),
+    ("fixtures.zip", "Zip"),
+    ("fixtures.tar", "Archive"),
+    ("fixtures.tar.gz", "Archive"),
+    ("fixtures.tgz", "Archive"),
+    ("fixtures.tar.bz2", "Archive"),
+    ("fixtures.tar.xz", "Archive"),
+    ("simple.db", "Sqlite"),
 ];
 
 #[test]
@@ -91,5 +107,86 @@ fn extract_schema_nonexistent_path_returns_err() {
         err.to_string().contains("No valid files found"),
         "expected 'No valid files found', got: {}",
         err
+    );
+}
+
+#[test]
+fn extended_fixtures_full_mode() {
+    for (filename, expected_type) in EXTENDED_FIXTURES {
+        let path = fixture_path(filename);
+        if !path.exists() {
+            continue; // skip if fixture not present (e.g. optional)
+        }
+        let path_str = path.to_str().expect("path is valid UTF-8");
+        let outputs = extract_schema(path_str, OutputMode::Full).expect("extract_schema");
+        assert_eq!(outputs.len(), 1, "{}", filename);
+        assert_eq!(
+            outputs[0].file_type.as_deref(),
+            Some(*expected_type),
+            "{}",
+            filename
+        );
+    }
+}
+
+/// CLI: --output writes one file per input and output is valid JSON
+#[test]
+fn cli_output_dir_writes_files() {
+    let out_dir = tempfile::tempdir().expect("temp dir");
+    let out_path = out_dir.path().to_path_buf();
+    let input = fixture_path("sample.txt");
+    let bin = env!("CARGO_BIN_EXE_zahirscan");
+    let status = Command::new(bin)
+        .arg("-i")
+        .arg(input)
+        .arg("-o")
+        .arg(out_path.as_os_str())
+        .status()
+        .expect("run zahirscan");
+    assert!(status.success(), "zahirscan should succeed");
+    let entries: Vec<_> = std::fs::read_dir(&out_path)
+        .expect("read dir")
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().contains("zahirscan"))
+        .collect();
+    assert!(
+        !entries.is_empty(),
+        "expected at least one .zahirscan.out file in {:?}",
+        out_path
+    );
+    let out_file = std::fs::read_to_string(entries[0].path()).expect("read output file");
+    let _: serde_json::Value =
+        serde_json::from_str(&out_file).expect("output file should be valid JSON");
+}
+
+/// CLI: invalid output dir (e.g. non-directory) fails with error
+#[test]
+fn cli_invalid_output_dir_fails() {
+    let input = fixture_path("sample.txt");
+    let bin = env!("CARGO_BIN_EXE_zahirscan");
+    let output = Command::new(bin)
+        .arg("-i")
+        .arg(input)
+        .arg("-o")
+        .arg("/dev/null") // exists but is not a directory
+        .output()
+        .expect("run zahirscan");
+    assert!(
+        !output.status.success(),
+        "zahirscan should fail when -o is not a directory"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stderr.contains("canonicalization")
+            || stderr.contains("resolve")
+            || stderr.contains("output")
+            || stderr.contains("directory")
+            || stderr.contains("Error")
+            || stdout.contains("canonicalization")
+            || stdout.contains("Error"),
+        "error output should mention canonicalization/resolve/output/directory or Error; stderr: {:?}, stdout: {:?}",
+        stderr,
+        stdout
     );
 }
