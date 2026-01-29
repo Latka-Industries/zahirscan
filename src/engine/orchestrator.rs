@@ -92,7 +92,6 @@ fn phase1_path_filter(p: &str, config: &Config) -> bool {
 pub fn phase1_scan(
     input_paths: &[String],
     output: Option<&str>,
-    output_is_dir: bool,
     config: &Config,
 ) -> Vec<ProcessingTask> {
     use std::time::Instant;
@@ -138,7 +137,7 @@ pub fn phase1_scan(
         match result {
             Ok(stats) => {
                 let input_path = &input_paths[i];
-                let output_path = determine_output_path(input_path, output, output_is_dir, config);
+                let output_path = determine_output_path(input_path, output, config);
                 tasks.push(ProcessingTask { stats, output_path });
             }
             Err(e) => {

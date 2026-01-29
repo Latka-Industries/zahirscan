@@ -245,37 +245,25 @@ pub fn get_temp_output_path(input_path: &str, config: &Config) -> String {
         .to_string()
 }
 
-/// Determine output path for a given input file
-pub fn determine_output_path(
-    input_path: &str,
-    output: Option<&str>,
-    output_is_dir: bool,
-    config: &Config,
-) -> String {
-    if let Some(output) = output {
-        if output_is_dir {
-            // Output to folder: create filename.ext.zahirscan.out in the folder
-            // Preserves original extension (e.g., "file.txt" -> "file.txt.zahirscan.out")
-            let path = Path::new(input_path);
-            let input_name = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("zahirscan");
-            let sanitized_name = sanitize_filename(input_name);
-            PathBuf::from(output)
-                .join(format!(
-                    "{}.{}",
-                    sanitized_name,
-                    config.temp_file_extension()
-                ))
-                .to_string_lossy()
-                .to_string()
-        } else {
-            // Single file output (only for single input)
-            output.to_string()
-        }
+/// Determine output path for a given input file.
+/// When output is Some we treat it as a directory and write filename.ext.zahirscan.out there; when None we use a temp file.
+pub fn determine_output_path(input_path: &str, output: Option<&str>, config: &Config) -> String {
+    if let Some(out_dir) = output {
+        let path = Path::new(input_path);
+        let input_name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("zahirscan");
+        let sanitized_name = sanitize_filename(input_name);
+        PathBuf::from(out_dir)
+            .join(format!(
+                "{}.{}",
+                sanitized_name,
+                config.temp_file_extension()
+            ))
+            .to_string_lossy()
+            .to_string()
     } else {
-        // No output specified, use temp file
         get_temp_output_path(input_path, config)
     }
 }
