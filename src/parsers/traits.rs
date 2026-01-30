@@ -3,6 +3,7 @@
 use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::{MiningResult, Template};
+use log::debug;
 use rayon::prelude::*;
 
 /// Create an empty MiningResult (no templates found)
@@ -180,19 +181,26 @@ impl SentenceStats {
 pub struct DefaultSentenceAnalyzer;
 
 impl SentenceAnalyzer for DefaultSentenceAnalyzer {
-    /// Extract sentences from text using heuristic-based splitting
-    /// Splits on sentence-ending punctuation (. ! ?) but skips:
+    /// Extract sentences from content. Normalizes input (trim lines, drop empty/non-alphanumeric,
+    /// join with space) then splits on sentence-ending punctuation (. ! ?) with heuristics to skip:
     /// - Abbreviations (single letter before punctuation)
     /// - Decimals (digit before punctuation)
-    /// - Abbreviations (lowercase letter after punctuation)
+    /// - Lowercase after punctuation (abbreviation)
     fn extract_sentences(text: &str) -> Vec<String> {
-        if text.trim().is_empty() {
+        let normalized = text
+            .lines()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty() && line.chars().any(|c| c.is_alphanumeric()))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        if normalized.is_empty() {
             return Vec::new();
         }
 
         let mut sentences = Vec::new();
         let mut current_sentence = String::new();
-        let chars: Vec<char> = text.chars().collect();
+        let chars: Vec<char> = normalized.chars().collect();
         let mut i = 0;
 
         while i < chars.len() {
@@ -270,6 +278,8 @@ impl SentenceAnalyzer for DefaultSentenceAnalyzer {
         if !remaining.is_empty() {
             sentences.push(remaining);
         }
+
+        debug!("Extracted {} sentences from text", sentences.len());
 
         sentences
     }

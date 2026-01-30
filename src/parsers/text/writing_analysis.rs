@@ -106,25 +106,20 @@ pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<St
 
     // Limit processing for very large files to avoid hangs
     // Process up to 50k sentences, which should be sufficient for most pivot detection
-    let max_sentences = 50_000;
-    let sentences_to_process = if sentences.len() > max_sentences {
-        &sentences[..max_sentences]
-    } else {
-        sentences
-    };
+    // let max_sentences = 50_000;
+    // let sentences_to_process = if sentences.len() > max_sentences {
+    //     &sentences[..max_sentences]
+    // } else {
+    //     sentences
+    // };
+    let sentences_to_process = sentences;
     let pivot_freq: DashMap<String, usize> = DashMap::new();
     let position_word_freq: DashMap<(usize, String), usize> = DashMap::new();
     // Track variation per word-position pair using a flat key structure to avoid nested DashMap contention
     // Key format: (pos, word, next_word) -> count
     let word_position_variation_flat: DashMap<(usize, String, String), usize> = DashMap::new();
 
-    // First pass: count word frequencies at each position and track word-specific variation
     // Process in parallel for large text files
-    debug!(
-        "Starting pivot extraction from {} sentences",
-        sentences_to_process.len()
-    );
-
     // Calculate optimal chunk size for parallel processing
     // Moderate work: tokenization + position tracking + hash map operations
     sentences_to_process
@@ -221,6 +216,11 @@ pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<St
             }
         }
     }
+    debug!(
+        "Extracted {} pivot points from {} sentences",
+        pivot_freq.len(),
+        total_sentences
+    );
 
     pivot_freq
 }
@@ -378,10 +378,9 @@ fn find_pivot_position(
     })
 }
 
-/// Uses pivot points to infer subject-verb-object relationships
-/// Analyzes sentences directly to find pivot positions and infer SVO structure
+/// Uses pivot points to infer subject-verb-object relationships.
+/// Analyzes sentences directly (no mining templates); uses only sentences and pivot_patterns.
 pub fn analyze_svo_structure(
-    _templates: &[Template],
     sentences: &[String],
     pivot_patterns: &DashMap<String, usize>,
     config: &Config,
@@ -396,7 +395,6 @@ pub fn analyze_svo_structure(
 
     // Analyze sentences directly for pivot points (which act as verbs in SVO)
     // Process in parallel with adaptive chunking
-    debug!("Starting SVO analysis from {} sentences", sentences.len());
     sentences.par_iter_adaptive(config).for_each(|sentence| {
         let tokens: Vec<&str> = sentence.split_whitespace().collect();
 
@@ -464,6 +462,14 @@ pub fn analyze_svo_structure(
         .take(config.max_common_pivots) // Top N most common pivots
         .map(|(word, _)| word)
         .collect();
+
+    debug!(
+        "SVO analysis: {:.2}% of sentences with {} common pivots and avg subject length of {:.2} and avg object length of {:.2}",
+        svo_structure_percent,
+        common_pivots.len(),
+        avg_subject_length,
+        avg_object_length
+    );
 
     SVOAnalysis {
         svo_structure_percent,
