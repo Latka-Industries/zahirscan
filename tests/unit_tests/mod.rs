@@ -1,13 +1,13 @@
 //! Unit tests for ZahirScan core functionality
 
-mod jpeg_subsampling;
-mod filename_sanitization;
 mod adaptive_chunking;
-mod minimal_fallback;
-mod serialization;
-mod placeholder_formatting;
-mod csv_metadata;
-mod image_metadata;
-mod sqlite_metadata;
 mod code_metadata;
+mod csv_metadata;
+mod filename_sanitization;
+mod image_metadata;
+mod jpeg_subsampling;
+mod minimal_fallback;
+mod placeholder_formatting;
+mod serialization;
 mod should_ignore_path;
+mod sqlite_metadata;
