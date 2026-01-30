@@ -31,12 +31,13 @@
 //!
 //! let config = Config::load().unwrap_or_default();
 //! let paths = vec!["file.log".to_string()];
-//! let tasks = phase1_scan(&paths, None, false, &config);
+//! let tasks = phase1_scan(&paths, None, &config);
 //! let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, &config);
 //! let outputs = phase2_mining(tasks, &config, &adaptive, false)?;
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
+pub mod analysis;
 pub mod engine;
 pub mod parsers;
 pub mod results;
@@ -116,7 +117,7 @@ pub fn extract_schema<P: ToPathIter>(paths: P, mode: OutputMode) -> Result<Vec<O
     }
 
     // Phase 1: Initial scan
-    let tasks = phase1_scan(&path_strings, None, false, &config);
+    let tasks = phase1_scan(&path_strings, None, &config);
     if tasks.is_empty() {
         return Err(anyhow::anyhow!(
             "No valid files found. All provided paths failed to scan or do not exist"

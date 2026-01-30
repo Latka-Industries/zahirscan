@@ -50,7 +50,7 @@ All outputs reduce size by 80-95% compared to raw content while preserving essen
 | Archive (TAR family) | File count, entries (path, size), compressed_size, uncompressed_size                                                                                                                                                                                                                                            |
 | XML                  | Recursive schema (root→children with attributes; repeated siblings as arrays with union of all children), element count, attribute count, max depth, has_namespaces                                                                                                                                             |
 | HTML                 | Title, meta description, lang, charset, viewport; link/stylesheet/script/style counts; heading (h1–h6) and element counts (img, table, form, p, ul, ol, iframe, article, nav, section, header, footer, main); plain_text_len, word_count; writing footprint from body text                                      |
-| Writing Footprint    | For text/markdown/html: vocabulary richness, sentence structure, template diversity, punctuation metrics                                                                                                                                                                                                        |
+| Writing Footprint    | For text/markdown/html: vocabulary richness, sentence structure, template diversity, punctuation metrics. Uses **two writing-analysis passes**: (1) exact-pattern grouping (n-gram/phrase-based); (2) shape fallback (group by sentence length + end punctuation) when pass 1 yields no templates               |
 
 ## Installation
 
@@ -230,8 +230,11 @@ See [`config.toml`](config.toml) for configuration.
 
 - **Metadata extraction** (media, document, database, settings, structured, archives, code): see the [Metadata extraction by format](#metadata-extraction-by-format) table above for what is extracted per format.
 - **Template Mining**: Frequency-based analysis to identify static vs. dynamic fields, extracts patterns as templates
-- **Tokenization**: Content-aware (whitespace for logs, JSON structure for JSON logs, sentence/paragraph for text/markdown)
-- **Writing Footprint**: Calculates vocabulary richness, sentence structure, punctuation metrics, template diversity for text/markdown
+- **Tokenization**: Content-aware (whitespace for logs, structure for JSON logs, sentence/paragraph for text/markdown)
+- **Writing Footprint**: Two writing-analysis passes for text/markdown:
+  1. **Exact-pattern pass**: Groups sentences by n-gram/phrase-derived pattern; used when repetition is sufficient to yield templates.
+  2. **Shape fallback**: If pass 1 yields no templates, groups by sentence shape (word count + end punctuation). Produces stable, interpretable templates for short or highly varied text.
+     Footprint metrics: vocabulary richness, sentence structure, punctuation, template diversity, SVO analysis.
 - **Parallel Processing**: Single Rayon thread pool with adaptive chunk sizing based on Phase 1 statistics
 
 ## Security
@@ -241,14 +244,6 @@ ZahirScan implements non-invasive file operations:
 - Path sanitization to prevent directory traversal attacks
 - File existence validation before processing
 - Read-only file access (never modifies source files)
-
-## TODO
-
-- [ ] Word universe for enhanced writing analysis (per-document vocabulary corpus with frequency distributions, word length statistics, and visualization data)
-- [ ] Improve template extraction for short literary texts (adaptive thresholds and pattern similarity merging for better pattern recognition in short documents)
-- [ ] Shared lightweight NLP utility layer for logs + writing analysis (normalization/tokenization/stats/redaction; optional similarity/embeddings later)
-
-- [ ] (Optional) Security hardening: output path validation + symlink checks
 
 ## License
 

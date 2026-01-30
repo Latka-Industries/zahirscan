@@ -1,7 +1,7 @@
 [tools]
 rust = "1.92"
 
-[tasks.clippy]
+[tasks.clip]
 description = "Run clippy linter"
 run = "cargo clippy -- -D warnings"
 
@@ -16,3 +16,7 @@ run = "cargo build"
 [tasks.check]
 description = "Run all checks (format, lint, test)"
 run = ["cargo fmt -- --check", "cargo clippy -- -D warnings", "cargo test"]
+
+[tasks.fmt]
+description = "Run rustfmt"
+run = "cargo fmt --all"

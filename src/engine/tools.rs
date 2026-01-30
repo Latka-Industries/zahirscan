@@ -245,37 +245,25 @@ pub fn get_temp_output_path(input_path: &str, config: &Config) -> String {
         .to_string()
 }
 
-/// Determine output path for a given input file
-pub fn determine_output_path(
-    input_path: &str,
-    output: Option<&str>,
-    output_is_dir: bool,
-    config: &Config,
-) -> String {
-    if let Some(output) = output {
-        if output_is_dir {
-            // Output to folder: create filename.ext.zahirscan.out in the folder
-            // Preserves original extension (e.g., "file.txt" -> "file.txt.zahirscan.out")
-            let path = Path::new(input_path);
-            let input_name = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("zahirscan");
-            let sanitized_name = sanitize_filename(input_name);
-            PathBuf::from(output)
-                .join(format!(
-                    "{}.{}",
-                    sanitized_name,
-                    config.temp_file_extension()
-                ))
-                .to_string_lossy()
-                .to_string()
-        } else {
-            // Single file output (only for single input)
-            output.to_string()
-        }
+/// Determine output path for a given input file.
+/// When output is Some we treat it as a directory and write filename.ext.zahirscan.out there; when None we use a temp file.
+pub fn determine_output_path(input_path: &str, output: Option<&str>, config: &Config) -> String {
+    if let Some(out_dir) = output {
+        let path = Path::new(input_path);
+        let input_name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("zahirscan");
+        let sanitized_name = sanitize_filename(input_name);
+        PathBuf::from(out_dir)
+            .join(format!(
+                "{}.{}",
+                sanitized_name,
+                config.temp_file_extension()
+            ))
+            .to_string_lossy()
+            .to_string()
     } else {
-        // No output specified, use temp file
         get_temp_output_path(input_path, config)
     }
 }
@@ -286,6 +274,10 @@ pub fn determine_output_path(
 pub enum PlaceholderType {
     /// Word placeholders for text/markdown parsers (e.g., "WORD_00")
     Word,
+    /// Prefix slot in structural text patterns (e.g., "PREFIX_00")
+    Prefix,
+    /// Suffix slot in structural text patterns (e.g., "SUFFIX_00")
+    Suffix,
     /// Position placeholders for log parsers (e.g., "POS_00")
     Position,
     /// Position placeholders for JSON parsers (lowercase, e.g., "pos_00")
@@ -307,6 +299,8 @@ impl PlaceholderType {
     pub fn as_str(self) -> &'static str {
         match self {
             PlaceholderType::Word => "WORD",
+            PlaceholderType::Prefix => "PREFIX",
+            PlaceholderType::Suffix => "SUFFIX",
             PlaceholderType::Position => "POS",
             PlaceholderType::Pos => "pos",
             PlaceholderType::Col => "col",
@@ -335,12 +329,17 @@ pub fn format_placeholder_bracketed(name: &str, index: usize) -> String {
     format!("[{}]", format_placeholder(name, index))
 }
 
-/// Format a bracketed placeholder using PlaceholderType enum
+/// Format a bracketed placeholder using PlaceholderType enum.
+/// Prefix and Suffix are formatted without an index (e.g. "[PREFIX]", "[SUFFIX]").
 pub fn format_placeholder_bracketed_typed(
     placeholder_type: PlaceholderType,
     index: usize,
 ) -> String {
-    format_placeholder_bracketed(placeholder_type.as_str(), index)
+    match placeholder_type {
+        PlaceholderType::Prefix => "[PREFIX]".to_string(),
+        PlaceholderType::Suffix => "[SUFFIX]".to_string(),
+        _ => format_placeholder_bracketed(placeholder_type.as_str(), index),
+    }
 }
 
 /// Check if ffprobe is available on the system

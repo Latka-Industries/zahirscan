@@ -1,5 +1,7 @@
+use anyhow::Context;
 use clap::Parser;
 use log::{debug, warn};
+use std::fs;
 use std::time::Instant;
 use zahirscan::{
     Config, calculate_adaptive_chunking, format_duration, is_stderr_tty, phase1_scan,
@@ -50,7 +52,6 @@ struct Args {
 struct ProcessedArgs {
     paths: Vec<String>,
     output: Option<String>,
-    output_is_dir: bool,
 }
 
 fn setup_logging(dev_mode: bool) {
@@ -105,20 +106,20 @@ fn process_args_for_paths_params(args: &Args) -> anyhow::Result<ProcessedArgs> {
         return Err(anyhow::anyhow!("At least one input file is required"));
     }
 
-    // Output path is always treated as a directory
-    let output_is_dir = args.output.is_some();
-
-    // If output is a directory, ensure it exists
-    if let Some(ref output) = args.output
-        && output_is_dir
-    {
-        std::fs::create_dir_all(output)?;
-    }
+    // If args.output is not empty: create the path, confirm it can be resolved
+    // Otherwise None — use a temp dir per file.
+    let output = match &args.output {
+        Some(out) => {
+            fs::create_dir_all(out)?;
+            let canonical = fs::canonicalize(out).context("Failed to resolve output directory")?;
+            Some(canonical.to_string_lossy().into_owned())
+        }
+        None => None,
+    };
 
     Ok(ProcessedArgs {
         paths: args.input.clone(),
-        output: args.output.clone(),
-        output_is_dir,
+        output,
     })
 }
 
@@ -143,7 +144,6 @@ fn main() -> anyhow::Result<()> {
     let tasks = phase1_scan(
         &processed_paths.paths,
         processed_paths.output.as_deref(),
-        processed_paths.output_is_dir,
         &config,
     );
 
