@@ -6,7 +6,7 @@ use std::io::Cursor;
 use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::XmlMetadata;
-use crate::results::metadata::xml::XmlTypeInfo;
+use crate::results::metadata::settings::xml::XmlTypeInfo;
 use anyhow::Result;
 use quick_xml::Reader;
 use quick_xml::events::Event;
@@ -39,6 +39,7 @@ fn collect_attrs(
     m
 }
 
+/// Helper struct to build XML type information incrementally.
 struct ElementBuilder {
     attributes: BTreeMap<String, String>,
     children: BTreeMap<String, XmlTypeInfo>,
@@ -78,6 +79,8 @@ fn merge_element_into(into: &mut XmlTypeInfo, other: XmlTypeInfo) {
     }
 }
 
+/// Merge child element into parent's children map.
+/// If child has same tag name, merge into array (recursive).
 fn merge_child(children: &mut BTreeMap<String, XmlTypeInfo>, key: String, value: XmlTypeInfo) {
     if let Some(existing) = children.remove(&key) {
         let mut arr = match existing {

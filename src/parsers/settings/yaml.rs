@@ -5,10 +5,11 @@ use std::collections::BTreeMap;
 use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::YamlMetadata;
-use crate::results::metadata::yaml::YamlTypeInfo;
+use crate::results::metadata::settings::yaml::YamlTypeInfo;
 use anyhow::Result;
 use serde_yaml::Value;
 
+/// Convert a `serde_yaml::Value` to a `YamlTypeInfo`.
 fn value_to_yaml_type_info(v: &Value) -> YamlTypeInfo {
     match v {
         Value::Null => YamlTypeInfo::Scalar("null".to_string()),
@@ -46,6 +47,7 @@ fn value_to_yaml_type_info(v: &Value) -> YamlTypeInfo {
     }
 }
 
+/// Recursively walk `serde_yaml::Value` to count keys, scalars, sequences, and maps.
 fn walk(
     v: &Value,
     depth: usize,

@@ -25,35 +25,30 @@ threshold_multiplier = 50
 min_collection_size_for_chunking = 1000
 
 [mining]
+# Core mining settings
 # Static token threshold (0.0-1.0) - percentage of lines that must match for a token to be considered static
 static_threshold = 0.8
-
 # Text threshold (0.0-1.0) - fraction of sentences/tokens required for templates and n-grams (literary text has low repetition)
 text_threshold = 0.01
-
 # Maximum number of lines to sample when extracting examples
 max_sample_lines = 100
-
 # Maximum number of examples to collect per placeholder
 max_examples_per_placeholder = 10
-
 # N-gram settings for text parsing
 min_ngram_size = 2
 max_ngram_size = 4
-
 # Minimum phrase length for text parsing
 min_phrase_length = 3
 
-# Token estimation settings
+[mining.tokens]
+# Token estimation settings for compressed output size calculations
 bytes_per_token = 4
 json_overhead_tokens = 50
-
 # Writing footprint token estimation
-# Base overhead for writing footprint structure (vocabulary, sentence length, punctuation, etc.)
 footprint_base_overhead_tokens = 20
-# Additional tokens for SVO analysis metrics (structure percent, subject/object lengths)
 footprint_svo_metrics_tokens = 10
 
+[mining.entropy]
 # Entropy calculation settings (for writing footprint analysis)
 # Minimum number of matching sentences required to calculate entropy
 min_entropy_sample_size = 5
@@ -67,7 +62,10 @@ entropy_diversity_threshold = 0.95
 entropy_small_sample_threshold = 5
 # Discount factor for small samples with high diversity
 entropy_small_sample_discount = 0.85
+# Maximum examples to use for entropy calculation
+max_examples_for_entropy = 10
 
+[mining.sentence]
 # Sentence filtering settings (for text parsing)
 # Minimum number of words required for a sentence to be processed
 min_sentence_words = 2
@@ -75,13 +73,12 @@ min_sentence_words = 2
 min_sentence_words_alt = 3
 # Minimum character length for a sentence (unless it meets word count alternative)
 min_sentence_length = 8
-# Maximum examples to use for entropy calculation
-max_examples_for_entropy = 10
 # Minimum examples per placeholder (used when calculating example limits)
 min_examples_per_placeholder = 3
 # Short prefix/suffix threshold (words) - below this, include in pattern; above, use placeholder
 short_prefix_threshold = 3
 
+[mining.pivot]
 # Pivot point detection settings (for SVO analysis)
 # Minimum variation score (different words following pivot) to be considered a pivot
 min_pivot_variation = 2
@@ -90,11 +87,10 @@ max_pivot_variation = 50
 # Maximum number of common pivots to include in SVO analysis output
 max_common_pivots = 10
 
-# Markdown parsing settings
+[mining.file_types]
+# File-type specific parsing settings
 # Maximum length of paragraph text preview in examples (characters)
 markdown_preview_length = 100
-
-# CSV parsing settings
 # Maximum number of rows to sample for data type inference (200 rows is usually sufficient)
 max_csv_sample_rows = 200
 

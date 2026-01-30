@@ -8,6 +8,96 @@ use chrono::DateTime;
 use dashmap::{DashMap, DashSet};
 use rayon::prelude::*;
 
+/// Number of seconds constants for date statistics
+const SECONDS_PER_MINUTE: f64 = 60.0;
+const SECONDS_PER_HOUR: f64 = 60.0 * SECONDS_PER_MINUTE;
+const SECONDS_PER_DAY: f64 = 24.0 * SECONDS_PER_HOUR;
+
+/// Check if a string value is null or empty
+/// Treats empty strings, "null", and "nil" as null values (case-insensitive)
+#[inline]
+fn is_null_or_empty(val: &str) -> bool {
+    val.is_empty() || val.eq_ignore_ascii_case("null") || val.eq_ignore_ascii_case("nil")
+}
+
+/// Check if a string value represents a boolean "true"
+/// Used for computing boolean statistics (true percentage)
+#[inline]
+fn is_true_value(val: &str) -> bool {
+    matches!(val.to_lowercase().as_str(), "true" | "yes" | "1" | "y")
+}
+
+/// Optimized statistics calculator with lazy computation and caching
+/// Avoids redundant calculations (e.g., mean is reused by stdev)
+struct StatsCalculator<'a> {
+    values: &'a [f64],
+    sorted_values: &'a [f64],
+    cached_mean: std::cell::Cell<Option<Option<f64>>>,
+}
+
+impl<'a> StatsCalculator<'a> {
+    /// Create a new statistics calculator
+    /// Requires both unsorted values (for mean/stdev) and sorted values (for median/IQR)
+    fn new(values: &'a [f64], sorted_values: &'a [f64]) -> Self {
+        Self {
+            values,
+            sorted_values,
+            cached_mean: std::cell::Cell::new(None),
+        }
+    }
+
+    /// Calculate the mean, with caching to avoid redundant computation
+    fn mean(&self) -> Option<f64> {
+        // Check cache first
+        if let Some(cached) = self.cached_mean.get() {
+            return cached;
+        }
+
+        // Compute and cache
+        let result = if self.values.is_empty() {
+            None
+        } else {
+            Some(self.values.iter().sum::<f64>() / self.values.len() as f64)
+        };
+        self.cached_mean.set(Some(result));
+        result
+    }
+
+    /// Calculate the median from sorted values
+    fn median(&self) -> Option<f64> {
+        if self.sorted_values.is_empty() {
+            return None;
+        }
+        let mid = self.sorted_values.len() / 2;
+        if self.sorted_values.len().is_multiple_of(2) {
+            Some((self.sorted_values[mid - 1] + self.sorted_values[mid]) / 2.0)
+        } else {
+            Some(self.sorted_values[mid])
+        }
+    }
+
+    /// Calculate the interquartile range from sorted values
+    fn iqr(&self) -> Option<f64> {
+        if self.sorted_values.is_empty() {
+            return None;
+        }
+        let q1_idx = self.sorted_values.len() / 4;
+        let q3_idx = (3 * self.sorted_values.len()) / 4;
+        Some(self.sorted_values[q3_idx] - self.sorted_values[q1_idx])
+    }
+
+    /// Calculate the standard deviation, reusing cached mean
+    fn stdev(&self) -> Option<f64> {
+        if self.values.is_empty() {
+            return None;
+        }
+        let mean = self.mean()?; // Reuses cached mean!
+        let variance = self.values.iter().map(|&v| (v - mean).powi(2)).sum::<f64>()
+            / (self.values.len() - 1) as f64;
+        Some(variance.sqrt())
+    }
+}
+
 /// Extract a column's values from row-based data (e.g., CSV rows)
 /// Returns a vector of strings for the specified column index
 pub fn extract_column_values(sample_data: &[Vec<String>], col_idx: usize) -> Vec<String> {
@@ -38,40 +128,12 @@ pub fn compute_numeric_stats_from_values(values: Vec<f64>) -> Option<NumericStat
     let max = sorted_values.last().copied();
     let range = min.zip(max).map(|(min_val, max_val)| max_val - min_val);
 
-    // Calculate mean
-    let mean = Some(values.iter().sum::<f64>() / values.len() as f64);
-
-    // Calculate median
-    let median = {
-        let mid = sorted_values.len() / 2;
-        if sorted_values.len().is_multiple_of(2) {
-            // Even number of values: average of two middle values
-            Some((sorted_values[mid - 1] + sorted_values[mid]) / 2.0)
-        } else {
-            // Odd number of values: middle value
-            Some(sorted_values[mid])
-        }
-    };
-
-    // Calculate IQR (interquartile range)
-    let iqr = if sorted_values.len() >= 4 {
-        let q1_idx = sorted_values.len() / 4;
-        let q3_idx = (3 * sorted_values.len()) / 4;
-        Some(sorted_values[q3_idx] - sorted_values[q1_idx])
-    } else {
-        None
-    };
-
-    // Calculate standard deviation
-    let stdev = if let Some(mean_val) = mean
-        && values.len() > 1
-    {
-        let variance =
-            values.iter().map(|&v| (v - mean_val).powi(2)).sum::<f64>() / (values.len() - 1) as f64;
-        Some(variance.sqrt())
-    } else {
-        None
-    };
+    // Use optimized calculator to compute all statistics (mean is cached and reused by stdev)
+    let calculator = StatsCalculator::new(&values, &sorted_values);
+    let mean = calculator.mean();
+    let median = calculator.median();
+    let iqr = calculator.iqr();
+    let stdev = calculator.stdev(); // Reuses cached mean!
 
     Some(NumericStats {
         min,
@@ -95,8 +157,7 @@ pub fn compute_numeric_stats_from_strings(
         .par_iter_adaptive(config)
         .filter_map(|val| {
             // Skip null/empty values
-            if val.is_empty() || val.eq_ignore_ascii_case("null") || val.eq_ignore_ascii_case("nil")
-            {
+            if is_null_or_empty(val) {
                 return None;
             }
             // Parse as float and filter finite values
@@ -120,8 +181,8 @@ pub fn compute_date_stats_from_timestamps(timestamps: Vec<i64>) -> Option<DateSt
 
     // Calculate span in seconds, then convert to days and minutes
     let span_seconds = (max_ts - min_ts) as f64;
-    let span_days = span_seconds / 86400.0;
-    let span_minutes = span_seconds / 60.0;
+    let span_days = span_seconds / SECONDS_PER_DAY;
+    let span_minutes = span_seconds / SECONDS_PER_MINUTE;
 
     // Convert back to strings for min/max
     let min_str = DateTime::from_timestamp(min_ts, 0).map(|dt| dt.to_rfc3339());
@@ -165,12 +226,12 @@ pub fn compute_boolean_stats_from_strings(
     // Count totals and true values in parallel
     values.par_iter_adaptive(config).for_each(|val| {
         // Skip null/empty values
-        if val.is_empty() || val.eq_ignore_ascii_case("null") || val.eq_ignore_ascii_case("nil") {
+        if is_null_or_empty(val) {
             return;
         }
         *total_count.entry(()).or_insert(0) += 1;
         // Check if value represents true
-        if matches!(val.to_lowercase().as_str(), "true" | "yes" | "1" | "y") {
+        if is_true_value(val) {
             *true_count.entry(()).or_insert(0) += 1;
         }
     });
@@ -203,7 +264,7 @@ pub fn compute_null_and_unique_stats(values: &[String], config: &Config) -> (f64
     // Count nulls and collect unique values in parallel
     values.par_iter_adaptive(config).for_each(|val| {
         // Check if null/empty
-        if val.is_empty() || val.eq_ignore_ascii_case("null") || val.eq_ignore_ascii_case("nil") {
+        if is_null_or_empty(val) {
             *null_count.entry(()).or_insert(0) += 1;
         } else {
             // Track unique values (DashSet handles deduplication)
@@ -224,12 +285,7 @@ pub fn compute_text_stats_from_strings(
     config: &Config,
 ) -> Option<(usize, usize, f64, usize)> {
     // Filter out null/empty values for length calculations
-    let non_null_values: Vec<&String> = values
-        .iter()
-        .filter(|v| {
-            !v.is_empty() && !v.eq_ignore_ascii_case("null") && !v.eq_ignore_ascii_case("nil")
-        })
-        .collect();
+    let non_null_values: Vec<&String> = values.iter().filter(|v| !is_null_or_empty(v)).collect();
 
     if non_null_values.is_empty() {
         return None;

@@ -3,7 +3,7 @@
 use crate::engine::config::Config;
 use crate::engine::tools::{PlaceholderType, format_placeholder_typed};
 use crate::parsers::ParseResult;
-use crate::parsers::traits::AdaptiveParallel;
+use crate::parsers::traits::{AdaptiveParallel, build_mining_result, empty_mining_result};
 use crate::results::MiningResult;
 use crate::results::Template;
 use anyhow::Result;
@@ -11,6 +11,59 @@ use dashmap::DashMap;
 use rayon::prelude::*;
 use serde_json::Value;
 use std::collections::BTreeMap;
+
+/// JSON placeholder constants and formatting utilities
+struct JsonPlaceholders;
+
+impl JsonPlaceholders {
+    /// Placeholder name for generic JSON values
+    const VALUE: &'static str = "VALUE";
+
+    /// Format a bracketed VALUE placeholder: "[VALUE]"
+    fn value_placeholder_bracketed() -> String {
+        format!("[{}]", Self::VALUE)
+    }
+
+    /// Format a key with VALUE placeholder suffix: "key_VALUE"
+    fn key_with_value_placeholder(key: &str) -> String {
+        format!("{}_{}", key, Self::VALUE)
+    }
+
+    /// Format a JSON key-value pair with actual value: "key": actual_value
+    fn json_key_value_pair(key: &str, value_str: &str) -> String {
+        format!("\"{}\": {}", key, value_str)
+    }
+
+    /// Format a JSON object with parts: {part1, part2, ...}
+    fn format_object(parts: &[String]) -> String {
+        format!("{{{}}}", parts.join(", "))
+    }
+
+    /// Format a JSON array with parts: [part1, part2, ...]
+    fn format_array(parts: &[String]) -> String {
+        format!("[{}]", parts.join(", "))
+    }
+
+    /// Format a quoted JSON string: "text"
+    fn format_string(s: &str) -> String {
+        format!("\"{}\"", s)
+    }
+
+    /// Format array description: [N items]
+    fn format_array_items(count: usize) -> String {
+        format!("[{} items]", count)
+    }
+
+    /// Format object description: {N keys}
+    fn format_object_keys(count: usize) -> String {
+        format!("{{{} keys}}", count)
+    }
+
+    /// Format array type and length for frequency tracking: [type:N]
+    fn format_array_type_length(value_type: &str, length: usize) -> String {
+        format!("[{}:{}]", value_type, length)
+    }
+}
 
 /// Extract templates from JSON files (JSON-aware analysis).
 /// Accepts `content: &str` so the same function can be used when JSON is detected via
@@ -24,7 +77,7 @@ pub fn extract_json_templates(
     let (parsed_objects, headers) = parse_json_content(content)?;
 
     if parsed_objects.is_empty() {
-        return Ok(crate::parsers::traits::empty_mining_result(stats));
+        return Ok(empty_mining_result(stats));
     }
 
     // First pass: collect frequencies in parallel with adaptive chunking
@@ -73,12 +126,7 @@ pub fn extract_json_templates(
         .collect();
 
     // Build MiningResult using shared utility
-    Ok(crate::parsers::traits::build_mining_result(
-        templates,
-        total_lines,
-        stats,
-        config,
-    ))
+    Ok(build_mining_result(templates, total_lines, stats, config))
 }
 
 /// Check if an array contains only string values (potential header row)
@@ -218,9 +266,9 @@ fn build_pattern_part(
     let value_str = if is_static {
         format_json_value(val)
     } else {
-        "[VALUE]".to_string()
+        JsonPlaceholders::value_placeholder_bracketed()
     };
-    format!("\"{}\": {}", key, value_str)
+    JsonPlaceholders::json_key_value_pair(key, &value_str)
 }
 
 /// Extract JSON pattern string (keys with placeholders for dynamic values)
@@ -248,7 +296,7 @@ fn extract_json_pattern(
                     )
                 })
                 .collect();
-            format!("{{{}}}", parts.join(", "))
+            JsonPlaceholders::format_object(&parts)
         }
         Value::Array(arr) => {
             let parts: Vec<String> = arr
@@ -259,16 +307,16 @@ fn extract_json_pattern(
                     build_pattern_part(&key, val, key_value_freq, total_lines, config)
                 })
                 .collect();
-            format!("[{}]", parts.join(", "))
+            JsonPlaceholders::format_array(&parts)
         }
-        _ => "[VALUE]".to_string(),
+        _ => JsonPlaceholders::value_placeholder_bracketed(),
     }
 }
 
 /// Format JSON value for frequency tracking (actual value representation)
 fn format_json_value_for_freq(value: &Value) -> String {
     match value {
-        Value::String(s) => format!("\"{}\"", s),
+        Value::String(s) => JsonPlaceholders::format_string(s),
         Value::Number(n) => n.to_string(),
         Value::Bool(b) => b.to_string(),
         Value::Null => "null".to_string(),
@@ -277,7 +325,8 @@ fn format_json_value_for_freq(value: &Value) -> String {
                 "[]".to_string()
             } else {
                 // For arrays, use type and length for frequency tracking
-                format!("[{}:{}]", get_value_type(arr.first().unwrap()), arr.len())
+                let value_type = get_value_type(arr.first().unwrap());
+                JsonPlaceholders::format_array_type_length(value_type, arr.len())
             }
         }
         Value::Object(obj) => {
@@ -285,7 +334,7 @@ fn format_json_value_for_freq(value: &Value) -> String {
                 "{}".to_string()
             } else {
                 // For objects, use key count for frequency tracking
-                format!("{{{} keys}}", obj.len())
+                JsonPlaceholders::format_object_keys(obj.len())
             }
         }
     }
@@ -306,17 +355,17 @@ fn get_value_type(value: &Value) -> &str {
 /// Format JSON value for pattern (simplified)
 fn format_json_value(value: &Value) -> String {
     match value {
-        Value::String(s) => format!("\"{}\"", s),
+        Value::String(s) => JsonPlaceholders::format_string(s),
         Value::Number(n) => n.to_string(),
         Value::Bool(b) => b.to_string(),
         Value::Null => "null".to_string(),
         Value::Array(arr) => match arr.is_empty() {
             true => "[]".to_string(),
-            false => format!("[{} items]", arr.len()),
+            false => JsonPlaceholders::format_array_items(arr.len()),
         },
         Value::Object(obj) => match obj.is_empty() {
             true => "{}".to_string(),
-            false => format!("{{{} keys}}", obj.len()),
+            false => JsonPlaceholders::format_object_keys(obj.len()),
         },
     }
 }
@@ -331,19 +380,19 @@ fn extract_json_examples(
     match value {
         Value::Object(map) => {
             for (key, val) in map {
-                let placeholder = format!("{}_VALUE", key);
+                let placeholder = JsonPlaceholders::key_with_value_placeholder(key);
                 add_example_value(val, &placeholder, examples, config);
             }
         }
         Value::Array(arr) => {
             for (idx, val) in arr.iter().enumerate() {
                 let key = get_array_key(idx, headers);
-                let placeholder = format!("{}_VALUE", key);
+                let placeholder = JsonPlaceholders::key_with_value_placeholder(&key);
                 add_example_value(val, &placeholder, examples, config);
             }
         }
         _ => {
-            add_example_value(value, "VALUE", examples, config);
+            add_example_value(value, JsonPlaceholders::VALUE, examples, config);
         }
     }
 }

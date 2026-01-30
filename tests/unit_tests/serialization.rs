@@ -1,6 +1,5 @@
 //! Tests for serialization edge cases
 
-use serde_json;
 use zahirscan::parsers::BitrateMode;
 use zahirscan::results::{AudioMetadata, ImageMetadata, VideoMetadata};
 

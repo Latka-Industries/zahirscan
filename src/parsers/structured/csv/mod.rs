@@ -15,8 +15,6 @@ use dashmap::DashMap;
 use rayon::prelude::*;
 use std::io::Cursor;
 
-use utils::{detect_delimiter, detect_escape_character, detect_quote_character};
-
 /// Extract CSV metadata
 pub fn extract_csv_metadata(
     content: &[u8],
@@ -61,9 +59,9 @@ pub fn extract_csv_metadata(
     };
 
     // Detect delimiter, quote, and escape characters
-    let delimiter = detect_delimiter(content_str);
-    let quote_character = detect_quote_character(content_str);
-    let escape_character = detect_escape_character(
+    let delimiter = utils::detect_delimiter(content_str);
+    let quote_character = utils::detect_quote_character(content_str);
+    let escape_character = utils::detect_escape_character(
         content_str,
         delimiter.as_deref(),
         quote_character.as_deref(),

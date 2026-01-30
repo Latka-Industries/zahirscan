@@ -1,7 +1,7 @@
 //! End-to-end integration tests for simple fixture files: file on disk → extract_schema → Output.
 use std::path::PathBuf;
 use std::process::Command;
-use zahirscan::{OutputMode, extract_schema};
+use zahirscan::{Config, OutputMode, extract_schema, extract_schema_with_config};
 
 fn fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -191,4 +191,53 @@ fn cli_invalid_output_dir_fails() {
         stderr,
         stdout
     );
+}
+
+#[test]
+fn extract_schema_with_config_reuses_config() {
+    // Load config once
+    let config = Config::load().unwrap_or_default();
+
+    // Use same config for multiple calls (simulates TUI usage pattern)
+    let files = ["sample.txt", "sample.log", "sample.json"];
+
+    for filename in &files {
+        let path = fixture_path(filename);
+        let path_str = path.to_str().expect("path is valid UTF-8");
+
+        // This should work without loading config from disk each time
+        let outputs = extract_schema_with_config(path_str, OutputMode::Full, &config)
+            .expect("extract_schema_with_config should succeed");
+
+        assert_eq!(outputs.len(), 1, "Should process one file: {}", filename);
+        assert!(outputs[0].source.is_some(), "Should have source");
+    }
+}
+
+#[test]
+fn extract_schema_with_config_multiple_files_at_once() {
+    let config = Config::load().unwrap_or_default();
+
+    // Process multiple files in a single call
+    let paths: Vec<String> = ["sample.txt", "sample.log", "sample.json"]
+        .iter()
+        .map(|f| fixture_path(f).to_string_lossy().to_string())
+        .collect();
+
+    let outputs = extract_schema_with_config(paths.as_slice(), OutputMode::Full, &config)
+        .expect("extract_schema_with_config should succeed with multiple files");
+
+    assert_eq!(outputs.len(), 3, "Should process all three files");
+
+    // Verify all outputs have expected data
+    for output in &outputs {
+        assert!(
+            output.source.is_some(),
+            "Each output should have a file name"
+        );
+        assert!(
+            output.file_type.is_some(),
+            "Each output should have a file type"
+        );
+    }
 }

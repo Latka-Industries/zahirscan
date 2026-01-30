@@ -15,7 +15,7 @@ run = "cargo build"
 
 [tasks.check]
 description = "Run all checks (format, lint, test)"
-run = ["cargo fmt -- --check", "cargo clippy -- -D warnings", "cargo test"]
+run = ["cargo fmt --all --check", "cargo clippy -- -D warnings", "cargo test"]
 
 [tasks.fmt]
 description = "Run rustfmt"

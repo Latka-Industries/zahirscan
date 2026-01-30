@@ -122,18 +122,23 @@ Options:
 
 ZahirScan can be used as a Rust library to extract schemas (templates and metadata) from files programmatically.
 
-#### Basic Example
+```rust
+use zahirscan::{Config, OutputMode, extract_schema, extract_schema_with_config};
 
-The `extract_schema()` function accepts flexible input types via the `ToPathIter` trait:
+// Simple API: Config loaded automatically
+let outputs = extract_schema("file.log", OutputMode::Full)?;
 
-- Single file: `&str`, `&String`, or `String`
-- Multiple files: `&[&str]`, `Vec<&str>`, `&[String]`, `Vec<String>`, or arrays like `[&str; N]`
-
-For a complete working example, see [`examples/basic_usage.rs`](examples/basic_usage.rs). Run it with:
-
-```bash
-cargo run --example basic_usage -- <input-file>
+// Advanced API: Load config once, reuse across multiple calls
+// (Optimal for TUI applications or processing multiple batches)
+let config = Config::load().unwrap_or_default();
+let batch1 = extract_schema_with_config(files1, OutputMode::Full, &config)?;
+let batch2 = extract_schema_with_config(files2, OutputMode::Full, &config)?;
 ```
+
+**Supported input types** (via `ToPathIter` trait):
+
+- Single file: `&str`, `String`, `&String`
+- Multiple files: `&[&str]`, `&[String]`, `Vec<String>`, `[&str; N]`
 
 #### Output Schema
 

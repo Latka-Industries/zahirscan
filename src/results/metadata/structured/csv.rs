@@ -3,8 +3,8 @@
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 
-use super::{BooleanStats, DateStats, NumericStats};
 use crate::results::MinimalFallback;
+use crate::results::{BooleanStats, DateStats, NumericStats};
 
 /// CSV metadata (Mode 2 only, for CSV files)
 #[derive(Debug, Clone, Deserialize, Default)]

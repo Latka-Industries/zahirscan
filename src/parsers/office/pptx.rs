@@ -2,7 +2,7 @@
 
 use std::io::Read;
 
-use super::constants::PPTX_CORE_PROPERTIES;
+use super::constants::{OFFICE_CORE_XML, PPTX_CORE_PROPERTIES};
 use super::utils::{has_namespace, open_office_archive};
 use crate::engine::config::Config;
 use crate::parsers::ParseResult;
@@ -30,7 +30,7 @@ pub fn extract_pptx_metadata(
         Err(_) => return Ok(metadata),
     };
 
-    if let Ok(mut f) = archive.by_name("docProps/core.xml") {
+    if let Ok(mut f) = archive.by_name(OFFICE_CORE_XML) {
         let mut xml = String::new();
         if f.read_to_string(&mut xml).is_ok() {
             extract_core_properties(&xml, &mut metadata);
@@ -47,6 +47,8 @@ pub fn extract_pptx_metadata(
     Ok(metadata)
 }
 
+/// Extract core properties from PPTX core.xml
+/// Add presentation title, author, creation date, and modification date to metadata
 fn extract_core_properties(xml: &str, m: &mut PptxMetadata) {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -91,6 +93,8 @@ fn extract_core_properties(xml: &str, m: &mut PptxMetadata) {
     }
 }
 
+/// Count slides in PPTX presentation.xml
+/// Returns number of slide IDs (p:sldId elements)
 fn count_sld_id_elements(xml: &str) -> usize {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
