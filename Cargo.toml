@@ -1,6 +1,6 @@
 [package]
 name = "zahirscan"
-version = "0.2.8"
+version = "0.2.9"
 edition = "2024"
 rust-version = "1.92"
 authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
@@ -26,10 +26,6 @@ path = "src/lib.rs"
 [[bin]]
 name = "zahirscan"
 path = "src/main.rs"
-
-[[example]]
-name = "basic_usage"
-path = "examples/basic_usage.rs"
 
 [dependencies]
 anyhow = "1.0.100"
