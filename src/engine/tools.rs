@@ -8,6 +8,34 @@ use chrono::{DateTime, NaiveDateTime};
 use ffprobe::{Config as FfprobeConfig, FfProbe, ffprobe_config};
 use log::debug;
 
+/// Macro to create a lazily-initialized static value using OnceLock
+///
+/// Usage:
+/// ```
+/// use zahirscan::cached_static;
+/// use regex::Regex;
+///
+/// let pattern = cached_static!(PATTERN: Regex = Regex::new(r"\d+").unwrap());
+/// assert!(pattern.is_match("123"));
+/// ```
+///
+/// This expands to:
+/// ```
+/// use std::sync::OnceLock;
+/// use regex::Regex;
+///
+/// static PATTERN: OnceLock<Regex> = OnceLock::new();
+/// let pattern = PATTERN.get_or_init(|| Regex::new(r"\d+").unwrap());
+/// ```
+#[macro_export]
+macro_rules! cached_static {
+    ($name:ident: $ty:ty = $init:expr) => {{
+        use std::sync::OnceLock;
+        static $name: OnceLock<$ty> = OnceLock::new();
+        $name.get_or_init(|| $init)
+    }};
+}
+
 /// Expands to the full `[(ext, FileType), ...]` array. Each `Variant: "a", "b"` becomes
 /// `("a", FileType::Variant), ("b", FileType::Variant)`. Macros must expand to a complete
 /// expression, so everything is in one macro.
@@ -501,26 +529,19 @@ pub fn is_number(value: &str) -> bool {
 /// - US/European format: MM/DD/YYYY or DD/MM/YYYY (can't distinguish without context)
 pub fn is_date(value: &str) -> bool {
     use regex::Regex;
-    use std::sync::OnceLock;
 
-    // Compile regexes once for better performance
-    static ISO_DATE_REGEX: OnceLock<Regex> = OnceLock::new();
-    static ISO_DATE_T_REGEX: OnceLock<Regex> = OnceLock::new();
-    static US_DATE_REGEX: OnceLock<Regex> = OnceLock::new();
-
-    // ISO 8601 with space separator: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
-    let iso_regex = ISO_DATE_REGEX.get_or_init(|| {
+    // Compile regexes once for better performance using cached_static macro
+    let iso_regex = cached_static!(ISO_DATE_REGEX: Regex =
         Regex::new(r"^\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)?$").unwrap()
-    });
+    );
 
-    // ISO 8601 with T separator (RFC3339-like): YYYY-MM-DDTHH:MM:SS (with optional timezone)
-    let iso_t_regex = ISO_DATE_T_REGEX.get_or_init(|| {
-        Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)?$")
-            .unwrap()
-    });
+    let iso_t_regex = cached_static!(ISO_DATE_T_REGEX: Regex =
+        Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)?$").unwrap()
+    );
 
-    let us_regex =
-        US_DATE_REGEX.get_or_init(|| Regex::new(r"^\d{1,2}[/-]\d{1,2}[/-]\d{4}$").unwrap());
+    let us_regex = cached_static!(US_DATE_REGEX: Regex =
+        Regex::new(r"^\d{1,2}[/-]\d{1,2}[/-]\d{4}$").unwrap()
+    );
 
     // ISO 8601 with space separator: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
     if iso_regex.is_match(value) {

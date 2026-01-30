@@ -103,44 +103,132 @@ impl Default for ConcurrencyConfig {
     }
 }
 
+/// Token estimation settings for compressed output size calculations
 #[derive(Debug, Deserialize)]
 #[serde(default)]
-struct MiningConfig {
-    static_threshold: f64,
-    /// Threshold for text files (typically much lower than static_threshold for logs)
-    text_threshold: f64,
-    max_sample_lines: u64,
-    max_examples_per_placeholder: u64,
-    min_ngram_size: u64,
-    max_ngram_size: u64,
-    min_phrase_length: u64,
+struct TokenEstimationConfig {
     bytes_per_token: u64,
     json_overhead_tokens: u64,
-    // Writing footprint token estimation
     footprint_base_overhead_tokens: u64,
     footprint_svo_metrics_tokens: u64,
-    // Entropy calculation settings
+}
+
+impl Default for TokenEstimationConfig {
+    fn default() -> Self {
+        Self {
+            bytes_per_token: 4,
+            json_overhead_tokens: 50,
+            footprint_base_overhead_tokens: 20,
+            footprint_svo_metrics_tokens: 10,
+        }
+    }
+}
+
+/// Entropy calculation settings for writing footprint analysis
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+struct EntropyConfig {
     min_entropy_sample_size: u64,
     min_entropy_display: f64,
     max_entropy_display: f64,
     entropy_diversity_threshold: f64,
     entropy_small_sample_threshold: u64,
     entropy_small_sample_discount: f64,
-    // Sentence filtering settings
+    max_examples_for_entropy: u64,
+}
+
+impl Default for EntropyConfig {
+    fn default() -> Self {
+        Self {
+            min_entropy_sample_size: 5,
+            min_entropy_display: 0.01,
+            max_entropy_display: 0.99,
+            entropy_diversity_threshold: 0.95,
+            entropy_small_sample_threshold: 5,
+            entropy_small_sample_discount: 0.85,
+            max_examples_for_entropy: 10,
+        }
+    }
+}
+
+/// Sentence filtering settings for text parsing
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+struct SentenceFilterConfig {
     min_sentence_words: u64,
     min_sentence_words_alt: u64,
     min_sentence_length: u64,
-    max_examples_for_entropy: u64,
     min_examples_per_placeholder: u64,
     short_prefix_threshold: u64,
-    // Pivot point detection settings
+}
+
+impl Default for SentenceFilterConfig {
+    fn default() -> Self {
+        Self {
+            min_sentence_words: 2,
+            min_sentence_words_alt: 3,
+            min_sentence_length: 8,
+            min_examples_per_placeholder: 3,
+            short_prefix_threshold: 3,
+        }
+    }
+}
+
+/// Pivot point detection settings for SVO analysis
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+struct PivotConfig {
     min_pivot_variation: u64,
     max_pivot_variation: u64,
     max_common_pivots: u64,
-    // Markdown parsing settings
+}
+
+impl Default for PivotConfig {
+    fn default() -> Self {
+        Self {
+            min_pivot_variation: 2,
+            max_pivot_variation: 50,
+            max_common_pivots: 10,
+        }
+    }
+}
+
+/// File-type specific parsing settings
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+struct FileTypeSpecificConfig {
     markdown_preview_length: u64,
-    // CSV parsing settings
     max_csv_sample_rows: u64,
+}
+
+impl Default for FileTypeSpecificConfig {
+    fn default() -> Self {
+        Self {
+            markdown_preview_length: 100,
+            max_csv_sample_rows: 200,
+        }
+    }
+}
+
+/// Core mining configuration with organized sub-configs
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+struct MiningConfig {
+    // Core mining settings
+    static_threshold: f64,
+    text_threshold: f64,
+    max_sample_lines: u64,
+    max_examples_per_placeholder: u64,
+    min_ngram_size: u64,
+    max_ngram_size: u64,
+    min_phrase_length: u64,
+
+    // Organized sub-configs (nested in TOML as [mining.tokens], [mining.entropy], etc.)
+    tokens: TokenEstimationConfig,
+    entropy: EntropyConfig,
+    sentence: SentenceFilterConfig,
+    pivot: PivotConfig,
+    file_types: FileTypeSpecificConfig,
 }
 
 impl Default for MiningConfig {
@@ -153,27 +241,11 @@ impl Default for MiningConfig {
             min_ngram_size: 2,
             max_ngram_size: 4,
             min_phrase_length: 3,
-            bytes_per_token: 4,
-            json_overhead_tokens: 50,
-            footprint_base_overhead_tokens: 20,
-            footprint_svo_metrics_tokens: 10,
-            min_entropy_sample_size: 5,
-            min_entropy_display: 0.01,
-            max_entropy_display: 0.99,
-            entropy_diversity_threshold: 0.95,
-            entropy_small_sample_threshold: 5,
-            entropy_small_sample_discount: 0.85,
-            min_sentence_words: 2,
-            min_sentence_words_alt: 3,
-            min_sentence_length: 8,
-            max_examples_for_entropy: 10,
-            min_examples_per_placeholder: 3,
-            short_prefix_threshold: 3,
-            min_pivot_variation: 2,
-            max_pivot_variation: 50,
-            max_common_pivots: 10,
-            markdown_preview_length: 100,
-            max_csv_sample_rows: 200,
+            tokens: TokenEstimationConfig::default(),
+            entropy: EntropyConfig::default(),
+            sentence: SentenceFilterConfig::default(),
+            pivot: PivotConfig::default(),
+            file_types: FileTypeSpecificConfig::default(),
         }
     }
 }
@@ -295,13 +367,14 @@ impl Config {
         let min_ngram_size = u64_to_usize_min(mining.min_ngram_size, 1);
         let max_ngram_size = u64_to_usize_min(mining.max_ngram_size.max(mining.min_ngram_size), 1);
         let min_phrase_length = u64_to_usize_min(mining.min_phrase_length, 2);
-        let bytes_per_token = u64_to_usize_min(mining.bytes_per_token, 1);
+        let bytes_per_token = u64_to_usize_min(mining.tokens.bytes_per_token, 1);
 
         Self {
             binary_name,
             max_workers,
             target_chunks_per_file,
             output_mode: crate::results::OutputMode::Templates,
+            // Core mining settings
             static_threshold,
             text_threshold: clamp_f64(mining.text_threshold, 0.0, 1.0),
             max_sample_lines: u64_to_usize(mining.max_sample_lines),
@@ -309,34 +382,49 @@ impl Config {
             min_ngram_size,
             max_ngram_size,
             min_phrase_length,
+            // Token estimation (from sub-config)
             bytes_per_token,
-            json_overhead_tokens: u64_to_usize(mining.json_overhead_tokens),
-            footprint_base_overhead_tokens: u64_to_usize(mining.footprint_base_overhead_tokens),
-            footprint_svo_metrics_tokens: u64_to_usize(mining.footprint_svo_metrics_tokens),
-            min_entropy_sample_size: u64_to_usize_min(mining.min_entropy_sample_size, 1),
-            min_entropy_display: clamp_f64(mining.min_entropy_display, 0.0, 1.0),
-            max_entropy_display: clamp_f64(mining.max_entropy_display, 0.0, 1.0),
-            entropy_diversity_threshold: clamp_f64(mining.entropy_diversity_threshold, 0.0, 1.0),
-            entropy_small_sample_threshold: u64_to_usize_min(
-                mining.entropy_small_sample_threshold,
-                1,
+            json_overhead_tokens: u64_to_usize(mining.tokens.json_overhead_tokens),
+            footprint_base_overhead_tokens: u64_to_usize(
+                mining.tokens.footprint_base_overhead_tokens,
             ),
-            entropy_small_sample_discount: clamp_f64(
-                mining.entropy_small_sample_discount,
+            footprint_svo_metrics_tokens: u64_to_usize(mining.tokens.footprint_svo_metrics_tokens),
+            // Entropy settings (from sub-config)
+            min_entropy_sample_size: u64_to_usize_min(mining.entropy.min_entropy_sample_size, 1),
+            min_entropy_display: clamp_f64(mining.entropy.min_entropy_display, 0.0, 1.0),
+            max_entropy_display: clamp_f64(mining.entropy.max_entropy_display, 0.0, 1.0),
+            entropy_diversity_threshold: clamp_f64(
+                mining.entropy.entropy_diversity_threshold,
                 0.0,
                 1.0,
             ),
-            min_sentence_words: u64_to_usize_min(mining.min_sentence_words, 1),
-            min_sentence_words_alt: u64_to_usize_min(mining.min_sentence_words_alt, 1),
-            min_sentence_length: u64_to_usize_min(mining.min_sentence_length, 1),
-            max_examples_for_entropy: u64_to_usize_min(mining.max_examples_for_entropy, 1),
-            min_examples_per_placeholder: u64_to_usize_min(mining.min_examples_per_placeholder, 1),
-            short_prefix_threshold: u64_to_usize_min(mining.short_prefix_threshold, 1),
-            min_pivot_variation: u64_to_usize_min(mining.min_pivot_variation, 1),
-            max_pivot_variation: u64_to_usize_min(mining.max_pivot_variation, 1),
-            max_common_pivots: u64_to_usize_min(mining.max_common_pivots, 1),
-            markdown_preview_length: u64_to_usize_min(mining.markdown_preview_length, 1),
-            max_csv_sample_rows: u64_to_usize_min(mining.max_csv_sample_rows, 1),
+            entropy_small_sample_threshold: u64_to_usize_min(
+                mining.entropy.entropy_small_sample_threshold,
+                1,
+            ),
+            entropy_small_sample_discount: clamp_f64(
+                mining.entropy.entropy_small_sample_discount,
+                0.0,
+                1.0,
+            ),
+            max_examples_for_entropy: u64_to_usize_min(mining.entropy.max_examples_for_entropy, 1),
+            // Sentence filtering (from sub-config)
+            min_sentence_words: u64_to_usize_min(mining.sentence.min_sentence_words, 1),
+            min_sentence_words_alt: u64_to_usize_min(mining.sentence.min_sentence_words_alt, 1),
+            min_sentence_length: u64_to_usize_min(mining.sentence.min_sentence_length, 1),
+            min_examples_per_placeholder: u64_to_usize_min(
+                mining.sentence.min_examples_per_placeholder,
+                1,
+            ),
+            short_prefix_threshold: u64_to_usize_min(mining.sentence.short_prefix_threshold, 1),
+            // Pivot settings (from sub-config)
+            min_pivot_variation: u64_to_usize_min(mining.pivot.min_pivot_variation, 1),
+            max_pivot_variation: u64_to_usize_min(mining.pivot.max_pivot_variation, 1),
+            max_common_pivots: u64_to_usize_min(mining.pivot.max_common_pivots, 1),
+            // File-type specific (from sub-config)
+            markdown_preview_length: u64_to_usize_min(mining.file_types.markdown_preview_length, 1),
+            max_csv_sample_rows: u64_to_usize_min(mining.file_types.max_csv_sample_rows, 1),
+            // Concurrency settings
             small_file_threshold_bytes: u64_to_usize(concurrency.small_file_threshold_bytes),
             large_file_threshold_bytes: u64_to_usize(concurrency.large_file_threshold_bytes),
             threshold_multiplier: u64_to_usize(concurrency.threshold_multiplier),
