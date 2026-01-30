@@ -100,15 +100,52 @@ use engine::ToPathIter;
 /// use zahirscan::{extract_schema, OutputMode};
 ///
 /// let files = vec!["file1.log", "file2.log", "file3.log"];
-/// let outputs = extract_schema(files.as_slice(), OutputMode::Full)?;
+/// let outputs = extract_schema(&files, OutputMode::Full)?;
 /// for output in outputs {
 ///     println!("Templates: {}", output.templates.len());
 /// }
 /// # Ok::<(), anyhow::Error>(())
 /// ```
+///
 #[allow(private_bounds)]
 pub fn extract_schema<P: ToPathIter>(paths: P, mode: OutputMode) -> Result<Vec<Output>> {
     let config = Config::load().unwrap_or_default();
+    extract_schema_with_config(paths, mode, &config)
+}
+
+/// Extract schema and metadata from files with a provided configuration.
+///
+/// This is the advanced version of [`extract_schema`] that allows you to provide a custom
+/// configuration. Use this when you need to:
+/// - Reuse the same config across multiple calls (optimal for TUI/loops)
+/// - Provide a programmatically constructed config
+/// - Avoid repeated disk I/O from loading `config.toml`
+///
+/// For simple one-time usage, prefer [`extract_schema`] which loads config automatically.
+///
+/// # Example - Reusing config (optimal for loops/TUI)
+///
+/// ```no_run
+/// use zahirscan::{extract_schema_with_config, OutputMode, Config};
+///
+/// let config = Config::load().unwrap_or_default();
+/// let file_batches = vec![
+///     vec!["batch1_file1.log", "batch1_file2.log"],
+///     vec!["batch2_file1.log", "batch2_file2.log"],
+/// ];
+///
+/// for batch in file_batches {
+///     let outputs = extract_schema_with_config(batch.as_slice(), OutputMode::Templates, &config)?;
+///     // Config loaded once, reused for all batches (no repeated disk I/O)
+/// }
+/// # Ok::<(), anyhow::Error>(())
+/// ```
+#[allow(private_bounds)]
+pub fn extract_schema_with_config<P: ToPathIter>(
+    paths: P,
+    mode: OutputMode,
+    config: &Config,
+) -> Result<Vec<Output>> {
     let path_strings = paths.to_path_iter();
 
     // Validate input - fail fast with clear error
@@ -117,7 +154,7 @@ pub fn extract_schema<P: ToPathIter>(paths: P, mode: OutputMode) -> Result<Vec<O
     }
 
     // Phase 1: Initial scan
-    let tasks = phase1_scan(&path_strings, None, &config);
+    let tasks = phase1_scan(&path_strings, None, config);
     if tasks.is_empty() {
         return Err(anyhow::anyhow!(
             "No valid files found. All provided paths failed to scan or do not exist"
@@ -125,7 +162,7 @@ pub fn extract_schema<P: ToPathIter>(paths: P, mode: OutputMode) -> Result<Vec<O
     }
 
     // Calculate adaptive chunking
-    let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, &config);
+    let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, config);
 
     // Phase 2: Template mining and metadata extraction
     // Set output mode in config
