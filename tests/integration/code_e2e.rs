@@ -43,8 +43,8 @@ fn code_e2e_templates_mode() {
     let path = dir.path().join("app.js");
     fs::write(&path, "console.log('hello');\n").expect("write");
     let path_str = path.to_string_lossy();
-    let outputs = extract_schema::<&str>(path_str.as_ref(), OutputMode::Templates)
-        .expect("extract_schema");
+    let outputs =
+        extract_schema::<&str>(path_str.as_ref(), OutputMode::Templates).expect("extract_schema");
     assert_eq!(outputs.len(), 1);
     assert_eq!(outputs[0].file_type.as_deref(), Some("Code"));
     assert!(outputs[0].templates.is_empty());

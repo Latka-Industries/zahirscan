@@ -18,8 +18,8 @@ fn sqlite_file_type_detection_extensions() {
         let path = dir.path().join(format!("test{}", ext));
         fs::write(&path, simple_db.as_slice()).expect("write fixture");
         let path_str = path.to_string_lossy();
-        let outputs = extract_schema::<&str>(path_str.as_ref(), OutputMode::Full)
-            .expect("extract_schema");
+        let outputs =
+            extract_schema::<&str>(path_str.as_ref(), OutputMode::Full).expect("extract_schema");
         assert_eq!(outputs.len(), 1);
         assert_eq!(outputs[0].file_type.as_deref(), Some("Sqlite"));
         assert!(
@@ -33,8 +33,7 @@ fn sqlite_file_type_detection_extensions() {
 #[test]
 fn sqlite_e2e_full_mode() {
     let path = fixture_path("simple.db");
-    let outputs =
-        extract_schema(path.to_str().unwrap(), OutputMode::Full).expect("extract_schema");
+    let outputs = extract_schema(path.to_str().unwrap(), OutputMode::Full).expect("extract_schema");
     assert_eq!(outputs.len(), 1);
     assert_eq!(outputs[0].file_type.as_deref(), Some("Sqlite"));
     let meta = outputs[0]
@@ -51,8 +50,8 @@ fn sqlite_e2e_full_mode() {
 #[test]
 fn sqlite_e2e_templates_mode() {
     let path = fixture_path("simple.db");
-    let outputs = extract_schema(path.to_str().unwrap(), OutputMode::Templates)
-        .expect("extract_schema");
+    let outputs =
+        extract_schema(path.to_str().unwrap(), OutputMode::Templates).expect("extract_schema");
     assert_eq!(outputs.len(), 1);
     assert_eq!(outputs[0].file_type.as_deref(), Some("Sqlite"));
     assert!(outputs[0].templates.is_empty());
@@ -62,8 +61,7 @@ fn sqlite_e2e_templates_mode() {
 #[test]
 fn sqlite_e2e_json_contains_sqlite_metadata() {
     let path = fixture_path("simple.db");
-    let outputs =
-        extract_schema(path.to_str().unwrap(), OutputMode::Full).expect("extract_schema");
+    let outputs = extract_schema(path.to_str().unwrap(), OutputMode::Full).expect("extract_schema");
     let json = serde_json::to_value(&outputs[0]).expect("serialize");
     assert!(json.get("sqlite_metadata").is_some());
     let meta = json.get("sqlite_metadata").unwrap();
