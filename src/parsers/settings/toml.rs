@@ -3,7 +3,7 @@
 use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::TomlMetadata;
-use crate::results::metadata::toml::TomlTypeInfo;
+use crate::results::metadata::settings::toml::TomlTypeInfo;
 use anyhow::Result;
 use toml::Value;
 
@@ -37,6 +37,7 @@ fn count_tables(v: &Value) -> usize {
     }
 }
 
+/// Walk `toml::Value` to count total keys across all tables.
 fn count_keys(v: &Value) -> usize {
     match v {
         Value::Table(t) => t.len() + t.values().map(count_keys).sum::<usize>(),
@@ -44,6 +45,7 @@ fn count_keys(v: &Value) -> usize {
     }
 }
 
+/// Recursively walk `toml::Value` to find maximum nesting depth.
 fn max_depth_rec(d: usize, v: &Value) -> usize {
     match v {
         Value::Table(t) => t

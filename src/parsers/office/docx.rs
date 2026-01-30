@@ -2,7 +2,7 @@
 
 use std::io::Read;
 
-use super::constants::{CP_NAMESPACE, DOCX_CORE_PROPERTIES, REVISION_ELEMENT};
+use super::constants::{CP_NAMESPACE, DOCX_CORE_PROPERTIES, OFFICE_CORE_XML, REVISION_ELEMENT};
 use super::utils::{decode_xml_entities, has_namespace, open_office_archive};
 use crate::engine::config::Config;
 use crate::parsers::ParseResult;
@@ -57,7 +57,7 @@ pub fn extract_docx_metadata(
     metadata.character_count_no_spaces = Some(character_count_no_spaces);
     metadata.paragraph_count = Some(paragraph_count);
 
-    if let Ok(mut file) = archive.by_name("docProps/core.xml") {
+    if let Ok(mut file) = archive.by_name(OFFICE_CORE_XML) {
         let mut xml_content = String::new();
         if file.read_to_string(&mut xml_content).is_ok() {
             extract_core_properties(&xml_content, &mut metadata);
@@ -67,6 +67,8 @@ pub fn extract_docx_metadata(
     Ok(metadata)
 }
 
+/// Access core properties XML (docProps/core.xml)
+/// Add revision number to metadata if present
 fn process_core_property(name: &[u8], text_content: &str, metadata: &mut DocumentMetadata) {
     for prop in DOCX_CORE_PROPERTIES {
         if name.ends_with(prop.element) && has_namespace(name, prop.namespace) {
@@ -85,6 +87,12 @@ fn process_core_property(name: &[u8], text_content: &str, metadata: &mut Documen
     }
 }
 
+/// Extract core properties from DOCX core.xml
+/// Extract core properties from DOCX docProps/core.xml.
+///
+/// Parses Dublin Core and CP (Core Properties) metadata using event-based XML parsing.
+/// Extracts: title, author, subject, description, creation/modified dates, last modified by, and revision.
+/// Best-effort: continues on parse errors, leaves missing properties as None.
 fn extract_core_properties(xml: &str, metadata: &mut DocumentMetadata) {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -121,6 +129,8 @@ fn extract_core_properties(xml: &str, metadata: &mut DocumentMetadata) {
     }
 }
 
+/// Extract text content from DOCX document.xml
+/// Returns word count, character count, character count without spaces, and paragraph count
 fn extract_text_from_document_xml(xml: &str) -> (String, usize, usize, usize, usize) {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);

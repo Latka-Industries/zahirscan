@@ -8,6 +8,26 @@ use crate::engine::tools::{is_boolean, parse_date_to_timestamp, parse_timestamp_
 use crate::parsers::column_stats;
 use crate::results::{BlobStats, ColumnInfo, TextStats};
 
+/// Compute type-specific statistics for a column based on its SQLite type.
+/// Dispatches to appropriate compute function: numeric, text/date, or blob stats.
+pub(super) fn compute_stats_for_type(
+    conn: &Connection,
+    quoted_table: &str,
+    quoted_col: &str,
+    col: &mut ColumnInfo,
+    values: &[String],
+    config: &Config,
+) {
+    match col.type_name.as_deref() {
+        Some("INTEGER") | Some("REAL") => {
+            compute_numeric_and_bool_stats(conn, quoted_table, quoted_col, col, values, config);
+        }
+        Some("TEXT") => compute_text_and_date_stats(col, values, config),
+        Some("BLOB") => compute_blob_stats(conn, quoted_table, quoted_col, col),
+        _ => {}
+    }
+}
+
 /// Fetches a column's values as strings (CAST to TEXT). Empty on error or no rows.
 pub(super) fn fetch_column_as_strings(
     conn: &Connection,
@@ -38,7 +58,7 @@ pub(super) fn fetch_column_as_strings(
 }
 
 /// Fills numeric_stats and, for INTEGER with 0/1-only values, boolean_stats.
-pub(super) fn compute_numeric_and_bool_stats(
+fn compute_numeric_and_bool_stats(
     conn: &Connection,
     quoted_table: &str,
     quoted_col: &str,
@@ -80,11 +100,7 @@ pub(super) fn compute_numeric_and_bool_stats(
 }
 
 /// Fills text_stats, unique_count (from text), and date_stats when >50% values look like dates.
-pub(super) fn compute_text_and_date_stats(
-    col: &mut ColumnInfo,
-    values: &[String],
-    config: &Config,
-) {
+fn compute_text_and_date_stats(col: &mut ColumnInfo, values: &[String], config: &Config) {
     if let Some((min_len, max_len, avg_len, unique_ct)) =
         column_stats::compute_text_stats_from_strings(values, config)
     {
@@ -108,7 +124,7 @@ pub(super) fn compute_text_and_date_stats(
 }
 
 /// Fills blob_stats (min/max/avg byte size) via SQLite length().
-pub(super) fn compute_blob_stats(
+fn compute_blob_stats(
     conn: &Connection,
     quoted_table: &str,
     quoted_col: &str,

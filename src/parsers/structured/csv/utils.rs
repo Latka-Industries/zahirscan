@@ -1,9 +1,39 @@
 //! Utility functions for CSV parsing and type inference
 
+/// Common CSV characters and patterns
+struct CsvSyntax {
+    delimiters: [char; 5],
+    quote_chars: [char; 2],
+    backslash_escapes: [&'static str; 3],
+}
+
+impl CsvSyntax {
+    const fn new() -> Self {
+        Self {
+            delimiters: [',', ';', '\t', '|', ':'],
+            quote_chars: ['"', '\''],
+            backslash_escapes: ["\\\"", "\\'", "\\\\"],
+        }
+    }
+}
+
+/// Value type names for CSV type inference
+struct CsvValueTypes;
+
+impl CsvValueTypes {
+    const NULL: &'static str = "null";
+    const BOOLEAN: &'static str = "boolean";
+    const TIMESTAMP: &'static str = "timestamp";
+    const NUMBER: &'static str = "number";
+    const DATE: &'static str = "date";
+    const STRING: &'static str = "string";
+}
+
 /// Detect CSV delimiter by trying common delimiters
 pub(crate) fn detect_delimiter(content: &str) -> Option<String> {
     // Try common delimiters in order of frequency
-    let delimiters = [',', ';', '\t', '|', ':'];
+    let syntax = CsvSyntax::new();
+    let delimiters = syntax.delimiters;
 
     // Sample first few lines to detect delimiter
     let sample_lines: Vec<&str> = content.lines().take(5).collect();
@@ -43,7 +73,8 @@ pub(crate) fn detect_delimiter(content: &str) -> Option<String> {
 /// Detect CSV quote character by analyzing field patterns
 pub(crate) fn detect_quote_character(content: &str) -> Option<String> {
     // Common quote characters: double quote (") and single quote (')
-    let quote_chars = ['"', '\''];
+    let syntax = CsvSyntax::new();
+    let quote_chars = syntax.quote_chars;
 
     // Sample first few lines
     let sample_lines: Vec<&str> = content.lines().take(10).collect();
@@ -106,12 +137,17 @@ pub(crate) fn detect_escape_character(
 
     // Common escape characters: backslash (\) or same as quote (for doubled quotes)
     // Check for backslash escapes first (most common)
+    let syntax = CsvSyntax::new();
     let mut backslash_escapes = 0;
     let mut doubled_quote_escapes = 0;
 
     for line in &sample_lines {
         // Count backslash escape patterns: \", \', \\, etc.
-        if line.contains("\\\"") || line.contains("\\'") || line.contains("\\\\") {
+        if syntax
+            .backslash_escapes
+            .iter()
+            .any(|pattern| line.contains(pattern))
+        {
             backslash_escapes += 1;
         }
 
@@ -142,14 +178,14 @@ pub(crate) fn infer_value_type(value: &str) -> String {
             || value.eq_ignore_ascii_case("null")
             || value.eq_ignore_ascii_case("nil") =>
         {
-            "null".to_string()
+            CsvValueTypes::NULL.to_string()
         }
-        _ if crate::engine::tools::is_boolean(value) => "boolean".to_string(),
+        _ if crate::engine::tools::is_boolean(value) => CsvValueTypes::BOOLEAN.to_string(),
         _ if crate::engine::tools::parse_timestamp_to_seconds(value).is_some() => {
-            "timestamp".to_string()
+            CsvValueTypes::TIMESTAMP.to_string()
         }
-        _ if crate::engine::tools::is_number(value) => "number".to_string(),
-        _ if crate::engine::tools::is_date(value) => "date".to_string(),
-        _ => "string".to_string(),
+        _ if crate::engine::tools::is_number(value) => CsvValueTypes::NUMBER.to_string(),
+        _ if crate::engine::tools::is_date(value) => CsvValueTypes::DATE.to_string(),
+        _ => CsvValueTypes::STRING.to_string(),
     }
 }

@@ -13,6 +13,44 @@ use rayon::prelude::*;
 use regex::Regex;
 use std::collections::BTreeMap;
 
+/// Markdown syntax markers/delimiters
+struct MarkdownSyntax {
+    header: char,
+    code_fence: &'static str,
+    block_quote: char,
+}
+
+impl MarkdownSyntax {
+    /// Create a new instance with markdown syntax markers
+    const fn new() -> Self {
+        Self {
+            header: '#',
+            code_fence: "```",
+            block_quote: '>',
+        }
+    }
+}
+
+/// Pre-compiled regex patterns for markdown parsing
+struct MarkdownPatterns {
+    header: Regex,
+    horizontal_rule: Regex,
+    list: Regex,
+    syntax: MarkdownSyntax,
+}
+
+impl MarkdownPatterns {
+    /// Create a new instance with compiled regex patterns
+    fn new() -> Self {
+        Self {
+            header: Regex::new(r"^(#{1,6})\s+(.+)$").expect("Invalid header regex"),
+            horizontal_rule: Regex::new(r"^[-*_]{3,}$").expect("Invalid horizontal rule regex"),
+            list: Regex::new(r"^(\s*)([-*+]|\d+\.)\s+(.+)$").expect("Invalid list regex"),
+            syntax: MarkdownSyntax::new(),
+        }
+    }
+}
+
 /// Markdown element types
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum MarkdownElement {
@@ -110,10 +148,11 @@ pub fn extract_markdown_templates(
 
 /// Parse markdown content into structured elements
 fn parse_markdown_structure(content: &str) -> Vec<MarkdownElement> {
+    // Cache compiled patterns to avoid recompiling regexes for every file
+    let patterns = crate::cached_static!(PATTERNS: MarkdownPatterns = MarkdownPatterns::new());
+
     let mut elements = Vec::new();
     let lines: Vec<&str> = content.lines().collect();
-    let horizontal_rule_re = Regex::new(r"^[-*_]{3,}$").unwrap();
-    let list_re = Regex::new(r"^(\s*)([-*+]|\d+\.)\s+").unwrap();
     let mut i = 0;
 
     while i < lines.len() {
@@ -126,7 +165,7 @@ fn parse_markdown_structure(content: &str) -> Vec<MarkdownElement> {
         }
 
         // Try parsing each element type in priority order
-        match try_parse_element(&lines, i, line, &horizontal_rule_re, &list_re) {
+        match try_parse_element(&lines, i, line, patterns) {
             ElementParseResult::Single(elem, next_idx) => {
                 elements.push(elem);
                 i = next_idx;
@@ -159,15 +198,14 @@ fn try_parse_element(
     lines: &[&str],
     idx: usize,
     line: &str,
-    horizontal_rule_re: &Regex,
-    list_re: &Regex,
+    patterns: &MarkdownPatterns,
 ) -> ElementParseResult {
     // Headers (# ## ### etc.) - highest priority
-    parse_header(line)
+    parse_header(line, &patterns.header)
         .map(|header| ElementParseResult::Single(header, idx + 1))
         .or_else(|| {
             // Horizontal rule
-            if horizontal_rule_re.is_match(line) {
+            if patterns.horizontal_rule.is_match(line) {
                 Some(ElementParseResult::Single(
                     MarkdownElement::HorizontalRule,
                     idx + 1,
@@ -178,34 +216,33 @@ fn try_parse_element(
         })
         .or_else(|| {
             // Code blocks (```) - multi-line
-            line.starts_with("```")
-                .then(|| parse_code_block(lines, idx))
+            line.starts_with(patterns.syntax.code_fence)
+                .then(|| parse_code_block(lines, idx, patterns.syntax.code_fence))
                 .flatten()
                 .map(|(code_block, next_idx)| ElementParseResult::Single(code_block, next_idx))
         })
         .or_else(|| {
             // Block quotes (>) - multi-line
-            line.starts_with('>')
-                .then(|| parse_block_quote(lines, idx, horizontal_rule_re, list_re))
+            line.starts_with(patterns.syntax.block_quote)
+                .then(|| parse_block_quote(lines, idx, patterns))
                 .flatten()
                 .map(|(block_quote, next_idx)| ElementParseResult::Single(block_quote, next_idx))
         })
         .or_else(|| {
             // Lists (-, *, +, or numbered) - multi-line, can produce multiple elements
-            parse_list(lines, idx)
+            parse_list(lines, idx, &patterns.list)
                 .map(|(list_items, next_idx)| ElementParseResult::Multiple(list_items, next_idx))
         })
         .or_else(|| {
             // Paragraph (collect consecutive non-special lines) - multi-line
-            parse_paragraph(lines, idx, horizontal_rule_re, list_re)
+            parse_paragraph(lines, idx, patterns)
                 .map(|(paragraph, next_idx)| ElementParseResult::Single(paragraph, next_idx))
         })
         .unwrap_or(ElementParseResult::None)
 }
 
 /// Parse markdown header (# ## ### etc.)
-fn parse_header(line: &str) -> Option<MarkdownElement> {
-    let header_re = Regex::new(r"^(#{1,6})\s+(.+)$").ok()?;
+fn parse_header(line: &str, header_re: &Regex) -> Option<MarkdownElement> {
     if let Some(caps) = header_re.captures(line) {
         let level = caps.get(1)?.as_str().len();
         let text = caps.get(2)?.as_str().to_string();
@@ -215,10 +252,15 @@ fn parse_header(line: &str) -> Option<MarkdownElement> {
 }
 
 /// Parse code block (```language\ncontent\n```)
-fn parse_code_block(lines: &[&str], start_idx: usize) -> Option<(MarkdownElement, usize)> {
+fn parse_code_block(
+    lines: &[&str],
+    start_idx: usize,
+    code_fence: &str,
+) -> Option<(MarkdownElement, usize)> {
     let first_line = lines[start_idx].trim();
-    let language = if first_line.len() > 3 {
-        Some(first_line[3..].trim().to_string())
+    let fence_len = code_fence.len();
+    let language = if first_line.len() > fence_len {
+        Some(first_line[fence_len..].trim().to_string())
     } else {
         None
     };
@@ -227,7 +269,7 @@ fn parse_code_block(lines: &[&str], start_idx: usize) -> Option<(MarkdownElement
     let mut i = start_idx + 1;
 
     while i < lines.len() {
-        if lines[i].trim().starts_with("```") {
+        if lines[i].trim().starts_with(code_fence) {
             return Some((
                 MarkdownElement::CodeBlock {
                     language,
@@ -250,13 +292,13 @@ fn parse_code_block(lines: &[&str], start_idx: usize) -> Option<(MarkdownElement
 fn parse_block_quote(
     lines: &[&str],
     start_idx: usize,
-    _horizontal_rule_re: &Regex,
-    _list_re: &Regex,
+    patterns: &MarkdownPatterns,
 ) -> Option<(MarkdownElement, usize)> {
     let mut text_parts = Vec::new();
     let mut i = start_idx;
+    let block_quote = patterns.syntax.block_quote;
 
-    while i < lines.len() && lines[i].trim().starts_with('>') {
+    while i < lines.len() && lines[i].trim().starts_with(block_quote) {
         let line = lines[i].trim();
         let quote_text = if line.len() > 1 { line[1..].trim() } else { "" };
         if !quote_text.is_empty() {
@@ -278,8 +320,11 @@ fn parse_block_quote(
 }
 
 /// Parse list items (-, *, +, or numbered)
-fn parse_list(lines: &[&str], start_idx: usize) -> Option<(Vec<MarkdownElement>, usize)> {
-    let list_re = Regex::new(r"^(\s*)([-*+]|\d+\.)\s+(.+)$").ok()?;
+fn parse_list(
+    lines: &[&str],
+    start_idx: usize,
+    list_re: &Regex,
+) -> Option<(Vec<MarkdownElement>, usize)> {
     let first_line = lines[start_idx].trim();
 
     if !list_re.is_match(first_line) {
@@ -316,8 +361,7 @@ fn parse_list(lines: &[&str], start_idx: usize) -> Option<(Vec<MarkdownElement>,
 fn parse_paragraph(
     lines: &[&str],
     start_idx: usize,
-    horizontal_rule_re: &Regex,
-    list_re: &Regex,
+    patterns: &MarkdownPatterns,
 ) -> Option<(MarkdownElement, usize)> {
     let mut text_parts = Vec::new();
     let mut i = start_idx;
@@ -330,11 +374,11 @@ fn parse_paragraph(
         }
 
         // Stop at special markdown elements
-        if line.starts_with('#')
-            || line.starts_with("```")
-            || line.starts_with('>')
-            || horizontal_rule_re.is_match(line)
-            || list_re.is_match(line)
+        if line.starts_with(patterns.syntax.header)
+            || line.starts_with(patterns.syntax.code_fence)
+            || line.starts_with(patterns.syntax.block_quote)
+            || patterns.horizontal_rule.is_match(line)
+            || patterns.list.is_match(line)
         {
             break;
         }

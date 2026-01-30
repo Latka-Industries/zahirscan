@@ -11,15 +11,19 @@ use crate::engine::config::Config;
 use crate::parsers::{FileType, ParseResult, column_stats};
 use crate::results::{ColumnInfo, MiningResult, SqliteMetadata, TableInfo};
 use memmap2::Mmap;
-use type_stats::{
-    compute_blob_stats, compute_numeric_and_bool_stats, compute_text_and_date_stats,
-    fetch_column_as_strings,
-};
-use utils::{
-    get_foreign_keys_for_table, get_indexes_for_table, get_table_columns, get_table_names,
-    get_table_row_count, open_sqlite_connection, quote_sql_identifier, set_no_data_column_stats,
-    try_query_one,
-};
+use type_stats::{compute_stats_for_type, fetch_column_as_strings};
+
+/// Log a SQLite error and set it in metadata, then return the metadata.
+/// Helper to reduce repetition of error handling pattern.
+fn handle_sqlite_error(
+    metadata: &mut SqliteMetadata,
+    file_path: &str,
+    error_msg: String,
+) -> Result<SqliteMetadata> {
+    debug!("SQLite error for '{}': {}", file_path, error_msg);
+    metadata.error = Some(error_msg);
+    Ok(metadata.clone())
+}
 
 /// Extract SQLite metadata from database file
 pub fn extract_sqlite_metadata(
@@ -28,45 +32,37 @@ pub fn extract_sqlite_metadata(
     config: &Config,
 ) -> Result<SqliteMetadata> {
     let (conn_opt, mut metadata) =
-        open_sqlite_connection(content, stats.byte_count, &stats.file_path)?;
+        utils::open_sqlite_connection(content, stats.byte_count, &stats.file_path)?;
     let (conn, _temp_file) = match conn_opt {
         Some((c, t)) => (c, t),
         None => return Ok(metadata),
     };
 
     // Extract database statistics (best-effort; failures remain None)
-    metadata.page_size =
-        try_query_one(&conn, "PRAGMA page_size;", |r| r.get::<_, i64>(0)).map(|v| v as usize);
-    metadata.encoding = try_query_one(&conn, "PRAGMA encoding;", |r| r.get::<_, String>(0));
+    metadata.page_size = utils::try_query_one(&conn, "PRAGMA page_size;", |r| r.get::<_, i64>(0))
+        .map(|v| v as usize);
+    metadata.encoding = utils::try_query_one(&conn, "PRAGMA encoding;", |r| r.get::<_, String>(0));
     metadata.sqlite_version =
-        try_query_one(&conn, "SELECT sqlite_version();", |r| r.get::<_, String>(0));
+        utils::try_query_one(&conn, "SELECT sqlite_version();", |r| r.get::<_, String>(0));
 
     // Extract schema information
     let mut tables = Vec::new();
     let mut total_rows = 0usize;
 
     // Get all table names (excluding system tables)
-    let table_names: Vec<String> = match get_table_names(&conn) {
+    let table_names: Vec<String> = match utils::get_table_names(&conn) {
         Ok(names) => names,
-        Err(error_msg) => {
-            debug!("SQLite error for '{}': {}", stats.file_path, error_msg);
-            metadata.error = Some(error_msg);
-            return Ok(metadata);
-        }
+        Err(error_msg) => return handle_sqlite_error(&mut metadata, &stats.file_path, error_msg),
     };
 
     metadata.table_count = Some(table_names.len());
 
     for table_name in &table_names {
-        let quoted_table = quote_sql_identifier(table_name);
+        let quoted_table = utils::quote_sql_identifier(table_name);
 
-        let (columns, primary_keys) = match get_table_columns(&conn, table_name) {
+        let (columns, primary_keys) = match utils::get_table_columns(&conn, table_name) {
             Ok(x) => x,
-            Err(msg) => {
-                debug!("SQLite error for '{}': {}", stats.file_path, msg);
-                metadata.error = Some(msg);
-                return Ok(metadata);
-            }
+            Err(msg) => return handle_sqlite_error(&mut metadata, &stats.file_path, msg),
         };
 
         let mut table_info = TableInfo {
@@ -86,19 +82,16 @@ pub fn extract_sqlite_metadata(
         };
 
         // Row count (best-effort; views may fail)
-        if let Some(n) = get_table_row_count(&conn, &quoted_table) {
+        if let Some(n) = utils::get_table_row_count(&conn, &quoted_table) {
             table_info.row_count = Some(n);
             total_rows += n;
         }
 
-        let (foreign_keys, fk_columns) = match get_foreign_keys_for_table(&conn, &quoted_table) {
-            Ok(x) => x,
-            Err(msg) => {
-                debug!("SQLite error for '{}': {}", stats.file_path, msg);
-                metadata.error = Some(msg);
-                return Ok(metadata);
-            }
-        };
+        let (foreign_keys, fk_columns) =
+            match utils::get_foreign_keys_for_table(&conn, &quoted_table) {
+                Ok(x) => x,
+                Err(msg) => return handle_sqlite_error(&mut metadata, &stats.file_path, msg),
+            };
         if !foreign_keys.is_empty() {
             table_info.foreign_keys = Some(foreign_keys);
         }
@@ -118,13 +111,9 @@ pub fn extract_sqlite_metadata(
             config,
         );
 
-        let indexes = match get_indexes_for_table(&conn, table_name, &quoted_table) {
+        let indexes = match utils::get_indexes_for_table(&conn, table_name, &quoted_table) {
             Ok(ix) => ix,
-            Err(msg) => {
-                debug!("SQLite error for '{}': {}", stats.file_path, msg);
-                metadata.error = Some(msg);
-                return Ok(metadata);
-            }
+            Err(msg) => return handle_sqlite_error(&mut metadata, &stats.file_path, msg),
         };
         if !indexes.is_empty() {
             table_info.indexes = Some(indexes);
@@ -153,7 +142,7 @@ fn ensure_column_stats(
     let Some(cols) = columns else { return };
     if row_count == 0 {
         for col in cols.iter_mut() {
-            set_no_data_column_stats(col);
+            utils::set_no_data_column_stats(col);
         }
     } else {
         compute_column_statistics(conn, table_name, cols, config);
@@ -167,14 +156,14 @@ fn compute_column_statistics(
     columns: &mut [ColumnInfo],
     config: &Config,
 ) {
-    let quoted_table = quote_sql_identifier(table_name);
+    let quoted_table = utils::quote_sql_identifier(table_name);
 
     for col in columns.iter_mut() {
-        let quoted_col = quote_sql_identifier(&col.name);
+        let quoted_col = utils::quote_sql_identifier(&col.name);
         let values =
             fetch_column_as_strings(conn, &quoted_table, &quoted_col, table_name, &col.name);
         if values.is_empty() {
-            set_no_data_column_stats(col);
+            utils::set_no_data_column_stats(col);
             continue;
         }
 
@@ -182,21 +171,7 @@ fn compute_column_statistics(
         col.null_percentage = Some(null_pct);
         col.unique_count = Some(unique_count);
 
-        match col.type_name.as_deref() {
-            Some("INTEGER") | Some("REAL") => {
-                compute_numeric_and_bool_stats(
-                    conn,
-                    &quoted_table,
-                    &quoted_col,
-                    col,
-                    &values,
-                    config,
-                );
-            }
-            Some("TEXT") => compute_text_and_date_stats(col, &values, config),
-            Some("BLOB") => compute_blob_stats(conn, &quoted_table, &quoted_col, col),
-            _ => {}
-        }
+        compute_stats_for_type(conn, &quoted_table, &quoted_col, col, &values, config);
     }
 }
 

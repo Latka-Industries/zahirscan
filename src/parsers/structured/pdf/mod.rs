@@ -9,7 +9,24 @@ use anyhow::Result;
 use log::warn;
 use pdf::file::FileOptions;
 
-use self::utils::{extract_pdf_date_to_iso8601, extract_text_str};
+/// Extract document info from PDF info dictionary
+fn extract_document_info(info: &pdf::object::InfoDict, metadata: &mut PdfMetadata) {
+    metadata.title = utils::extract_text_str(info.title.as_ref());
+    metadata.author = utils::extract_text_str(info.author.as_ref());
+    metadata.subject = utils::extract_text_str(info.subject.as_ref());
+    metadata.creator = utils::extract_text_str(info.creator.as_ref());
+    metadata.producer = utils::extract_text_str(info.producer.as_ref());
+
+    // Dates are Option<pdf::primitive::Date> - convert to ISO 8601 format
+    metadata.creation_date = info
+        .creation_date
+        .as_ref()
+        .and_then(utils::extract_pdf_date_to_iso8601);
+    metadata.modification_date = info
+        .mod_date
+        .as_ref()
+        .and_then(utils::extract_pdf_date_to_iso8601);
+}
 
 /// Extract PDF metadata
 pub fn extract_pdf_metadata(
@@ -46,18 +63,7 @@ pub fn extract_pdf_metadata(
 
     // Extract document info (metadata dictionary) if present
     if let Some(ref info) = file.trailer.info_dict {
-        metadata.title = extract_text_str(info.title.as_ref());
-        metadata.author = extract_text_str(info.author.as_ref());
-        metadata.subject = extract_text_str(info.subject.as_ref());
-        metadata.creator = extract_text_str(info.creator.as_ref());
-        metadata.producer = extract_text_str(info.producer.as_ref());
-
-        // Dates are Option<pdf::primitive::Date> - convert to ISO 8601 format
-        metadata.creation_date = info
-            .creation_date
-            .as_ref()
-            .and_then(extract_pdf_date_to_iso8601);
-        metadata.modification_date = info.mod_date.as_ref().and_then(extract_pdf_date_to_iso8601);
+        extract_document_info(info, &mut metadata);
     }
 
     Ok(metadata)

@@ -63,6 +63,8 @@ pub fn extract_xlsx_metadata(
     Ok(metadata)
 }
 
+/// Extract row and column counts from XLSX workbook.xml
+/// Returns sheet names and row/column counts for each sheet
 fn extract_row_column_counts(file_path: &str, metadata: &mut DocumentMetadata) -> Result<()> {
     let mut workbook: Xlsx<BufReader<File>> = match open_workbook(file_path) {
         Ok(wb) => wb,
@@ -92,6 +94,8 @@ fn extract_row_column_counts(file_path: &str, metadata: &mut DocumentMetadata) -
     Ok(())
 }
 
+/// Process a core property from XLSX core properties XML
+/// Add revision number to metadata if present
 fn process_core_property(name: &[u8], text_content: &str, metadata: &mut DocumentMetadata) {
     for prop in DOCX_CORE_PROPERTIES {
         if name.ends_with(prop.element) && has_namespace(name, prop.namespace) {
@@ -110,6 +114,8 @@ fn process_core_property(name: &[u8], text_content: &str, metadata: &mut Documen
     }
 }
 
+/// Extract core properties from XLSX core properties XML
+/// Add document title, creator, subject, description, creation date, modification date, and last modified by to metadata
 fn extract_core_properties(xml: &str, metadata: &mut DocumentMetadata) {
     let mut reader = XmlReader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -146,6 +152,8 @@ fn extract_core_properties(xml: &str, metadata: &mut DocumentMetadata) {
     }
 }
 
+/// Extract app properties from XLSX app properties XML
+/// Returns sheet names from lpstr attributes
 fn extract_app_properties(xml: &str, metadata: &mut DocumentMetadata) {
     let mut reader = XmlReader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -194,6 +202,8 @@ fn extract_app_properties(xml: &str, metadata: &mut DocumentMetadata) {
     }
 }
 
+/// Extract sheet info from XLSX workbook.xml
+/// Returns sheet names from sheet elements
 fn extract_sheet_info(xml: &str, metadata: &mut DocumentMetadata) {
     let mut reader = XmlReader::from_str(xml);
     reader.config_mut().trim_text(true);

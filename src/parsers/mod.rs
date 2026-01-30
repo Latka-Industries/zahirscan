@@ -69,6 +69,32 @@ macro_rules! process_with_metadata {
     }};
 }
 
+/// Macro to copy all metadata fields from ParseResult to Output.
+/// Usage: `copy_metadata_fields!(from_stats, to_output)`
+/// This ensures all metadata fields are copied without having to manually list them.
+#[macro_export]
+macro_rules! copy_metadata_fields {
+    ($from:expr, $to:expr) => {
+        $to.image_metadata = $from.image_metadata.clone();
+        $to.video_metadata = $from.video_metadata.clone();
+        $to.audio_metadata = $from.audio_metadata.clone();
+        $to.csv_metadata = $from.csv_metadata.clone();
+        $to.pdf_metadata = $from.pdf_metadata.clone();
+        $to.docx_metadata = $from.docx_metadata.clone();
+        $to.sqlite_metadata = $from.sqlite_metadata.clone();
+        $to.toml_metadata = $from.toml_metadata.clone();
+        $to.zip_metadata = $from.zip_metadata.clone();
+        $to.xml_metadata = $from.xml_metadata.clone();
+        $to.html_metadata = $from.html_metadata.clone();
+        $to.yaml_metadata = $from.yaml_metadata.clone();
+        $to.ini_metadata = $from.ini_metadata.clone();
+        $to.pptx_metadata = $from.pptx_metadata.clone();
+        $to.epub_metadata = $from.epub_metadata.clone();
+        $to.archive_metadata = $from.archive_metadata.clone();
+        $to.code_metadata = $from.code_metadata.clone();
+    };
+}
+
 /// Defines `extract_X_templates` that returns `empty_mining_result(stats)`.
 /// Use for parsers that do metadata only and no template mining.
 /// Usage: `crate::no_template_mining!(extract_toml_templates, "TOML is config; schema covers structure. No template mining.")`
@@ -120,8 +146,9 @@ impl ParserCategory {
 
 /// Supported file types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
 pub enum FileType {
-    Log,
+    Log = 0,
     Json,
     Text,
     Markdown,
@@ -147,34 +174,16 @@ pub enum FileType {
     Unknown,
 }
 
+const METADATA_NAMES: [&str; 23] = [
+    "Log", "JSON", "Text", "Markdown", "Image", "Video", "Audio", "CSV", "PDF", "DOCX", "XLSX",
+    "SQLite", "TOML", "ZIP", "XML", "HTML", "YAML", "INI", "PPTX", "EPUB", "Archive", "Code",
+    "Unknown",
+];
+
 impl FileType {
     /// Get the string representation of the file type for metadata extraction
     pub fn as_metadata_name(&self) -> &'static str {
-        match self {
-            FileType::Image => "Image",
-            FileType::Video => "Video",
-            FileType::Audio => "Audio",
-            FileType::Csv => "CSV",
-            FileType::Pdf => "PDF",
-            FileType::Docx => "DOCX",
-            FileType::Xlsx => "XLSX",
-            FileType::Sqlite => "SQLite",
-            FileType::Toml => "TOML",
-            FileType::Zip => "ZIP",
-            FileType::Xml => "XML",
-            FileType::Html => "HTML",
-            FileType::Yaml => "YAML",
-            FileType::Ini => "INI",
-            FileType::Pptx => "PPTX",
-            FileType::Epub => "EPUB",
-            FileType::Archive => "Archive",
-            FileType::Code => "Code",
-            FileType::Log => "Log",
-            FileType::Json => "JSON",
-            FileType::Text => "Text",
-            FileType::Markdown => "Markdown",
-            FileType::Unknown => "Unknown",
-        }
+        METADATA_NAMES[*self as u8 as usize]
     }
 
     /// Check if this is a binary file type that still needs processing (metadata extraction)
@@ -254,129 +263,94 @@ pub struct ParseResult {
 impl ParseResult {
     /// Helper method to set all metadata fields on an Output
     fn set_metadata_fields(&self, output: &mut Output) {
-        output.image_metadata = self.image_metadata.clone();
-        output.video_metadata = self.video_metadata.clone();
-        output.audio_metadata = self.audio_metadata.clone();
-        output.csv_metadata = self.csv_metadata.clone();
-        output.pdf_metadata = self.pdf_metadata.clone();
-        output.docx_metadata = self.docx_metadata.clone();
-        output.sqlite_metadata = self.sqlite_metadata.clone();
-        output.toml_metadata = self.toml_metadata.clone();
-        output.zip_metadata = self.zip_metadata.clone();
-        output.xml_metadata = self.xml_metadata.clone();
-        output.html_metadata = self.html_metadata.clone();
-        output.yaml_metadata = self.yaml_metadata.clone();
-        output.ini_metadata = self.ini_metadata.clone();
-        output.pptx_metadata = self.pptx_metadata.clone();
-        output.epub_metadata = self.epub_metadata.clone();
-        output.archive_metadata = self.archive_metadata.clone();
-        output.code_metadata = self.code_metadata.clone();
+        copy_metadata_fields!(self, output);
     }
 
     /// Convert parse result to Output object
     pub fn to_output(&self, mode: OutputMode, config: &crate::engine::config::Config) -> Output {
-        if let Some(ref mining) = self.mining_result {
-            match mode {
-                OutputMode::Templates => {
-                    // Mode 1: Templates + Writing Footprint (for text/markdown files)
-                    // Also include media metadata (images, videos, audio) even in templates mode
-                    // Include source and file_type in both modes
-                    let source_path = match config.redact_paths {
-                        true => redact_path(&self.file_path),
-                        false => self.file_path.clone(),
-                    };
-                    let mut output = Output::templates_only(
-                        mining.templates.clone(),
-                        Some(source_path),
-                        Some(format!("{:?}", self.file_type)),
-                    );
-                    // Include writing footprint if available (text/markdown files only, not DOCX/XLSX)
-                    if self.file_type != crate::parsers::FileType::Docx
-                        && self.file_type != crate::parsers::FileType::Xlsx
-                    {
-                        output.writing_footprint = mining.writing_footprint.clone();
-                    }
-                    // Include media metadata if available (images, videos, audio, CSV, PDF, DOCX, SQLite)
-                    self.set_metadata_fields(&mut output);
-                    output
-                }
-                OutputMode::Full => {
-                    // Mode 2: Full metadata
-                    // Redact path if configured (only in Full mode where source is shown)
-                    let source_path = match config.redact_paths {
-                        true => redact_path(&self.file_path),
-                        false => self.file_path.clone(),
-                    };
-                    let metadata = FileMetadata {
-                        source: source_path,
-                        file_type: format!("{:?}", self.file_type),
-                        line_count: self.line_count,
-                        byte_count: self.byte_count,
-                        token_count: self.token_count,
-                        processing_time_ms: self.duration.as_secs_f64() * 1000.0, // Convert to milliseconds
-                        is_binary: self.is_binary,
-                    };
-                    let compression = CompressionStats {
-                        original_tokens: mining.original_tokens,
-                        compressed_tokens: mining.compressed_tokens,
-                        reduction_percent: mining.token_reduction_percent,
-                    };
-                    let mut output = Output::full(mining.templates.clone(), metadata, compression);
-                    // Only include writing_footprint for text/markdown files, not DOCX/XLSX
-                    if self.file_type != crate::parsers::FileType::Docx
-                        && self.file_type != crate::parsers::FileType::Xlsx
-                    {
-                        output.writing_footprint = mining.writing_footprint.clone();
-                    }
-                    self.set_metadata_fields(&mut output);
-                    output
-                }
-            }
-        } else {
-            // No mining results (binary file or error)
-            match mode {
-                OutputMode::Templates => {
-                    // Include media metadata even when there are no templates (e.g., pure media files)
-                    // Include source and file_type in both modes
-                    let source_path = match config.redact_paths {
-                        true => redact_path(&self.file_path),
-                        false => self.file_path.clone(),
-                    };
-                    let mut output = Output::templates_only(
-                        vec![],
-                        Some(source_path),
-                        Some(format!("{:?}", self.file_type)),
-                    );
-                    self.set_metadata_fields(&mut output);
-                    output
-                }
-                OutputMode::Full => {
-                    // Redact path if configured
-                    let source_path = match config.redact_paths {
-                        true => redact_path(&self.file_path),
-                        false => self.file_path.clone(),
-                    };
-                    let metadata = FileMetadata {
-                        source: source_path,
-                        file_type: format!("{:?}", self.file_type),
-                        line_count: self.line_count,
-                        byte_count: self.byte_count,
-                        token_count: self.token_count,
-                        processing_time_ms: self.duration.as_secs_f64() * 1000.0,
-                        is_binary: self.is_binary,
-                    };
-                    let compression = CompressionStats {
-                        original_tokens: self.token_count,
-                        compressed_tokens: 0,
-                        reduction_percent: 0.0,
-                    };
-                    let mut output = Output::full(vec![], metadata, compression);
-                    output.writing_footprint = None;
-                    self.set_metadata_fields(&mut output);
-                    output
-                }
-            }
+        match mode {
+            OutputMode::Templates => self.build_templates_output(config),
+            OutputMode::Full => self.build_full_output(config),
         }
+    }
+
+    fn check_for_writing_footprint(&self, output: &mut Output) {
+        if let Some(ref mining) = self.mining_result {
+            output.writing_footprint = mining.writing_footprint.clone();
+        }
+    }
+
+    /// Build templates-only output (with writing footprint and metadata)
+    fn build_templates_output(&self, config: &Config) -> Output {
+        let source_path = match config.redact_paths {
+            true => redact_path(&self.file_path),
+            false => self.file_path.clone(),
+        };
+
+        let templates = self
+            .mining_result
+            .as_ref()
+            .map(|m| m.templates.clone())
+            .unwrap_or_default();
+
+        let mut output = Output::templates_only(
+            templates,
+            Some(source_path),
+            Some(format!("{:?}", self.file_type)),
+        );
+
+        // Include writing footprint if available
+        self.check_for_writing_footprint(&mut output);
+
+        // Include media metadata if available
+        self.set_metadata_fields(&mut output);
+        output
+    }
+
+    /// Build full output (with all metadata and compression stats)
+    fn build_full_output(&self, config: &Config) -> Output {
+        let source_path = match config.redact_paths {
+            true => redact_path(&self.file_path),
+            false => self.file_path.clone(),
+        };
+
+        let metadata = FileMetadata {
+            source: source_path,
+            file_type: format!("{:?}", self.file_type),
+            line_count: self.line_count,
+            byte_count: self.byte_count,
+            token_count: self.token_count,
+            processing_time_ms: self.duration.as_secs_f64() * 1000.0,
+            is_binary: self.is_binary,
+        };
+
+        let (templates, compression) = if let Some(ref mining) = self.mining_result {
+            (
+                mining.templates.clone(),
+                CompressionStats {
+                    original_tokens: mining.original_tokens,
+                    compressed_tokens: mining.compressed_tokens,
+                    reduction_percent: mining.token_reduction_percent,
+                },
+            )
+        } else {
+            (
+                vec![],
+                CompressionStats {
+                    original_tokens: self.token_count,
+                    compressed_tokens: 0,
+                    reduction_percent: 0.0,
+                },
+            )
+        };
+
+        let mut output = Output::full(templates, metadata, compression);
+
+        // Include writing footprint if available
+        self.check_for_writing_footprint(&mut output);
+
+        self.set_metadata_fields(&mut output);
+        output
     }
 
     /// Write the parse result to an output file as JSON
