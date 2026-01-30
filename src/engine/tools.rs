@@ -274,6 +274,10 @@ pub fn determine_output_path(input_path: &str, output: Option<&str>, config: &Co
 pub enum PlaceholderType {
     /// Word placeholders for text/markdown parsers (e.g., "WORD_00")
     Word,
+    /// Prefix slot in structural text patterns (e.g., "PREFIX_00")
+    Prefix,
+    /// Suffix slot in structural text patterns (e.g., "SUFFIX_00")
+    Suffix,
     /// Position placeholders for log parsers (e.g., "POS_00")
     Position,
     /// Position placeholders for JSON parsers (lowercase, e.g., "pos_00")
@@ -295,6 +299,8 @@ impl PlaceholderType {
     pub fn as_str(self) -> &'static str {
         match self {
             PlaceholderType::Word => "WORD",
+            PlaceholderType::Prefix => "PREFIX",
+            PlaceholderType::Suffix => "SUFFIX",
             PlaceholderType::Position => "POS",
             PlaceholderType::Pos => "pos",
             PlaceholderType::Col => "col",
@@ -323,12 +329,17 @@ pub fn format_placeholder_bracketed(name: &str, index: usize) -> String {
     format!("[{}]", format_placeholder(name, index))
 }
 
-/// Format a bracketed placeholder using PlaceholderType enum
+/// Format a bracketed placeholder using PlaceholderType enum.
+/// Prefix and Suffix are formatted without an index (e.g. "[PREFIX]", "[SUFFIX]").
 pub fn format_placeholder_bracketed_typed(
     placeholder_type: PlaceholderType,
     index: usize,
 ) -> String {
-    format_placeholder_bracketed(placeholder_type.as_str(), index)
+    match placeholder_type {
+        PlaceholderType::Prefix => "[PREFIX]".to_string(),
+        PlaceholderType::Suffix => "[SUFFIX]".to_string(),
+        _ => format_placeholder_bracketed(placeholder_type.as_str(), index),
+    }
 }
 
 /// Check if ffprobe is available on the system

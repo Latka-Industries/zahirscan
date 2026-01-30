@@ -12,7 +12,9 @@ use rayon::prelude::*;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-/// Extract templates from JSON files (JSON-aware analysis)
+/// Extract templates from JSON files (JSON-aware analysis).
+/// Accepts `content: &str` so the same function can be used when JSON is detected via
+/// structured::process (mmap → str at call site) or via extract_unknown_templates (content already available).
 pub fn extract_json_templates(
     content: &str,
     stats: &ParseResult,

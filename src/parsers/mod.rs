@@ -4,11 +4,9 @@
 pub mod code;
 mod column_stats;
 pub mod container;
-mod epub;
 pub mod media;
 mod media_helpers;
 mod office;
-pub mod pdf;
 pub mod settings;
 pub mod sqlite;
 pub mod structured;
@@ -93,12 +91,10 @@ macro_rules! no_template_mining {
 pub enum ParserCategory {
     Media,      // Image | Video | Audio -> media::process
     Office,     // Docx | Xlsx | Pptx -> office::process
-    Structured, // Csv | Html -> structured::process
+    Structured, // Csv | Html | Json | Epub | Pdf -> structured::process
     Settings,   // Toml | Yaml | Xml | Ini -> settings::process
     Container,  // Zip | Archive -> container::process
-    Pdf,
     Sqlite,
-    Epub,
     Code,
 }
 
@@ -116,9 +112,7 @@ impl ParserCategory {
             ParserCategory::Structured => structured::process(stats, mmap, config),
             ParserCategory::Settings => settings::process(stats, mmap, config),
             ParserCategory::Container => container::process(stats, mmap, config),
-            ParserCategory::Pdf => pdf::process(stats, mmap, config),
             ParserCategory::Sqlite => sqlite::process(stats, mmap, config),
-            ParserCategory::Epub => epub::process(stats, mmap, config),
             ParserCategory::Code => code::process(stats, mmap, config),
         }
     }
@@ -193,14 +187,14 @@ impl FileType {
         match self {
             FileType::Image | FileType::Video | FileType::Audio => Some(ParserCategory::Media),
             FileType::Docx | FileType::Xlsx | FileType::Pptx => Some(ParserCategory::Office),
-            FileType::Csv | FileType::Html => Some(ParserCategory::Structured),
+            FileType::Csv | FileType::Html | FileType::Json | FileType::Epub | FileType::Pdf => {
+                Some(ParserCategory::Structured)
+            }
             FileType::Toml | FileType::Yaml | FileType::Xml | FileType::Ini => {
                 Some(ParserCategory::Settings)
             }
             FileType::Zip | FileType::Archive => Some(ParserCategory::Container),
-            FileType::Pdf => Some(ParserCategory::Pdf),
             FileType::Sqlite => Some(ParserCategory::Sqlite),
-            FileType::Epub => Some(ParserCategory::Epub),
             FileType::Code => Some(ParserCategory::Code),
             _ => None,
         }
@@ -463,7 +457,6 @@ fn process_text_or_unknown(
     let content = std::str::from_utf8(mmap)?;
     match stats.file_type {
         FileType::Log => text::log::extract_log_templates(content, stats, config),
-        FileType::Json => text::json::extract_json_templates(content, stats, config),
         FileType::Markdown => text::markdown::extract_markdown_templates(content, stats, config),
         FileType::Text => text::plain_text::extract_text_templates(content, stats, config),
         FileType::Unknown => extract_unknown_templates(content, stats, config),
@@ -529,6 +522,6 @@ fn extract_unknown_templates(
     // Try JSON first (most structured), then log, then text
     serde_json::from_str::<serde_json::Value>(content.lines().next().unwrap_or("")).map_or_else(
         |_| text::log::extract_log_templates(content, stats, config),
-        |_| text::json::extract_json_templates(content, stats, config),
+        |_| structured::extract_json_templates(content, stats, config),
     )
 }

@@ -141,7 +141,6 @@ struct MiningConfig {
     markdown_preview_length: u64,
     // CSV parsing settings
     max_csv_sample_rows: u64,
-    // Performance optimization settings (reserved for future use)
 }
 
 impl Default for MiningConfig {

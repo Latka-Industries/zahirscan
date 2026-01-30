@@ -1,5 +1,5 @@
-//! Writing footprint and SVO analysis utilities
-//! Shared analysis functions for text and markdown parsers
+//! Writing footprint and SVO analysis utilities.
+//! Shared analysis functions for text and markdown parsers.
 
 use crate::engine::config::Config;
 use crate::parsers::traits::AdaptiveParallel;
@@ -99,29 +99,15 @@ pub fn calculate_template_entropy(
 /// and have high variation in what follows them (indicating structural importance)
 /// Returns empty DashMap if there are too many sentences to process efficiently
 pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<String, usize> {
-    // Early return for empty input
     if sentences.is_empty() {
         return DashMap::new();
     }
 
-    // Limit processing for very large files to avoid hangs
-    // Process up to 50k sentences, which should be sufficient for most pivot detection
-    // let max_sentences = 50_000;
-    // let sentences_to_process = if sentences.len() > max_sentences {
-    //     &sentences[..max_sentences]
-    // } else {
-    //     sentences
-    // };
     let sentences_to_process = sentences;
     let pivot_freq: DashMap<String, usize> = DashMap::new();
     let position_word_freq: DashMap<(usize, String), usize> = DashMap::new();
-    // Track variation per word-position pair using a flat key structure to avoid nested DashMap contention
-    // Key format: (pos, word, next_word) -> count
     let word_position_variation_flat: DashMap<(usize, String, String), usize> = DashMap::new();
 
-    // Process in parallel for large text files
-    // Calculate optimal chunk size for parallel processing
-    // Moderate work: tokenization + position tracking + hash map operations
     sentences_to_process
         .par_iter_adaptive(config)
         .enumerate()
@@ -132,7 +118,6 @@ pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<St
             let tokens: Vec<&str> = sentence.split_whitespace().collect();
 
             for (pos, token) in tokens.iter().enumerate() {
-                // Normalize token (lowercase, remove punctuation)
                 let token_clean: String = token
                     .chars()
                     .filter(|c| c.is_alphanumeric())
@@ -146,7 +131,6 @@ pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<St
                         .and_modify(|c| *c += 1)
                         .or_insert(1);
 
-                    // Track variation: what words appear after this specific word at this position
                     if pos + 1 < tokens.len() {
                         let next_token = tokens[pos + 1];
                         let next_clean: String = next_token
@@ -156,7 +140,6 @@ pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<St
                             .to_lowercase();
 
                         if !next_clean.is_empty() {
-                            // Use flat structure to avoid nested DashMap contention
                             let variation_key = (pos, token_clean, next_clean);
                             word_position_variation_flat
                                 .entry(variation_key)
@@ -168,15 +151,9 @@ pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<St
             }
         });
 
-    // Second pass: identify pivot points
-    // A pivot is a word that:
-    // 1. Appears frequently at a specific position
-    // 2. Has high variation in what follows it (structural importance)
     let total_sentences = sentences_to_process.len();
     let min_frequency = (total_sentences as f64 * config.text_threshold).max(2.0) as usize;
 
-    // Collect variation counts per word-position pair from flat structure
-    // Build a HashMap for faster lookups
     let mut variation_counts_map: HashMap<(usize, String), HashSet<String>> = HashMap::new();
     for entry in word_position_variation_flat.iter() {
         let (pos, word, next_word) = entry.key();
@@ -187,7 +164,6 @@ pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<St
             .insert(next_word.clone());
     }
 
-    // Convert to counts for faster lookups
     let variation_counts: HashMap<(usize, String), usize> = variation_counts_map
         .into_iter()
         .map(|(k, v)| (k, v.len()))
@@ -197,14 +173,11 @@ pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<St
         let (pos, word) = entry.key();
         let count = entry.value();
         if *count >= min_frequency {
-            // Check variation score (how many different words follow this specific word at this position)
             let variation_score = variation_counts
                 .get(&(*pos, word.clone()))
                 .copied()
                 .unwrap_or(0);
 
-            // Pivot if it appears frequently AND has reasonable variation
-            // (too low variation = static word, too high = random word)
             if variation_score >= config.min_pivot_variation
                 && variation_score <= config.max_pivot_variation
             {
@@ -232,8 +205,6 @@ pub fn calculate_writing_footprint(
     content: &str,
     config: &Config,
 ) -> WritingFootprint {
-    // Vocabulary richness: unique words / total words
-    // Use split_whitespace for vocabulary calculation - it's simpler and more reliable for very large strings
     debug!(
         "Calculating vocabulary richness (content length: {})",
         content.len()
@@ -250,8 +221,6 @@ pub fn calculate_writing_footprint(
         0.0
     };
 
-    // Average sentence length
-    // Process in parallel with adaptive chunking
     debug!(
         "Calculating average sentence length from {} sentences",
         sentences.len()
@@ -266,7 +235,6 @@ pub fn calculate_writing_footprint(
         0.0
     };
 
-    // Punctuation metrics
     let mut period_count = 0;
     let mut question_count = 0;
     let mut exclamation_count = 0;
@@ -315,14 +283,12 @@ pub fn calculate_writing_footprint(
         avg_commas_per_sentence: avg(total_commas),
     };
 
-    // Template diversity: number of unique patterns
     let template_diversity = templates.len();
 
     // Average entropy across templates (extract from pattern strings)
     let mut total_entropy = 0.0;
     let mut entropy_count = 0;
     for template in templates {
-        // Extract entropy from pattern if present: "[WORD_0] [entropy=0.85]"
         if let Some(entropy_start) = template.pattern.find("[entropy=") {
             let entropy_str = &template.pattern[entropy_start + 9..];
             if let Some(entropy_end) = entropy_str.find(']')
@@ -349,8 +315,6 @@ pub fn calculate_writing_footprint(
     }
 }
 
-/// Analyze SVO structure from templates (language-agnostic)
-/// Normalizes a token for pattern matching (alphanumeric, lowercase)
 fn normalize_token(token: &str) -> String {
     token
         .chars()
@@ -359,7 +323,6 @@ fn normalize_token(token: &str) -> String {
         .to_lowercase()
 }
 
-/// Finds the first pivot position in a sentence, if any
 fn find_pivot_position(
     tokens: &[&str],
     pivot_patterns: &DashMap<String, usize>,
@@ -379,13 +342,11 @@ fn find_pivot_position(
 }
 
 /// Uses pivot points to infer subject-verb-object relationships.
-/// Analyzes sentences directly (no mining templates); uses only sentences and pivot_patterns.
 pub fn analyze_svo_structure(
     sentences: &[String],
     pivot_patterns: &DashMap<String, usize>,
     config: &Config,
 ) -> SVOAnalysis {
-    // Use atomic counters for thread-safe parallel updates
     let sentences_with_pivots = AtomicUsize::new(0);
     let total_subject_length = AtomicUsize::new(0);
     let total_object_length = AtomicUsize::new(0);
@@ -393,29 +354,22 @@ pub fn analyze_svo_structure(
     let object_count = AtomicUsize::new(0);
     let pivot_words: DashMap<String, usize> = DashMap::new();
 
-    // Analyze sentences directly for pivot points (which act as verbs in SVO)
-    // Process in parallel with adaptive chunking
     sentences.par_iter_adaptive(config).for_each(|sentence| {
         let tokens: Vec<&str> = sentence.split_whitespace().collect();
 
-        // Find first pivot in sentence (likely verb/structural element)
         if let Some((pivot_pos, pivot_word)) = find_pivot_position(&tokens, pivot_patterns) {
-            // Found a pivot - this sentence has SVO-like structure
             sentences_with_pivots.fetch_add(1, Ordering::Relaxed);
 
-            // Count pivot word frequency
             pivot_words
                 .entry(pivot_word.clone())
                 .and_modify(|c| *c += 1)
                 .or_insert(1);
 
-            // Subject length (words before pivot)
             if pivot_pos > 0 {
                 total_subject_length.fetch_add(pivot_pos, Ordering::Relaxed);
                 subject_count.fetch_add(1, Ordering::Relaxed);
             }
 
-            // Object length (words after pivot)
             let words_after_pivot = tokens.len().saturating_sub(pivot_pos + 1);
             if words_after_pivot > 0 {
                 total_object_length.fetch_add(words_after_pivot, Ordering::Relaxed);
@@ -424,7 +378,6 @@ pub fn analyze_svo_structure(
         }
     });
 
-    // Extract final values from atomics
     let sentences_with_pivots = sentences_with_pivots.load(Ordering::Relaxed);
     let total_subject_length = total_subject_length.load(Ordering::Relaxed);
     let total_object_length = total_object_length.load(Ordering::Relaxed);
@@ -454,12 +407,11 @@ pub fn analyze_svo_structure(
         0.0
     };
 
-    // Get most common pivot words (likely verbs/structural elements)
     let mut pivot_vec: Vec<(String, usize)> = pivot_words.into_iter().collect();
     pivot_vec.sort_by(|a, b| b.1.cmp(&a.1));
     let common_pivots: Vec<String> = pivot_vec
         .into_iter()
-        .take(config.max_common_pivots) // Top N most common pivots
+        .take(config.max_common_pivots)
         .map(|(word, _)| word)
         .collect();
 
