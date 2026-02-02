@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/zahirscan.svg)](https://crates.io/crates/zahirscan)
 [![docs.rs](https://img.shields.io/docsrs/zahirscan)](https://docs.rs/zahirscan)
 ![Build](https://github.com/thicclatka/zahirscan/workflows/Build/badge.svg)
-![Rust](https://img.shields.io/badge/rust-1.92.0-orange.svg)
+![Rust](https://img.shields.io/badge/rust-1.93.0-orange.svg)
 
 > _"Others will dream that I am mad, while I dream of the Zahir."_ — [JL Borges, Labyrinths](https://bookshop.org/p/books/labyrinths-jorge-luis-borges/f14b472a366ed106?ean=9780811216999&next=t&)
 
@@ -109,6 +109,9 @@ Options:
 
   -h, --help
           Print help
+
+Commands:
+  init    Write default config to app data dir for editing (see Configuration)
 ```
 
 **Output formats:**
@@ -123,14 +126,14 @@ Options:
 ZahirScan can be used as a Rust library to extract schemas (templates and metadata) from files programmatically.
 
 ```rust
-use zahirscan::{Config, OutputMode, extract_schema, extract_schema_with_config};
+use zahirscan::{RuntimeConfig, OutputMode, extract_schema, extract_schema_with_config};
 
-// Simple API: Config loaded automatically
+// Simple API: config loaded automatically from CWD config.toml (or defaults)
 let outputs = extract_schema("file.log", OutputMode::Full)?;
 
-// Advanced API: Load config once, reuse across multiple calls
+// Advanced API: load config once, reuse across multiple calls
 // (Optimal for TUI applications or processing multiple batches)
-let config = Config::load().unwrap_or_default();
+let config = RuntimeConfig::new();
 let batch1 = extract_schema_with_config(files1, OutputMode::Full, &config)?;
 let batch2 = extract_schema_with_config(files2, OutputMode::Full, &config)?;
 ```
@@ -209,9 +212,16 @@ Each `Template` contains:
 
 ### Configuration
 
-See [`config.toml`](config.toml) for configuration.
+Runtime config is `RuntimeConfig`. How it’s loaded:
 
-**Adaptive Defaults:**
+- **CLI**: Embedded default (`config.toml`), merged with a user config in the app data dir if present. Only keys in the user file override.
+  - User config path: Unix `~/.config/zahirscan/zahirscan.toml` (or `$XDG_CONFIG_HOME/zahirscan/zahirscan.toml`), Windows `%APPDATA%\zahirscan\zahirscan.toml`.
+  - Run **`zahirscan init`** to write the embedded default to edit; the CLI will use it as the overlay.
+- **Library**: `extract_schema()` uses the embedded default only (no user config file). For custom config: `RuntimeConfig::new()` is the embedded default (same as config.toml, no file I/O); `RuntimeConfig::load_from_path(path)` to load from a file; `RuntimeConfig::load_with_overlay(base_path, overlay_path)` for base + overlay.
+
+Schema (concurrency, mining, filter): see [config.toml](config.toml).
+
+**Adaptive defaults:**
 
 - `max_workers = 0` uses a sensible default based on CPU cores
 - Phase 2 uses **adaptive chunking** based on Phase 1 file statistics (count/bytes/variance) and targets a neat multiple of `max_workers`
