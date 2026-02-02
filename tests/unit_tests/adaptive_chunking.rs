@@ -19,6 +19,7 @@ fn create_test_task(byte_count: usize, file_type: FileType) -> ProcessingTask {
             ..Default::default()
         },
         output_path: "test.out".to_string(),
+        mmap: None,
     }
 }
 
