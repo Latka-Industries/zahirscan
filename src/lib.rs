@@ -27,9 +27,9 @@
 //! # Advanced API Example
 //!
 //! ```no_run
-//! use zahirscan::{Config, phase1_scan, phase2_mining, calculate_adaptive_chunking};
+//! use zahirscan::{RuntimeConfig, phase1_scan, phase2_mining, calculate_adaptive_chunking};
 //!
-//! let config = Config::load().unwrap_or_default();
+//! let config = RuntimeConfig::new();
 //! let paths = vec!["file.log".to_string()];
 //! let tasks = phase1_scan(&paths, None, &config);
 //! let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, &config);
@@ -37,16 +37,22 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
+pub const PKG_NAME: &str = env!("CARGO_PKG_NAME");
+
+pub use config::DEFAULT_CONFIG_TOML;
+
 pub mod analysis;
+pub mod config;
 pub mod engine;
 pub mod parsers;
 pub mod results;
+pub mod setup;
 
 // Re-export chunking utilities
 pub use engine::chunking::{ProcessingTask, calculate_adaptive_chunking};
 
 // Re-export configuration
-pub use engine::config::Config;
+pub use config::RuntimeConfig;
 
 // Re-export orchestrator functions (main entry points)
 pub use engine::orchestrator::{phase1_scan, phase2_mining};
@@ -109,7 +115,10 @@ use engine::ToPathIter;
 ///
 #[allow(private_bounds)]
 pub fn extract_schema<P: ToPathIter>(paths: P, mode: OutputMode) -> Result<Vec<Output>> {
-    let config = Config::load().unwrap_or_default();
+    let config =
+        RuntimeConfig::load_config_with_overlay(DEFAULT_CONFIG_TOML, None::<&std::path::Path>)
+            .unwrap_or_default();
+    config.validate_external()?;
     extract_schema_with_config(paths, mode, &config)
 }
 
@@ -126,9 +135,9 @@ pub fn extract_schema<P: ToPathIter>(paths: P, mode: OutputMode) -> Result<Vec<O
 /// # Example - Reusing config (optimal for loops/TUI)
 ///
 /// ```no_run
-/// use zahirscan::{extract_schema_with_config, OutputMode, Config};
+/// use zahirscan::{extract_schema_with_config, OutputMode, RuntimeConfig};
 ///
-/// let config = Config::load().unwrap_or_default();
+/// let config = RuntimeConfig::new();
 /// let file_batches = vec![
 ///     vec!["batch1_file1.log", "batch1_file2.log"],
 ///     vec!["batch2_file1.log", "batch2_file2.log"],
@@ -136,7 +145,7 @@ pub fn extract_schema<P: ToPathIter>(paths: P, mode: OutputMode) -> Result<Vec<O
 ///
 /// for batch in file_batches {
 ///     let outputs = extract_schema_with_config(batch.as_slice(), OutputMode::Templates, &config)?;
-///     // Config loaded once, reused for all batches (no repeated disk I/O)
+///     // RuntimeConfig loaded once, reused for all batches (no repeated disk I/O)
 /// }
 /// # Ok::<(), anyhow::Error>(())
 /// ```
@@ -144,8 +153,10 @@ pub fn extract_schema<P: ToPathIter>(paths: P, mode: OutputMode) -> Result<Vec<O
 pub fn extract_schema_with_config<P: ToPathIter>(
     paths: P,
     mode: OutputMode,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<Vec<Output>> {
+    config.validate_external()?;
+
     let path_strings = paths.to_path_iter();
 
     // Validate input - fail fast with clear error
