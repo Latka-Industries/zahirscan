@@ -199,7 +199,7 @@ impl Output {
 }
 
 /// Result of Phase 1 scan: valid tasks and paths that failed (for TUI/lib to display).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct Phase1Result {
     pub tasks: Vec<ProcessingTask>,
     /// Paths that failed during initial scan, with error message (e.g. for TUI fallback).
