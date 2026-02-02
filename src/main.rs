@@ -99,18 +99,18 @@ fn main() -> anyhow::Result<()> {
         });
 
     // Phase 1: Initial scan to prepare for template mining
-    let tasks = phase1_scan(
+    let phase1 = phase1_scan(
         &processed_paths.paths,
         processed_paths.output.as_deref(),
         &config,
     );
 
     // Calculate adaptive chunking based on Phase 1 stats
-    let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, &config);
+    let adaptive = calculate_adaptive_chunking(&phase1.tasks, config.max_workers, &config);
 
-    // Phase 2: Template mining and write output
-    // skip_file_write=false (write files)
-    let _outputs = phase2_mining(tasks, &config, &adaptive, false)?;
+    // Phase 2: Template mining and write output (skip_file_write=false)
+    let phase2 = phase2_mining(phase1.tasks, &config, &adaptive, false);
+    let _outputs = phase2.outputs;
 
     let total_duration = start.elapsed();
 

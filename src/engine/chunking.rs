@@ -10,6 +10,7 @@ use log::debug;
 
 /// File processing task with stats and output path
 /// Defined here to avoid circular dependency between chunking and orchestrator
+#[derive(Debug, Clone)]
 pub struct ProcessingTask {
     pub stats: ParseResult,
     pub output_path: String,

@@ -109,14 +109,14 @@ ZahirScan can be used as a Rust library to extract schemas (templates and metada
 ```rust
 use zahirscan::{RuntimeConfig, OutputMode, extract_schema, extract_schema_with_config};
 
-// Simple API: config loaded automatically from CWD config.toml (or defaults)
-let outputs = extract_schema("file.log", OutputMode::Full)?;
+// Simple API: embedded default config, same result shape as extract_schema_with_config
+let result = extract_schema("file.log", OutputMode::Full)?;
+let outputs = result.outputs;
 
-// Advanced API: load config once, reuse across multiple calls
-// (Optimal for TUI applications or processing multiple batches)
+// Advanced API: same ZahirScanResult { outputs, phase1_failed, phase2_failed }, with your config
 let config = RuntimeConfig::new();
-let batch1 = extract_schema_with_config(files1, OutputMode::Full, &config)?;
-let batch2 = extract_schema_with_config(files2, OutputMode::Full, &config)?;
+let result = extract_schema_with_config(files, OutputMode::Full, &config)?;
+// result.outputs, result.phase1_failed, result.phase2_failed
 ```
 
 **Supported input types** (via `ToPathIter` trait):
@@ -124,9 +124,17 @@ let batch2 = extract_schema_with_config(files2, OutputMode::Full, &config)?;
 - Single file: `&str`, `String`, `&String`
 - Multiple files: `&[&str]`, `&[String]`, `Vec<String>`, `[&str; N]`
 
-#### Output Schema
+#### Return types
 
-The `extract_schema()` function returns `Result<Vec<Output>>`. Each `Output` object contains:
+Both **`extract_schema()`** and **`extract_schema_with_config()`** return `Result<ZahirScanResult>`. **`ZahirScanResult`** has:
+
+- **`outputs: Vec<Output>`** — successful results (one per file that passed Phase 1 and Phase 2)
+- **`phase1_failed: Vec<(String, String)>`** — paths that failed initial scan `(path, error_message)`
+- **`phase2_failed: Vec<(String, String)>`** — paths that failed template mining or write `(path, error_message)`
+
+Use `phase1_failed` and `phase2_failed` for TUI/reporting when some paths fail; partial success is returned, not an error. **`extract_schema()`** uses embedded default config only; **`extract_schema_with_config()`** uses the config you pass.
+
+Each **`Output`** object contains:
 
 **Always present (both modes):**
 

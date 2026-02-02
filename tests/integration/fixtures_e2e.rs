@@ -43,7 +43,8 @@ fn simple_fixtures_full_mode() {
     for (filename, expected_type) in SIMPLE_FIXTURES {
         let path = fixture_path(filename);
         let path_str = path.to_str().expect("path is valid UTF-8");
-        let outputs = extract_schema(path_str, OutputMode::Full).expect("extract_schema");
+        let result = extract_schema(path_str, OutputMode::Full).expect("extract_schema");
+        let outputs = &result.outputs;
         assert_eq!(outputs.len(), 1, "{}", filename);
         assert_eq!(
             outputs[0].file_type.as_deref(),
@@ -59,7 +60,8 @@ fn simple_fixtures_templates_mode() {
     for (filename, expected_type) in SIMPLE_FIXTURES {
         let path = fixture_path(filename);
         let path_str = path.to_str().expect("path is valid UTF-8");
-        let outputs = extract_schema(path_str, OutputMode::Templates).expect("extract_schema");
+        let result = extract_schema(path_str, OutputMode::Templates).expect("extract_schema");
+        let outputs = &result.outputs;
         assert_eq!(outputs.len(), 1, "{}", filename);
         assert_eq!(
             outputs[0].file_type.as_deref(),
@@ -81,7 +83,8 @@ fn multi_file_extract_schema_returns_one_output_per_file() {
         .into_string()
         .unwrap();
     let paths: Vec<String> = vec![p1, p2];
-    let outputs = extract_schema(paths.as_slice(), OutputMode::Full).expect("extract_schema");
+    let result = extract_schema(paths.as_slice(), OutputMode::Full).expect("extract_schema");
+    let outputs = &result.outputs;
     assert_eq!(outputs.len(), 2);
     assert_eq!(outputs[0].file_type.as_deref(), Some("Text"));
     assert_eq!(outputs[1].file_type.as_deref(), Some("Json"));
@@ -120,7 +123,8 @@ fn extended_fixtures_full_mode() {
             continue; // skip if fixture not present (e.g. optional)
         }
         let path_str = path.to_str().expect("path is valid UTF-8");
-        let outputs = extract_schema(path_str, OutputMode::Full).expect("extract_schema");
+        let result = extract_schema(path_str, OutputMode::Full).expect("extract_schema");
+        let outputs = &result.outputs;
         assert_eq!(outputs.len(), 1, "{}", filename);
         assert_eq!(
             outputs[0].file_type.as_deref(),
@@ -208,8 +212,9 @@ fn extract_schema_with_config_reuses_config() {
         let path_str = path.to_str().expect("path is valid UTF-8");
 
         // This should work without loading config from disk each time
-        let outputs = extract_schema_with_config(path_str, OutputMode::Full, &config)
+        let result = extract_schema_with_config(path_str, OutputMode::Full, &config)
             .expect("extract_schema_with_config should succeed");
+        let outputs = result.outputs;
 
         assert_eq!(outputs.len(), 1, "Should process one file: {}", filename);
         assert!(outputs[0].source.is_some(), "Should have source");
@@ -226,8 +231,9 @@ fn extract_schema_with_config_multiple_files_at_once() {
         .map(|f| fixture_path(f).to_string_lossy().to_string())
         .collect();
 
-    let outputs = extract_schema_with_config(paths.as_slice(), OutputMode::Full, &config)
+    let result = extract_schema_with_config(paths.as_slice(), OutputMode::Full, &config)
         .expect("extract_schema_with_config should succeed with multiple files");
+    let outputs = result.outputs;
 
     assert_eq!(outputs.len(), 3, "Should process all three files");
 

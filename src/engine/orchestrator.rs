@@ -7,7 +7,7 @@ use super::tools::{
 };
 use crate::config::RuntimeConfig;
 use crate::parsers::{extract_templates, initial_file_scan};
-use crate::results::Output;
+use crate::results::{Output, Phase1Result, Phase2Result};
 use anyhow::Result;
 use kdam::Animation;
 use log::{debug, error, info};
@@ -88,12 +88,13 @@ fn phase1_path_filter(p: &str, config: &RuntimeConfig) -> bool {
     }
 }
 
-/// Phase 1: Initial scan to collect stats and prepare for template mining
+/// Phase 1: Initial scan to collect stats and prepare for template mining.
+/// Returns tasks and failed paths with error messages (for TUI/lib to display).
 pub fn phase1_scan(
     input_paths: &[String],
     output: Option<&str>,
     config: &RuntimeConfig,
-) -> Vec<ProcessingTask> {
+) -> Phase1Result {
     use std::time::Instant;
 
     let input_paths: Vec<String> = input_paths
@@ -130,9 +131,10 @@ pub fn phase1_scan(
         scan_duration.as_secs_f64()
     );
 
-    // Determine output paths and collect valid stats
+    // Determine output paths and collect valid stats; collect failed (path, message) for TUI/lib
     let path_start = Instant::now();
     let mut tasks = Vec::new();
+    let mut failed: Vec<(String, String)> = Vec::new();
     for (i, result) in stats_results.into_iter().enumerate() {
         match result {
             Ok(stats) => {
@@ -141,9 +143,24 @@ pub fn phase1_scan(
                 tasks.push(ProcessingTask { stats, output_path });
             }
             Err(e) => {
-                error!("Error collecting stats for {}: {}", input_paths[i], e);
+                let path = input_paths[i].clone();
+                let msg = e.to_string();
+                error!("Error collecting stats for {}: {}", path, e);
+                failed.push((path, msg));
             }
         }
+    }
+    if !failed.is_empty() {
+        debug!(
+            "Phase 1: {} of {} paths failed: {}",
+            failed.len(),
+            input_paths.len(),
+            failed
+                .iter()
+                .map(|(p, _)| p.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
     let path_duration = path_start.elapsed();
 
@@ -157,17 +174,17 @@ pub fn phase1_scan(
         config,
     );
 
-    tasks
+    Phase1Result { tasks, failed }
 }
 
-/// Phase 2: Template mining and processing
-/// Writes to files (unless `skip_file_write` is true) and returns Output objects
+/// Phase 2: Template mining and processing.
+/// Writes to files (unless `skip_file_write` is true). Returns outputs and per-file failures (no short-circuit).
 pub fn phase2_mining(
     tasks: Vec<ProcessingTask>,
     config: &RuntimeConfig,
     adaptive: &AdaptiveChunking,
     skip_file_write: bool,
-) -> Result<Vec<Output>> {
+) -> Phase2Result {
     use std::time::Instant;
 
     let phase2_start = Instant::now();
@@ -202,13 +219,29 @@ pub fn phase2_mining(
     // Calculate and log Phase 2 metrics
     log_phase2_metrics(phase2_start.elapsed(), &tasks, config.max_workers, config);
 
-    // Collect all outputs (or handle errors)
+    // Collect outputs and failures (partial success; no short-circuit)
     let mut outputs = Vec::new();
-    for result in results {
-        outputs.push(result?);
+    let mut failed = Vec::new();
+    for (result, task) in results.into_iter().zip(tasks.iter()) {
+        match result {
+            Ok(out) => outputs.push(out),
+            Err(e) => failed.push((task.stats.file_path.clone(), e.to_string())),
+        }
+    }
+    if !failed.is_empty() {
+        debug!(
+            "Phase 2: {} of {} paths failed: {}",
+            failed.len(),
+            tasks.len(),
+            failed
+                .iter()
+                .map(|(p, _)| p.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 
-    Ok(outputs)
+    Phase2Result { outputs, failed }
 }
 
 /// Process files with adaptive batching based on file count and worker count

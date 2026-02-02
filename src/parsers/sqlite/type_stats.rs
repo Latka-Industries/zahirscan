@@ -146,8 +146,9 @@ fn compute_blob_stats(
         Err(_) => Vec::new(),
     };
     if !sizes.is_empty() {
-        let min_size = *sizes.iter().min().unwrap();
-        let max_size = *sizes.iter().max().unwrap();
+        // Guard above guarantees sizes is non-empty.
+        let min_size = *sizes.iter().min().expect("sizes non-empty");
+        let max_size = *sizes.iter().max().expect("sizes non-empty");
         let avg_size = sizes.iter().sum::<usize>() as f64 / sizes.len() as f64;
         col.blob_stats = Some(BlobStats {
             min_size: Some(min_size),

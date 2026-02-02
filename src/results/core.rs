@@ -4,6 +4,8 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
 
+use crate::engine::chunking::ProcessingTask;
+
 use super::metadata::{
     ArchiveMetadata, AudioMetadata, CodeMetadata, DocumentMetadata, EpubMetadata, HtmlMetadata,
     ImageMetadata, IniMetadata, PptxMetadata, SqliteMetadata, TomlMetadata, VideoMetadata,
@@ -194,4 +196,31 @@ impl Output {
             ..Default::default()
         }
     }
+}
+
+/// Result of Phase 1 scan: valid tasks and paths that failed (for TUI/lib to display).
+#[derive(Debug, Clone, Default)]
+pub struct Phase1Result {
+    pub tasks: Vec<ProcessingTask>,
+    /// Paths that failed during initial scan, with error message (e.g. for TUI fallback).
+    pub failed: Vec<(String, String)>,
+}
+
+/// Result of Phase 2: successful outputs and paths that failed (for TUI/lib to display).
+#[derive(Debug, Clone, Default)]
+pub struct Phase2Result {
+    pub outputs: Vec<Output>,
+    /// Paths that failed during template mining or write, with error message.
+    pub failed: Vec<(String, String)>,
+}
+
+/// Result of schema extraction: outputs plus Phase 1 and Phase 2 failures (for TUI/lib to display).
+#[derive(Debug, Clone, Default)]
+pub struct ZahirScanResult {
+    /// Successful outputs (one per file that passed Phase 1 and Phase 2).
+    pub outputs: Vec<Output>,
+    /// Paths that failed during Phase 1 (initial scan), with error message.
+    pub phase1_failed: Vec<(String, String)>,
+    /// Paths that failed during Phase 2 (template mining or write), with error message.
+    pub phase2_failed: Vec<(String, String)>,
 }

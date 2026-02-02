@@ -289,7 +289,8 @@ fn extract_json_pattern(
                 .map(|key| {
                     build_pattern_part(
                         key.as_str(),
-                        map.get(*key).unwrap(),
+                        map.get(*key)
+                            .expect("key from sorted_keys derived from map.keys()"),
                         key_value_freq,
                         total_lines,
                         config,
@@ -325,7 +326,10 @@ fn format_json_value_for_freq(value: &Value) -> String {
                 "[]".to_string()
             } else {
                 // For arrays, use type and length for frequency tracking
-                let value_type = get_value_type(arr.first().unwrap());
+                let value_type = get_value_type(
+                    arr.first()
+                        .expect("array non-empty in else branch of is_empty check"),
+                );
                 JsonPlaceholders::format_array_type_length(value_type, arr.len())
             }
         }

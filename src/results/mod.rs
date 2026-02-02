@@ -4,24 +4,20 @@ pub mod core;
 pub mod metadata;
 pub mod writing;
 
+pub use core::*;
+pub use metadata::*;
+pub use writing::*;
+
+// ============================================================================
+// Minimal Fallback Trait
+// ============================================================================
+
 /// Trait for metadata types that can create a minimal fallback
 pub trait MinimalFallback {
     /// Create minimal fallback metadata when extraction fails
     /// Only sets the file size (stream_size), all other fields are None/0
     fn minimal_fallback(file_size_bytes: usize) -> Self;
 }
-
-// Re-export all public types for convenience
-pub use core::{FileMetadata, MiningResult, Output, OutputMode, Template};
-// Re-export all metadata types (now from metadata module)
-pub use metadata::{
-    ArchiveEntry, ArchiveMetadata, AudioMetadata, BlobStats, BooleanStats, CodeMetadata,
-    ColumnInfo, CsvMetadata, DateStats, DocumentMetadata, EpubMetadata, ForeignKeyInfo,
-    HtmlMetadata, ImageMetadata, IndexInfo, IniMetadata, NumericStats, PdfMetadata, PptxMetadata,
-    SqliteMetadata, TableInfo, TextStats, TomlMetadata, VideoMetadata, XmlMetadata, YamlMetadata,
-    ZipEntry, ZipMetadata,
-};
-pub use writing::{CompressionStats, PunctuationMetrics, SVOAnalysis, WritingFootprint};
 
 /// Helper function to create minimal fallback metadata
 /// This simplifies calls from outside the results module
