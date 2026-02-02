@@ -10,7 +10,9 @@ use zahirscan::{
 
 #[derive(Parser)]
 #[command(name = zahirscan::PKG_NAME)]
-#[command(about = "Text file and log file parser using probabilistic template mining")]
+#[command(
+    about = "Template mining for text/logs and metadata extraction for media, documents, archives, and more"
+)]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 struct Args {
     #[command(subcommand)]

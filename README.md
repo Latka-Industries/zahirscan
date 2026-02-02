@@ -75,43 +75,24 @@ Documentation: [docs.rs/zahirscan](https://docs.rs/zahirscan)
 
 ```bash
 $ zahirscan --help
-Text file and log file parser using probabilistic template mining
+Template mining for text/logs and metadata extraction for media, documents, archives, and more
 
-Usage: zahirscan [OPTIONS]
-
-Options:
-  -i, --input <INPUT>...
-          Input file(s) to parse (can specify multiple)
-
-  -o, --output <OUTPUT>
-          Output folder path (defaults to temp file if not specified).
-          Creates filename.zahirscan.out in the folder for each input file
-
-  -f, --full
-          Output mode: full metadata (for development/debugging).
-          Default is templates-only mode (minimal JSON with templates, writing footprint, and media metadata)
-
-  -d, --dev
-          Development mode: enables debug logging.
-          Default is production mode (info level only).
-          This disables progress bars if enabled
-
-  -r, --redact
-          Redact file paths in output (show only filename as ***/filename.ext).
-          Useful for privacy when sharing output JSON
-
-  -n, --no-media
-          Skip media metadata extraction (audio, video, image).
-          Faster processing when metadata is not needed
-  -p, --progress
-          Show progress bars during processing.
-          This is ignored if dev mode is enabled.
-
-  -h, --help
-          Print help
+Usage: zahirscan [OPTIONS] [COMMAND]
 
 Commands:
-  init    Write default config to app data dir for editing (see Configuration)
+  init  Write default config to XDG config dir (~/.config/zahirscan/zahirscan.toml or equivalent)
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -i, --input <INPUT>...  Input file(s) to parse (can specify multiple)
+  -o, --output <OUTPUT>   Output folder path (defaults to temp file if not specified). Creates filename.zahirscan.out in the folder for each input file
+  -f, --full              Output mode: full metadata (for development/debugging). Default is templates-only mode (minimal JSON with templates & writing footprint)
+  -d, --dev               Development mode: enables debug logging. Default is production mode (info level only). This disables progress bars if enabled
+  -r, --redact            Redact file paths in output (show only filename as ***/filename.ext). Useful for privacy when sharing output JSON
+  -n, --no-media          Skip media metadata extraction (audio, video, image). Faster processing when metadata is not needed
+  -p, --progress          Show progress bars during processing. This is ignored if dev mode is enabled
+  -h, --help              Print help
+  -V, --version           Print version
 ```
 
 **Output formats:**
