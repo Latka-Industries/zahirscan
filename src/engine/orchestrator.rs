@@ -6,7 +6,7 @@ use super::tools::{
     determine_output_path, format_bytes, print_progress_handler, should_ignore_path,
 };
 use crate::config::RuntimeConfig;
-use crate::parsers::{extract_templates, initial_file_scan};
+use crate::parsers::{extract_templates, initial_file_scan_with_mmap};
 use crate::results::{Output, Phase1Result, Phase2Result};
 use anyhow::Result;
 use kdam::Animation;
@@ -123,7 +123,7 @@ pub fn phase1_scan(
     // Progress bar will close automatically on drop
     let stats_results: Vec<_> = input_paths
         .par_iter()
-        .map(|input_path| crate::with_progress!(&pb, initial_file_scan(input_path)))
+        .map(|input_path| crate::with_progress!(&pb, initial_file_scan_with_mmap(input_path)))
         .collect();
     let scan_duration = scan_start.elapsed();
     debug!(
@@ -137,10 +137,14 @@ pub fn phase1_scan(
     let mut failed: Vec<(String, String)> = Vec::new();
     for (i, result) in stats_results.into_iter().enumerate() {
         match result {
-            Ok(stats) => {
+            Ok((stats, mmap)) => {
                 let input_path = &input_paths[i];
                 let output_path = determine_output_path(input_path, output, config);
-                tasks.push(ProcessingTask { stats, output_path });
+                tasks.push(ProcessingTask {
+                    stats,
+                    output_path,
+                    mmap: Some(mmap),
+                });
             }
             Err(e) => {
                 let path = input_paths[i].clone();
@@ -193,6 +197,11 @@ pub fn phase2_mining(
         tasks.len()
     );
 
+    // One config with target_chunks_per_file set for the whole batch (same value for every file)
+    let target_chunks = adaptive.chunks_per_file_multiplier * config.max_workers;
+    let mut phase2_config = config.clone();
+    phase2_config.target_chunks_per_file = target_chunks;
+
     // Process files in parallel with adaptive batching
     let pb = if config.show_progress {
         Some(create_progress_bar(ProgressBarConfig::new(
@@ -211,7 +220,7 @@ pub fn phase2_mining(
         |task| {
             crate::with_progress!(
                 &pb,
-                process_task_phase2(task, config, adaptive, config.max_workers, skip_file_write)
+                process_task_phase2(task, &phase2_config, skip_file_write)
             )
         },
     );
@@ -294,8 +303,6 @@ where
 fn process_task_phase2(
     task: &ProcessingTask,
     config: &RuntimeConfig,
-    adaptive: &AdaptiveChunking,
-    max_workers: usize,
     skip_file_write: bool,
 ) -> Result<Output> {
     use std::time::Instant;
@@ -307,14 +314,8 @@ fn process_task_phase2(
     let needs_processing = !stats.is_binary || stats.file_type.binary_needs_processing();
 
     if needs_processing {
-        // Create modified config with adaptive chunking
-        // Calculate target number of chunks: multiplier * max_workers
-        let target_chunks = adaptive.chunks_per_file_multiplier * max_workers;
-        let mut phase2_config = config.clone();
-        phase2_config.target_chunks_per_file = target_chunks;
-
-        // Template mining (and image metadata extraction for images)
-        stats.mining_result = extract_templates(&mut stats, &phase2_config)
+        // config already has target_chunks_per_file set (once per batch in phase2_mining)
+        stats.mining_result = extract_templates(&mut stats, config, task.mmap.as_ref())
             .inspect_err(|e| {
                 error!("Error extracting templates for {}: {}", stats.file_path, e);
             })
