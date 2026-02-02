@@ -3,21 +3,17 @@
 [![Crates.io](https://img.shields.io/crates/v/zahirscan.svg)](https://crates.io/crates/zahirscan)
 [![docs.rs](https://img.shields.io/docsrs/zahirscan)](https://docs.rs/zahirscan)
 ![Build](https://github.com/thicclatka/zahirscan/workflows/Build/badge.svg)
-![Rust](https://img.shields.io/badge/rust-1.93.0-orange.svg)
+![Rust](https://img.shields.io/badge/rust-1.93-orange.svg)
 
 > _"Others will dream that I am mad, while I dream of the Zahir."_ — [JL Borges, Labyrinths](https://bookshop.org/p/books/labyrinths-jorge-luis-borges/f14b472a366ed106?ean=9780811216999&next=t&)
 
-A high-performance Rust CLI tool that extracts templates and patterns from unstructured content, converting them into compact structured formats while preserving essential information. Provides comprehensive metadata extraction for many file types: media (images, video, audio), documents (DOCX, XLSX, PDF), databases (SQLite), settings (TOML, YAML, INI, XML), archives (ZIP, TAR), and code/scripts (via linguist).
+A high-performance Rust CLI that uses probabilistic template mining to extract structure and patterns from content, and metadata for the formats below.
 
-## Overview
-
-ZahirScan uses probabilistic template mining to extract essential structure and patterns from content, and extracts metadata for the formats below.
-
-**Supported Formats**:
+**Supported formats**:
 
 - **Logs**: Plain text logs, JSON-formatted logs, structured log files
 - **Text Documents**: TXT, Markdown (MD), plain text content
-- **Documents**: DOCX, XLSX, PDF
+- **Documents**: DOCX, XLSX, PPTX, PDF
 - **Databases**: SQLite (.db, .sqlite, .sqlite3)
 - **Settings**: INI (.ini, .cfg), TOML (.toml, .lock), YAML (.yaml, .yml), XML (.xml)
 - **Structured**: CSV, HTML (.html, .htm)
@@ -27,30 +23,28 @@ ZahirScan uses probabilistic template mining to extract essential structure and 
 - **Videos**: MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, 3GP, OGV
 - **Audio**: MP3, FLAC, WAV, M4A, AAC, OGG, Opus, WMA, APE, DSD, DSF
 
-All outputs reduce size by 80-95% compared to raw content while preserving essential information.
-
 ## Key Features
 
-- **Template Mining**: Automatically identifies repeated patterns in logs/text and extracts them as templates with placeholders
-- **Zero-Copy Processing**: Uses memory-mapped files (`memmap2`) to handle files larger than available RAM
-- **Adaptive Parallelization**: Automatically optimizes chunk sizes based on file statistics and CPU resources
-- **Size Reduction**: Typically reduces content size by 80-95% while preserving essential information
+- **Template mining**: Identifies repeated patterns in logs/text and extracts them as templates with placeholders
+- **Memory-mapped I/O**: Uses `memmap2` for large files; each path is opened once (Phase 1 mmap reused in Phase 2)
+- **Adaptive parallelization**: Chunk sizes and worker usage tuned from Phase 1 statistics
+- **Size reduction**: Typically 80–95% smaller than raw content while preserving structure and metadata
 
 ### Metadata extraction by format
 
-| **Metadata**         | **Extracts**                                                                                                                                                                                                                                                                                                    |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Media                | Dimensions, codecs, bitrates for images, videos, audio                                                                                                                                                                                                                                                          |
-| Document             | DOCX: word count, character count, paragraph count, title, author, creation/modification dates, revision. XLSX: sheet count, sheet names, row/column counts per sheet, core properties. PDF: page count, title, author, subject, creator, producer, creation/modification dates, PDF version, encryption status |
-| CSV                  | Row/column counts, column names, data types, delimiter, quote/escape characters, null percentages, unique counts; type-specific statistics (numeric: min/max/mean/median/IQR/stdev, date: span/min/max, boolean: true percentage)                                                                               |
-| SQLite               | Schema (tables, columns, types, constraints), primary keys, foreign keys, indexes, row counts, column statistics (null percentages, unique counts, numeric/text/boolean/blob/date)                                                                                                                              |
-| TOML, YAML, INI, CFG | Recursive schema (scalar, table/mapping, array/sequence; INI: section→key→scalar, multi-line values), key count, max depth. TOML: section count. YAML: scalar/sequence/map counts. INI/.cfg: section count, comment count                                                                                       |
-| Code/Scripts         | script_type (linguist + optional shebang), byte_count, line_count; BOM, line_ending, trailing_newline, max_line_length, blank_line_count, indentation (single-pass scan)                                                                                                                                        |
-| ZIP                  | File count, entries (path, uncompressed/compressed size, detected type, modified, compression method), entry_type_counts; filters hidden OS files (e.g. \_\_MACOSX, .DS_Store, Thumbs.db)                                                                                                                       |
-| Archive (TAR family) | File count, entries (path, size), compressed_size, uncompressed_size                                                                                                                                                                                                                                            |
-| XML                  | Recursive schema (root→children with attributes; repeated siblings as arrays with union of all children), element count, attribute count, max depth, has_namespaces                                                                                                                                             |
-| HTML                 | Title, meta description, lang, charset, viewport; link/stylesheet/script/style counts; heading (h1–h6) and element counts (img, table, form, p, ul, ol, iframe, article, nav, section, header, footer, main); plain_text_len, word_count; writing footprint from body text                                      |
-| Writing Footprint    | For text/markdown/html: vocabulary richness, sentence structure, template diversity, punctuation metrics. Uses **two writing-analysis passes**: (1) exact-pattern grouping (n-gram/phrase-based); (2) shape fallback (group by sentence length + end punctuation) when pass 1 yields no templates               |
+| **Metadata**         | **Extracts**                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Media                | Dimensions, codecs, bitrates for images, videos, audio                                                                                                                                                                                                                                                                                                              |
+| Document             | **DOCX**: word count, character count, paragraph count, title, author, creation/modification dates, revision. **XLSX**: sheet count, sheet names, row/column counts per sheet, core properties. **PPTX**: slide count, core properties. **PDF**: page count, title, author, subject, creator, producer, creation/modification dates, PDF version, encryption status |
+| CSV                  | Row/column counts, column names, data types, delimiter, quote/escape characters, null percentages, unique counts; type-specific statistics (numeric: min/max/mean/median/IQR/stdev, date: span/min/max, boolean: true percentage)                                                                                                                                   |
+| SQLite               | Schema (tables, columns, types, constraints), primary keys, foreign keys, indexes, row counts, column statistics (null percentages, unique counts, numeric/text/boolean/blob/date)                                                                                                                                                                                  |
+| TOML, YAML, INI, CFG | Recursive schema (scalar, table/mapping, array/sequence; INI: section→key→scalar, multi-line values), key count, max depth. TOML: section count. YAML: scalar/sequence/map counts. INI/.cfg: section count, comment count                                                                                                                                           |
+| Code/Scripts         | script_type (linguist + optional shebang), byte_count, line_count; BOM, line_ending, trailing_newline, max_line_length, blank_line_count, indentation (single-pass scan)                                                                                                                                                                                            |
+| ZIP                  | File count, entries (path, uncompressed/compressed size, detected type, modified, compression method), entry_type_counts; filters hidden OS files (e.g. \_\_MACOSX, .DS_Store, Thumbs.db)                                                                                                                                                                           |
+| Archive (TAR family) | File count, entries (path, size), compressed_size, uncompressed_size                                                                                                                                                                                                                                                                                                |
+| XML                  | Recursive schema (root→children with attributes; repeated siblings as arrays with union of all children), element count, attribute count, max depth, has_namespaces                                                                                                                                                                                                 |
+| HTML                 | Title, meta description, lang, charset, viewport; link/stylesheet/script/style counts; heading (h1–h6) and element counts (img, table, form, p, ul, ol, iframe, article, nav, section, header, footer, main); plain_text_len, word_count; writing footprint from body text                                                                                          |
+| Writing Footprint    | For text/markdown/html: vocabulary richness, sentence structure, template diversity, punctuation metrics. Uses **two writing-analysis passes**: (1) exact-pattern grouping (n-gram/phrase-based); (2) shape fallback (group by sentence length + end punctuation) when pass 1 yields no templates                                                                   |
 
 ## Installation
 
@@ -66,8 +60,6 @@ cargo install zahirscan
 ```
 
 **Note**: `ffprobe` (from FFmpeg) is optional but required for video/audio metadata extraction.
-
-Documentation: [docs.rs/zahirscan](https://docs.rs/zahirscan)
 
 ## Usage
 
@@ -97,7 +89,7 @@ Options:
 
 **Output formats:**
 
-- **Mode 1 (Templates)**: Minimal JSON with template patterns & schema, writing footprint (for text/markdown), media metadata (for images/videos/audio), code metadata (for code/script files), and document metadata (for DOCX/XLSX)
+- **Mode 1 (Templates)**: Minimal JSON with template patterns & schema, writing footprint (for text/markdown), media metadata (for images/videos/audio), code metadata (for code/script files), and document metadata (for DOCX/XLSX/PPTX)
 - **Mode 2 (Full)**: Mode 1 output plus:
   - File statistics (size, line count, processing time)
   - Size comparison (before/after)
@@ -151,26 +143,7 @@ Each **`Output`** object contains:
 - `is_binary: Option<bool>` - Whether file is binary
 - `compression: Option<CompressionStats>` - Compression metrics
 
-**Conditional Fields (present when applicable):**
-
-- `writing_footprint: Option<WritingFootprint>` - Writing analysis for text/markdown files
-- `image_metadata: Option<ImageMetadata>` - Image metadata (dimensions, format, etc.)
-- `video_metadata: Option<VideoMetadata>` - Video metadata (codec, resolution, bitrate, etc.)
-- `audio_metadata: Option<AudioMetadata>` - Audio metadata (codec, bitrate, sample rate, etc.)
-- `code_metadata: Option<CodeMetadata>` - Code/script metadata (script_type, byte_count, line_count, BOM, line_ending, trailing_newline, max_line_length, blank_line_count, indentation)
-- `csv_metadata: Option<CsvMetadata>` - CSV metadata (row/column counts, data types, statistics)
-- `sqlite_metadata: Option<SqliteMetadata>` - SQLite database metadata (schema, tables, columns, indexes, statistics)
-- `toml_metadata: Option<TomlMetadata>` - TOML config metadata (recursive schema, section/key counts, depth)
-- `zip_metadata: Option<ZipMetadata>` - ZIP archive metadata (entries, sizes, detected types, compression; hidden OS files filtered)
-- `archive_metadata: Option<ArchiveMetadata>` - TAR / compressed TAR. Plain `.tar`: format, file_count, entries, compressed_size, uncompressed_size. Compressed (`.tar.gz`/`.xz`/`.bz2`): zero-copy, no decompression—format, compressed_size; `.tar.gz` also has uncompressed_size from gzip trailer; file_count and entries are `None`.
-- `xml_metadata: Option<XmlMetadata>` - XML structure metadata (recursive schema, element/attribute counts, namespaces)
-- `html_metadata: Option<HtmlMetadata>` - HTML metadata (title, meta, lang, charset, element counts, plain text/word count, writing footprint from body)
-- `yaml_metadata: Option<YamlMetadata>` - YAML metadata (recursive schema, key count, max depth, scalar/sequence/map counts)
-- `ini_metadata: Option<IniMetadata>` - INI/.cfg metadata (recursive schema section→key→scalar, section/key/comment counts, max depth, multi-line values)
-- `pdf_metadata: Option<PdfMetadata>` - PDF metadata (page count, document properties, etc.)
-- `docx_metadata: Option<DocumentMetadata>` - DOCX/XLSX metadata (word count, sheet count, title, author, dates, etc.)
-- `pptx_metadata: Option<PptxMetadata>` - PPTX metadata (slide count, core properties, etc.)
-- `epub_metadata: Option<EpubMetadata>` - EPUB metadata (title, creator, language, chapter count, etc.)
+**Conditional fields** (per-format metadata when applicable): `writing_footprint`, `image_metadata`, `video_metadata`, `audio_metadata`, `code_metadata`, `csv_metadata`, `sqlite_metadata`, `toml_metadata`, `zip_metadata`, `archive_metadata`, `xml_metadata`, `html_metadata`, `yaml_metadata`, `ini_metadata`, `pdf_metadata`, `docx_metadata`, `pptx_metadata`, `epub_metadata`. See [Metadata extraction by format](#metadata-extraction-by-format) and [docs.rs](https://docs.rs/zahirscan) for field details.
 
 #### Template Structure
 
@@ -208,7 +181,7 @@ Runtime config is `RuntimeConfig`. How it’s loaded:
   - Run **`zahirscan init`** to write the embedded default to edit; the CLI will use it as the overlay.
 - **Library**: `extract_schema()` uses the embedded default only (no user config file). For custom config: `RuntimeConfig::new()` is the embedded default (same as config.toml, no file I/O); `RuntimeConfig::load_from_path(path)` to load from a file; `RuntimeConfig::load_with_overlay(base_path, overlay_path)` for base + overlay.
 
-Schema (concurrency, mining, filter): see [config.toml](config.toml).
+Full schema: [config.toml](config.toml).
 
 **Adaptive defaults:**
 
@@ -226,7 +199,7 @@ Schema (concurrency, mining, filter): see [config.toml](config.toml).
 ### Phase 1: Initial File Scan
 
 - File format detection and statistics collection (line count, byte count, token count)
-- Memory-mapped file access for text files (`memmap2`)
+- Memory-mapped file access for text files (`memmap2`); mmap reused in Phase 2 (single open per path)
 - Content type determination (log vs. text/markdown vs. media)
 - Prepares tasks for Phase 2
 
@@ -251,4 +224,4 @@ ZahirScan implements non-invasive file operations:
 
 ## License
 
-This project is licensed under the MIT OR Apache-2.0 dual license - see the [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE) files for details.
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE).
