@@ -2,7 +2,7 @@
 name = "zahirscan"
 version = "0.2.9"
 edition = "2024"
-rust-version = "1.92"
+rust-version = "1.93"
 authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
 description = "Token-efficient content compression for AI analysis using probabilistic template mining"
 license = "MIT OR Apache-2.0"
@@ -29,37 +29,37 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.100"
+calamine = "0.32.0"
 chrono = { version = "0.4.43", features = ["serde"] }
 clap = { version = "4.5.54", features = ["derive"] }
+csv = "1.4.0"
 dashmap = "6.1.0"
 env_logger = "0.11.8"
+ffprobe = "0.4.0"
+image = "0.25"
+kdam = "0.6.4"
 lasso = "0.7.3"
+linguist = "0.1.6"
+lofty = "0.22.4"
 log = "0.4.29"
 memchr = "2.7.6"
 memmap2 = "0.9.9"
 num_cpus = "1.17.0"
+pdf = "0.9.0"
+png = "0.18.0"
+quick-xml = { version = "0.39.0", features = ["serialize"] }
 rayon = "1.11.0"
 regex = "1.12.2"
+rusqlite = { version = "0.38.0", features = ["bundled"] }
+scraper = "0.25.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-toml = { version = "0.9.11", features = ["parse", "serde"] }
-image = "0.25"
-png = "0.18.0"
-tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread"] }
-ffprobe = "0.4.0"
-lofty = "0.22.4"
-csv = "1.4.0"
-pdf = "0.9.0"
-zip = "7.2.0"
-quick-xml = { version = "0.39.0", features = ["serialize"] }
-unicode-segmentation = "1.12.0"
-calamine = "0.32.0"
-kdam = "0.6.4"
-rusqlite = { version = "0.38.0", features = ["bundled"] }
-tempfile = "3.12.0"
-scraper = "0.25.0"
 serde_yaml = "0.9.34"
-linguist = "0.1.6"
+tempfile = "3.12.0"
+tokio = { version = "1.49.0", features = ["rt", "rt-multi-thread"] }
+toml = { version = "0.9.11", features = ["parse", "serde"] }
+unicode-segmentation = "1.12.0"
+zip = "7.2.0"
 
 [profile.release]
 opt-level = "s"

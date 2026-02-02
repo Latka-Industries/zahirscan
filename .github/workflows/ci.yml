@@ -66,7 +66,7 @@ jobs:
       - name: Install Rust (MSRV)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.92
+          toolchain: 1.93
 
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
