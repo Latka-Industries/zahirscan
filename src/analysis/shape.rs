@@ -2,7 +2,7 @@
 //! Groups by (word count, end punctuation) so more sentences share a template than exact-pattern.
 
 use crate::analysis::Punctuation;
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::engine::tools::{
     PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed,
 };
@@ -55,7 +55,7 @@ pub fn pattern_for_shape(shape: &SentenceShape) -> String {
 pub fn group_sentences_by_shape(
     sentences: &[String],
     template_groups: &DashMap<String, Vec<String>>,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) {
     let mut by_shape: HashMap<SentenceShape, Vec<String>> = HashMap::new();
     for s in sentences {

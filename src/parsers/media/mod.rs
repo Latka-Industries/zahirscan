@@ -1,6 +1,6 @@
 //! Media parsers: audio, image, video.
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::{FileType, ParseResult};
 use crate::results::MiningResult;
 use anyhow::Result;
@@ -15,7 +15,11 @@ pub use image::{extract_image_metadata, extract_image_templates};
 pub use video::{extract_video_metadata, extract_video_templates};
 
 /// Dispatch by file type; fills the appropriate metadata field and returns templates.
-pub fn process(stats: &mut ParseResult, mmap: &Mmap, config: &Config) -> Result<MiningResult> {
+pub fn process(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &RuntimeConfig,
+) -> Result<MiningResult> {
     match stats.file_type {
         FileType::Image => crate::process_with_metadata!(
             stats,

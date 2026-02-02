@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::engine::tools::{detect_file_type, should_ignore_path};
 use crate::parsers::ParseResult;
 use crate::results::metadata::{ZipEntry, ZipMetadata};
@@ -30,7 +30,7 @@ impl ZipOmit {
 pub fn extract_zip_metadata(
     content: &[u8],
     stats: &ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<ZipMetadata> {
     let mut archive = ZipArchive::new(Cursor::new(content))
         .map_err(|e| anyhow::anyhow!("ZIP parse error: {}", e))?;

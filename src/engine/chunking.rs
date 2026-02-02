@@ -3,8 +3,8 @@
 //! This module provides functions for calculating optimal chunk sizes
 //! and adaptive chunking strategies based on file statistics.
 
-use super::config::Config;
 use super::tools::format_bytes;
+use crate::config::RuntimeConfig;
 use crate::parsers::{FileType, ParseResult};
 use log::debug;
 
@@ -52,7 +52,7 @@ pub fn optimal_chunk_size(
 pub fn calculate_adaptive_chunking(
     tasks: &[ProcessingTask],
     max_workers: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> AdaptiveChunking {
     let num_files = tasks.len();
 

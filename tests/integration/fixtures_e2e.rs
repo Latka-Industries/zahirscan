@@ -1,7 +1,9 @@
 //! End-to-end integration tests for simple fixture files: file on disk → extract_schema → Output.
+
+use crate::get_test_config;
 use std::path::PathBuf;
 use std::process::Command;
-use zahirscan::{Config, OutputMode, extract_schema, extract_schema_with_config};
+use zahirscan::{OutputMode, extract_schema, extract_schema_with_config};
 
 fn fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -196,7 +198,7 @@ fn cli_invalid_output_dir_fails() {
 #[test]
 fn extract_schema_with_config_reuses_config() {
     // Load config once
-    let config = Config::load().unwrap_or_default();
+    let config = get_test_config();
 
     // Use same config for multiple calls (simulates TUI usage pattern)
     let files = ["sample.txt", "sample.log", "sample.json"];
@@ -216,7 +218,7 @@ fn extract_schema_with_config_reuses_config() {
 
 #[test]
 fn extract_schema_with_config_multiple_files_at_once() {
-    let config = Config::load().unwrap_or_default();
+    let config = get_test_config();
 
     // Process multiple files in a single call
     let paths: Vec<String> = ["sample.txt", "sample.log", "sample.json"]

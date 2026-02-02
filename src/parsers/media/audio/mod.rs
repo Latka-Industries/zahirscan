@@ -2,7 +2,7 @@
 
 mod mp3;
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::engine::tools::{get_extensions_for_file_type, is_codec_for_file_type};
 use crate::parsers::media::image;
 use crate::parsers::{CompressionMode, FileType, ParseResult, media_helpers};
@@ -63,7 +63,7 @@ fn extract_compression_mode(codec: &str) -> CompressionMode {
 pub fn extract_audio_metadata(
     _content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<OutputAudioMetadata> {
     // Check if ffprobe is available before attempting extraction
     check_ffprobe_available()?;
@@ -276,7 +276,7 @@ fn analyze_image_data(image_data: &[u8]) -> Option<ImageMetadata> {
     };
 
     // Use the existing image parser
-    let config = Config::default();
+    let config = RuntimeConfig::default();
     match image::extract_image_metadata(image_data, &stats, &config) {
         Ok(metadata) => Some(metadata),
         Err(e) => {

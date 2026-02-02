@@ -14,7 +14,7 @@ pub mod text;
 pub mod traits;
 pub use media_helpers::{BitrateMode, CompressionMode};
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::engine::tools::{detect_file_type, redact_path};
 use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
 use anyhow::Result;
@@ -105,7 +105,7 @@ macro_rules! no_template_mining {
         pub fn $name(
             _content: &[u8],
             stats: &$crate::parsers::ParseResult,
-            _config: &$crate::engine::config::Config,
+            _config: &$crate::config::RuntimeConfig,
         ) -> anyhow::Result<$crate::results::MiningResult> {
             Ok($crate::parsers::traits::empty_mining_result(stats))
         }
@@ -130,7 +130,7 @@ impl ParserCategory {
         self,
         stats: &mut ParseResult,
         mmap: &Mmap,
-        config: &Config,
+        config: &RuntimeConfig,
     ) -> Result<MiningResult> {
         match self {
             ParserCategory::Media => media::process(stats, mmap, config),
@@ -267,7 +267,7 @@ impl ParseResult {
     }
 
     /// Convert parse result to Output object
-    pub fn to_output(&self, mode: OutputMode, config: &crate::engine::config::Config) -> Output {
+    pub fn to_output(&self, mode: OutputMode, config: &RuntimeConfig) -> Output {
         match mode {
             OutputMode::Templates => self.build_templates_output(config),
             OutputMode::Full => self.build_full_output(config),
@@ -281,7 +281,7 @@ impl ParseResult {
     }
 
     /// Build templates-only output (with writing footprint and metadata)
-    fn build_templates_output(&self, config: &Config) -> Output {
+    fn build_templates_output(&self, config: &RuntimeConfig) -> Output {
         let source_path = match config.redact_paths {
             true => redact_path(&self.file_path),
             false => self.file_path.clone(),
@@ -308,7 +308,7 @@ impl ParseResult {
     }
 
     /// Build full output (with all metadata and compression stats)
-    fn build_full_output(&self, config: &Config) -> Output {
+    fn build_full_output(&self, config: &RuntimeConfig) -> Output {
         let source_path = match config.redact_paths {
             true => redact_path(&self.file_path),
             false => self.file_path.clone(),
@@ -358,7 +358,7 @@ impl ParseResult {
         &self,
         output_path: &str,
         mode: OutputMode,
-        config: &crate::engine::config::Config,
+        config: &crate::config::RuntimeConfig,
     ) -> Result<()> {
         let mut output_file = OpenOptions::new()
             .create(true)
@@ -423,7 +423,7 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
 fn process_text_or_unknown(
     stats: &mut ParseResult,
     mmap: &Mmap,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<MiningResult> {
     if stats.is_binary {
         return Ok(traits::empty_mining_result(stats));
@@ -442,7 +442,7 @@ fn process_text_or_unknown(
 /// Extract templates from a file using probabilistic template mining
 /// Main handler that routes to log or text parsers
 /// For images, also extracts image metadata
-pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<MiningResult> {
+pub fn extract_templates(stats: &mut ParseResult, config: &RuntimeConfig) -> Result<MiningResult> {
     let mmap = open_mmap(&stats.file_path)?;
     match stats.file_type.parser_category() {
         Some(cat) => cat.process(stats, &mmap, config),
@@ -454,7 +454,7 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
 pub(crate) fn estimate_compressed_tokens_with_footprint(
     templates: &[Template],
     _total_lines: usize,
-    config: &crate::engine::config::Config,
+    config: &RuntimeConfig,
     writing_footprint: Option<&crate::results::WritingFootprint>,
 ) -> usize {
     // Rough estimate: template patterns + examples
@@ -491,7 +491,7 @@ pub(crate) fn estimate_compressed_tokens_with_footprint(
 fn extract_unknown_templates(
     content: &str,
     stats: &mut ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<MiningResult> {
     // Try JSON first (most structured), then log, then text
     serde_json::from_str::<serde_json::Value>(content.lines().next().unwrap_or("")).map_or_else(

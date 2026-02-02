@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::YamlMetadata;
 use crate::results::metadata::settings::yaml::YamlTypeInfo;
@@ -120,7 +120,7 @@ fn walk(
 pub fn extract_yaml_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<YamlMetadata> {
     let value: Value =
         serde_yaml::from_slice(content).map_err(|e| anyhow::anyhow!("YAML parse error: {}", e))?;

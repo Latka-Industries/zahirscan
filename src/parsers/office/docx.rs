@@ -4,7 +4,7 @@ use std::io::Read;
 
 use super::constants::{CP_NAMESPACE, DOCX_CORE_PROPERTIES, OFFICE_CORE_XML, REVISION_ELEMENT};
 use super::utils::{decode_xml_entities, has_namespace, open_office_archive};
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::DocumentMetadata;
 use anyhow::Result;
@@ -16,7 +16,7 @@ use quick_xml::events::Event;
 pub fn extract_docx_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<DocumentMetadata> {
     let mut metadata = DocumentMetadata {
         file_size: Some(stats.byte_count),

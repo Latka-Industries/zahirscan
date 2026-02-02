@@ -1,12 +1,12 @@
 //! Tests for CSV metadata extraction
 
 use std::time::Duration;
-use zahirscan::engine::config::Config;
+use zahirscan::RuntimeConfig;
 use zahirscan::parsers::structured::extract_csv_metadata;
 use zahirscan::parsers::{FileType, ParseResult};
 
-fn get_test_config() -> Config {
-    Config::default()
+fn get_test_config() -> RuntimeConfig {
+    RuntimeConfig::default()
 }
 
 fn get_test_stats() -> ParseResult {

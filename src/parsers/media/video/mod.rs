@@ -1,6 +1,6 @@
 //! Video file metadata extraction
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::engine::tools::{check_ffprobe_available, run_ffprobe_safe};
 use crate::parsers::{ParseResult, media_helpers};
 use crate::results::VideoMetadata as OutputVideoMetadata;
@@ -11,7 +11,7 @@ use ffprobe::Stream;
 pub fn extract_video_metadata(
     _content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<OutputVideoMetadata> {
     // Check if ffprobe is available before attempting extraction
     check_ffprobe_available()?;

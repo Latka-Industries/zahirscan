@@ -1,7 +1,6 @@
-//! Scan engine: config, orchestration, chunking, path iteration, progress, and file-type/format utilities.
+//! Scan engine: orchestration, chunking, path iteration, progress, and file-type/format utilities.
 
 pub mod chunking;
-pub mod config;
 pub mod orchestrator;
 mod path_iter;
 mod progress;

@@ -2,7 +2,7 @@
 
 use crate::analysis::calculate_writing_footprint;
 use crate::analysis::{DefaultSentenceAnalyzer, SentenceAnalyzer};
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::engine::tools::{PlaceholderType, format_placeholder_bracketed_typed};
 use crate::parsers::ParseResult;
 use crate::parsers::traits::AdaptiveParallel;
@@ -96,7 +96,7 @@ enum MarkdownElement {
 pub fn extract_markdown_templates(
     content: &str,
     stats: &ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<MiningResult> {
     if content.trim().is_empty() {
         return Ok(crate::parsers::traits::empty_mining_result(stats));
@@ -434,7 +434,7 @@ fn element_to_pattern(elem: &MarkdownElement) -> Option<String> {
 /// Extract patterns from markdown structure (headers, lists, etc.)
 fn extract_structure_patterns(
     elements: &[MarkdownElement],
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Vec<(String, usize)> {
     let pattern_freq: DashMap<String, usize> = DashMap::new();
 
@@ -457,7 +457,7 @@ fn extract_structure_patterns(
 fn build_markdown_templates(
     elements: &[MarkdownElement],
     _structure_patterns: &[(String, usize)],
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Vec<Template> {
     let mut templates = Vec::new();
 

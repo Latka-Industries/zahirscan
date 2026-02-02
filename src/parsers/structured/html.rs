@@ -1,6 +1,6 @@
 //! HTML file metadata extraction
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::HtmlMetadata;
 use anyhow::Result;
@@ -148,7 +148,7 @@ fn get_html_selectors() -> &'static HtmlSelectors {
 pub fn extract_html_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<HtmlMetadata> {
     let s = std::str::from_utf8(content)
         .map_err(|e| anyhow::anyhow!("HTML must be valid UTF-8: {}", e))?;
@@ -211,7 +211,7 @@ pub fn extract_html_metadata(
 pub fn extract_html_templates(
     content: &[u8],
     stats: &crate::parsers::ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<crate::results::MiningResult> {
     let s = std::str::from_utf8(content)
         .map_err(|e| anyhow::anyhow!("HTML must be valid UTF-8: {}", e))?;

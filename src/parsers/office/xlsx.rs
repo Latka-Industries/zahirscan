@@ -9,7 +9,7 @@ use super::constants::{
     XLSX_ATTR_NAME, XLSX_LPSTR, XLSX_SHEET, XLSX_WORKBOOK_XML,
 };
 use super::utils::{has_namespace, open_office_archive, read_xml_from_archive};
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::DocumentMetadata;
 use anyhow::Result;
@@ -22,7 +22,7 @@ use quick_xml::events::Event;
 pub fn extract_xlsx_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<DocumentMetadata> {
     let mut metadata = DocumentMetadata {
         file_size: Some(stats.byte_count),

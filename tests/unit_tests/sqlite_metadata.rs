@@ -1,16 +1,12 @@
 //! Tests for SQLite metadata extraction
 
+use crate::get_test_config;
 use rusqlite::Connection;
 use std::fs;
 use std::time::Duration;
 use tempfile::NamedTempFile;
-use zahirscan::engine::config::Config;
 use zahirscan::parsers::sqlite::extract_sqlite_metadata;
 use zahirscan::parsers::{FileType, ParseResult};
-
-fn get_test_config() -> Config {
-    Config::default()
-}
 
 fn get_test_stats(file_path: &str, byte_count: usize) -> ParseResult {
     ParseResult {

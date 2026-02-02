@@ -1,9 +1,10 @@
 //! Tests for path ignore rules (ignore_patterns, ignore_hidden_files)
 
-use zahirscan::{Config, should_ignore_path};
+use crate::get_test_config;
+use zahirscan::{RuntimeConfig, should_ignore_path};
 
-fn config_with(ignore_patterns: Vec<&str>, ignore_hidden_files: bool) -> Config {
-    let mut c = Config::default();
+fn config_with(ignore_patterns: Vec<&str>, ignore_hidden_files: bool) -> RuntimeConfig {
+    let mut c = get_test_config();
     c.ignore_patterns = ignore_patterns.into_iter().map(String::from).collect();
     c.ignore_hidden_files = ignore_hidden_files;
     c

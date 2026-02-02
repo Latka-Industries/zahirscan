@@ -1,7 +1,7 @@
 //! Text file template extraction using sentence-level analysis and n-gram/phrase-based patterns
 
 use crate::analysis::{self, DefaultSentenceAnalyzer, SentenceAnalyzer, ngrams};
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::{
     ParseResult,
     traits::{AdaptiveParallel, build_mining_result_with_footprint, empty_mining_result},
@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 /// Filter segments before n-gram extraction and template grouping: keep only those that
 /// look like sentences (min words, alphanumeric, min length or min_words_alt). Drops
 /// fragments so n-grams and templates are built from sentence-like text only. Mutates in place.
-fn filter_sentences_before_ngrams(sentences: &mut Vec<String>, config: &Config) {
+fn filter_sentences_before_ngrams(sentences: &mut Vec<String>, config: &RuntimeConfig) {
     let before_filter = sentences.len();
     sentences.retain(|s| {
         let trimmed = s.trim();
@@ -40,7 +40,7 @@ fn filter_sentences_before_ngrams(sentences: &mut Vec<String>, config: &Config) 
 }
 
 /// Pre-compute tokens for each sentence (parallel). Returns Vec<Vec<String>>, one token list per sentence.
-fn precompute_sentence_tokens(sentences: &[String], config: &Config) -> Vec<Vec<String>> {
+fn precompute_sentence_tokens(sentences: &[String], config: &RuntimeConfig) -> Vec<Vec<String>> {
     let sentence_tokens: Vec<Vec<String>> = sentences
         .par_iter_adaptive(config)
         .map(|s| {
@@ -64,7 +64,7 @@ fn group_sentences_by_pattern(
     template_groups: &DashMap<String, Vec<String>>,
     frequent_ngrams: &[(String, usize)],
     frequent_phrases: &[(String, usize)],
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     sentences
         .par_iter_adaptive(config)
@@ -95,7 +95,7 @@ fn build_templates_from_groups(
     avg_sentence_length: usize,
     frequent_ngrams: &[(String, usize)],
     frequent_phrases: &[(String, usize)],
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Vec<Template> {
     let min_count = min_template_count.max(2);
     let templates: Vec<Template> = template_groups
@@ -176,7 +176,7 @@ fn build_templates_from_groups(
 pub fn extract_text_templates(
     content: &str,
     stats: &ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<MiningResult> {
     if content.trim().is_empty() {
         return Ok(empty_mining_result(stats));

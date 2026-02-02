@@ -1,6 +1,6 @@
 //! Common utilities for parsers
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::{MiningResult, Template};
 use rayon::prelude::*;
@@ -23,7 +23,7 @@ pub fn build_mining_result(
     templates: Vec<Template>,
     total_items: usize,
     stats: &ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> MiningResult {
     build_mining_result_with_footprint(templates, total_items, stats, config, None)
 }
@@ -33,7 +33,7 @@ pub fn build_mining_result_with_footprint(
     templates: Vec<Template>,
     total_items: usize,
     stats: &ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
     writing_footprint: Option<&crate::results::WritingFootprint>,
 ) -> MiningResult {
     // Sort by count (most common first)
@@ -65,7 +65,7 @@ pub fn calculate_compression(
     templates: &[Template],
     total_items: usize,
     stats: &ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> (usize, usize, f64) {
     calculate_compression_with_footprint(templates, total_items, stats, config, None)
 }
@@ -76,7 +76,7 @@ pub fn calculate_compression_with_footprint(
     templates: &[Template],
     total_items: usize,
     stats: &ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
     writing_footprint: Option<&crate::results::WritingFootprint>,
 ) -> (usize, usize, f64) {
     let original_tokens = stats.token_count;
@@ -115,7 +115,7 @@ pub trait AdaptiveParallel:
     IntoParallelIterator<Iter: rayon::iter::IndexedParallelIterator>
 {
     /// Returns a parallel iterator configured with adaptive chunking based on config
-    fn par_iter_adaptive(self, config: &Config) -> rayon::iter::MinLen<Self::Iter>
+    fn par_iter_adaptive(self, config: &RuntimeConfig) -> rayon::iter::MinLen<Self::Iter>
     where
         Self: Sized,
     {

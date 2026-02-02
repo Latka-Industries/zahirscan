@@ -1,6 +1,6 @@
 //! JSON file template extraction using JSON-aware parsing
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::engine::tools::{PlaceholderType, format_placeholder_typed};
 use crate::parsers::ParseResult;
 use crate::parsers::traits::{AdaptiveParallel, build_mining_result, empty_mining_result};
@@ -71,7 +71,7 @@ impl JsonPlaceholders {
 pub fn extract_json_templates(
     content: &str,
     stats: &ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<MiningResult> {
     let key_value_freq: DashMap<String, DashMap<String, usize>> = DashMap::new();
     let (parsed_objects, headers) = parse_json_content(content)?;
@@ -250,7 +250,7 @@ fn build_pattern_part(
     val: &Value,
     key_value_freq: &DashMap<String, DashMap<String, usize>>,
     total_lines: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> String {
     let value_str_for_freq = format_json_value_for_freq(val);
     let threshold = (total_lines as f64 * config.static_threshold) as usize;
@@ -276,7 +276,7 @@ fn extract_json_pattern(
     value: &Value,
     key_value_freq: &DashMap<String, DashMap<String, usize>>,
     total_lines: usize,
-    config: &Config,
+    config: &RuntimeConfig,
     headers: &Option<Vec<String>>,
 ) -> String {
     match value {
@@ -374,7 +374,7 @@ fn format_json_value(value: &Value) -> String {
 fn extract_json_examples(
     value: &Value,
     examples: &mut BTreeMap<String, Vec<String>>,
-    config: &Config,
+    config: &RuntimeConfig,
     headers: &Option<Vec<String>>,
 ) {
     match value {
@@ -402,7 +402,7 @@ fn add_example_value(
     val: &Value,
     placeholder: &str,
     examples: &mut BTreeMap<String, Vec<String>>,
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     let entry = examples.entry(placeholder.to_string()).or_default();
 

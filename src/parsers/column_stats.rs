@@ -1,7 +1,7 @@
 //! Shared column statistics computation utilities
 //! Used by both CSV and SQLite parsers for consistent statistics calculation
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::traits::AdaptiveParallel;
 use crate::results::{BooleanStats, DateStats, NumericStats};
 use chrono::DateTime;
@@ -150,7 +150,7 @@ pub fn compute_numeric_stats_from_values(values: Vec<f64>) -> Option<NumericStat
 /// Used by CSV parser which works with string data
 pub fn compute_numeric_stats_from_strings(
     values: &[String],
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Option<NumericStats> {
     // Collect and parse numeric values in parallel, filtering out NaN/invalid
     let parsed_values: Vec<f64> = values
@@ -217,7 +217,7 @@ pub fn compute_date_stats_from_strings(values: &[String]) -> Option<DateStats> {
 /// Used by CSV parser which works with string data
 pub fn compute_boolean_stats_from_strings(
     values: &[String],
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Option<BooleanStats> {
     // Use DashMap for thread-safe parallel counting
     let total_count: DashMap<(), usize> = DashMap::new();
@@ -251,7 +251,7 @@ pub fn compute_boolean_stats_from_strings(
 
 /// Compute null percentage and unique count from string values
 /// Returns (null_percentage, unique_count)
-pub fn compute_null_and_unique_stats(values: &[String], config: &Config) -> (f64, usize) {
+pub fn compute_null_and_unique_stats(values: &[String], config: &RuntimeConfig) -> (f64, usize) {
     let total = values.len();
     if total == 0 {
         return (0.0, 0);
@@ -282,7 +282,7 @@ pub fn compute_null_and_unique_stats(values: &[String], config: &Config) -> (f64
 /// Compute text statistics (min/max/avg length, unique count) from string values
 pub fn compute_text_stats_from_strings(
     values: &[String],
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Option<(usize, usize, f64, usize)> {
     // Filter out null/empty values for length calculations
     let non_null_values: Vec<&String> = values.iter().filter(|v| !is_null_or_empty(v)).collect();

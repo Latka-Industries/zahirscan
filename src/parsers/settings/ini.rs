@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::parsers::structured::infer_value_type;
 use crate::results::IniMetadata;
@@ -53,7 +53,7 @@ fn is_continuation_line(line: &str) -> bool {
 pub fn extract_ini_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<IniMetadata> {
     let s = std::str::from_utf8(content)
         .map_err(|e| anyhow::anyhow!("INI must be valid UTF-8: {}", e))?;

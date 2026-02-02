@@ -1,11 +1,11 @@
 //! Orchestration logic for processing multiple files
 
 use super::chunking::{AdaptiveChunking, ProcessingTask};
-use super::config::Config;
 use super::progress::{ProgressBarConfig, create_progress_bar};
 use super::tools::{
     determine_output_path, format_bytes, print_progress_handler, should_ignore_path,
 };
+use crate::config::RuntimeConfig;
 use crate::parsers::{extract_templates, initial_file_scan};
 use crate::results::Output;
 use anyhow::Result;
@@ -22,7 +22,7 @@ fn log_phase1_metrics(
     path_duration: Duration,
     input_file_count: usize,
     tasks: &[ProcessingTask],
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     let duration_secs = duration.as_secs_f64();
     let scan_secs = scan_duration.as_secs_f64();
@@ -43,7 +43,7 @@ fn log_phase2_metrics(
     duration: Duration,
     tasks: &[ProcessingTask],
     max_workers: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     let total_bytes = tasks.iter().map(|t| t.stats.byte_count).sum::<usize>();
     let file_count = tasks.len();
@@ -76,7 +76,7 @@ fn log_phase2_metrics(
 }
 
 /// Filter input paths for Phase 1: skip directories and paths that match ignore patterns
-fn phase1_path_filter(p: &str, config: &Config) -> bool {
+fn phase1_path_filter(p: &str, config: &RuntimeConfig) -> bool {
     if Path::new(p).is_dir() {
         info!("Skipping directory: {}", p);
         false
@@ -92,7 +92,7 @@ fn phase1_path_filter(p: &str, config: &Config) -> bool {
 pub fn phase1_scan(
     input_paths: &[String],
     output: Option<&str>,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Vec<ProcessingTask> {
     use std::time::Instant;
 
@@ -164,7 +164,7 @@ pub fn phase1_scan(
 /// Writes to files (unless `skip_file_write` is true) and returns Output objects
 pub fn phase2_mining(
     tasks: Vec<ProcessingTask>,
-    config: &Config,
+    config: &RuntimeConfig,
     adaptive: &AdaptiveChunking,
     skip_file_write: bool,
 ) -> Result<Vec<Output>> {
@@ -260,7 +260,7 @@ where
 /// Process a single file task (extracted for reuse)
 fn process_task_phase2(
     task: &ProcessingTask,
-    config: &Config,
+    config: &RuntimeConfig,
     adaptive: &AdaptiveChunking,
     max_workers: usize,
     skip_file_write: bool,

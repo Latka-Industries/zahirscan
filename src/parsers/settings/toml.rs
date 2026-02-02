@@ -1,6 +1,6 @@
 //! TOML file metadata extraction
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::TomlMetadata;
 use crate::results::metadata::settings::toml::TomlTypeInfo;
@@ -61,7 +61,7 @@ fn max_depth_rec(d: usize, v: &Value) -> usize {
 pub fn extract_toml_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<TomlMetadata> {
     let s = std::str::from_utf8(content)
         .map_err(|e| anyhow::anyhow!("TOML must be valid UTF-8: {}", e))?;
