@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/zahirscan.svg)](https://crates.io/crates/zahirscan)
 [![docs.rs](https://img.shields.io/docsrs/zahirscan)](https://docs.rs/zahirscan)
 ![Build](https://github.com/thicclatka/zahirscan/workflows/Build/badge.svg)
-![Rust](https://img.shields.io/badge/rust-1.92.0-orange.svg)
+![Rust](https://img.shields.io/badge/rust-1.93.0-orange.svg)
 
 > _"Others will dream that I am mad, while I dream of the Zahir."_ — [JL Borges, Labyrinths](https://bookshop.org/p/books/labyrinths-jorge-luis-borges/f14b472a366ed106?ean=9780811216999&next=t&)
 
@@ -75,40 +75,24 @@ Documentation: [docs.rs/zahirscan](https://docs.rs/zahirscan)
 
 ```bash
 $ zahirscan --help
-Text file and log file parser using probabilistic template mining
+Template mining for text/logs and metadata extraction for media, documents, archives, and more
 
-Usage: zahirscan [OPTIONS]
+Usage: zahirscan [OPTIONS] [COMMAND]
+
+Commands:
+  init  Write default config to XDG config dir (~/.config/zahirscan/zahirscan.toml or equivalent)
+  help  Print this message or the help of the given subcommand(s)
 
 Options:
-  -i, --input <INPUT>...
-          Input file(s) to parse (can specify multiple)
-
-  -o, --output <OUTPUT>
-          Output folder path (defaults to temp file if not specified).
-          Creates filename.zahirscan.out in the folder for each input file
-
-  -f, --full
-          Output mode: full metadata (for development/debugging).
-          Default is templates-only mode (minimal JSON with templates, writing footprint, and media metadata)
-
-  -d, --dev
-          Development mode: enables debug logging.
-          Default is production mode (info level only).
-          This disables progress bars if enabled
-
-  -r, --redact
-          Redact file paths in output (show only filename as ***/filename.ext).
-          Useful for privacy when sharing output JSON
-
-  -n, --no-media
-          Skip media metadata extraction (audio, video, image).
-          Faster processing when metadata is not needed
-  -p, --progress
-          Show progress bars during processing.
-          This is ignored if dev mode is enabled.
-
-  -h, --help
-          Print help
+  -i, --input <INPUT>...  Input file(s) to parse (can specify multiple)
+  -o, --output <OUTPUT>   Output folder path (defaults to temp file if not specified). Creates filename.zahirscan.out in the folder for each input file
+  -f, --full              Output mode: full metadata (for development/debugging). Default is templates-only mode (minimal JSON with templates & writing footprint)
+  -d, --dev               Development mode: enables debug logging. Default is production mode (info level only). This disables progress bars if enabled
+  -r, --redact            Redact file paths in output (show only filename as ***/filename.ext). Useful for privacy when sharing output JSON
+  -n, --no-media          Skip media metadata extraction (audio, video, image). Faster processing when metadata is not needed
+  -p, --progress          Show progress bars during processing. This is ignored if dev mode is enabled
+  -h, --help              Print help
+  -V, --version           Print version
 ```
 
 **Output formats:**
@@ -123,16 +107,16 @@ Options:
 ZahirScan can be used as a Rust library to extract schemas (templates and metadata) from files programmatically.
 
 ```rust
-use zahirscan::{Config, OutputMode, extract_schema, extract_schema_with_config};
+use zahirscan::{RuntimeConfig, OutputMode, extract_schema, extract_schema_with_config};
 
-// Simple API: Config loaded automatically
-let outputs = extract_schema("file.log", OutputMode::Full)?;
+// Simple API: embedded default config, same result shape as extract_schema_with_config
+let result = extract_schema("file.log", OutputMode::Full)?;
+let outputs = result.outputs;
 
-// Advanced API: Load config once, reuse across multiple calls
-// (Optimal for TUI applications or processing multiple batches)
-let config = Config::load().unwrap_or_default();
-let batch1 = extract_schema_with_config(files1, OutputMode::Full, &config)?;
-let batch2 = extract_schema_with_config(files2, OutputMode::Full, &config)?;
+// Advanced API: same ZahirScanResult { outputs, phase1_failed, phase2_failed }, with your config
+let config = RuntimeConfig::new();
+let result = extract_schema_with_config(files, OutputMode::Full, &config)?;
+// result.outputs, result.phase1_failed, result.phase2_failed
 ```
 
 **Supported input types** (via `ToPathIter` trait):
@@ -140,9 +124,17 @@ let batch2 = extract_schema_with_config(files2, OutputMode::Full, &config)?;
 - Single file: `&str`, `String`, `&String`
 - Multiple files: `&[&str]`, `&[String]`, `Vec<String>`, `[&str; N]`
 
-#### Output Schema
+#### Return types
 
-The `extract_schema()` function returns `Result<Vec<Output>>`. Each `Output` object contains:
+Both **`extract_schema()`** and **`extract_schema_with_config()`** return `Result<ZahirScanResult>`. **`ZahirScanResult`** has:
+
+- **`outputs: Vec<Output>`** — successful results (one per file that passed Phase 1 and Phase 2)
+- **`phase1_failed: Vec<(String, String)>`** — paths that failed initial scan `(path, error_message)`
+- **`phase2_failed: Vec<(String, String)>`** — paths that failed template mining or write `(path, error_message)`
+
+Use `phase1_failed` and `phase2_failed` for TUI/reporting when some paths fail; partial success is returned, not an error. **`extract_schema()`** uses embedded default config only; **`extract_schema_with_config()`** uses the config you pass.
+
+Each **`Output`** object contains:
 
 **Always present (both modes):**
 
@@ -209,9 +201,16 @@ Each `Template` contains:
 
 ### Configuration
 
-See [`config.toml`](config.toml) for configuration.
+Runtime config is `RuntimeConfig`. How it’s loaded:
 
-**Adaptive Defaults:**
+- **CLI**: Embedded default (`config.toml`), merged with a user config in the app data dir if present. Only keys in the user file override.
+  - User config path: Unix `~/.config/zahirscan/zahirscan.toml` (or `$XDG_CONFIG_HOME/zahirscan/zahirscan.toml`), Windows `%APPDATA%\zahirscan\zahirscan.toml`.
+  - Run **`zahirscan init`** to write the embedded default to edit; the CLI will use it as the overlay.
+- **Library**: `extract_schema()` uses the embedded default only (no user config file). For custom config: `RuntimeConfig::new()` is the embedded default (same as config.toml, no file I/O); `RuntimeConfig::load_from_path(path)` to load from a file; `RuntimeConfig::load_with_overlay(base_path, overlay_path)` for base + overlay.
+
+Schema (concurrency, mining, filter): see [config.toml](config.toml).
+
+**Adaptive defaults:**
 
 - `max_workers = 0` uses a sensible default based on CPU cores
 - Phase 2 uses **adaptive chunking** based on Phase 1 file statistics (count/bytes/variance) and targets a neat multiple of `max_workers`

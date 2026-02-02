@@ -7,7 +7,7 @@ use anyhow::Result;
 use log::debug;
 use rusqlite::Connection;
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::{FileType, ParseResult, column_stats};
 use crate::results::{ColumnInfo, MiningResult, SqliteMetadata, TableInfo};
 use memmap2::Mmap;
@@ -29,7 +29,7 @@ fn handle_sqlite_error(
 pub fn extract_sqlite_metadata(
     content: &[u8],
     stats: &ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<SqliteMetadata> {
     let (conn_opt, mut metadata) =
         utils::open_sqlite_connection(content, stats.byte_count, &stats.file_path)?;
@@ -137,7 +137,7 @@ fn ensure_column_stats(
     table_name: &str,
     columns: Option<&mut [ColumnInfo]>,
     row_count: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     let Some(cols) = columns else { return };
     if row_count == 0 {
@@ -154,7 +154,7 @@ fn compute_column_statistics(
     conn: &Connection,
     table_name: &str,
     columns: &mut [ColumnInfo],
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     let quoted_table = utils::quote_sql_identifier(table_name);
 
@@ -181,7 +181,11 @@ crate::no_template_mining!(
 );
 
 /// Extract metadata and templates for SQLite; single file type in this module.
-pub fn process(stats: &mut ParseResult, mmap: &Mmap, config: &Config) -> Result<MiningResult> {
+pub fn process(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &RuntimeConfig,
+) -> Result<MiningResult> {
     crate::process_with_metadata!(
         stats,
         mmap,

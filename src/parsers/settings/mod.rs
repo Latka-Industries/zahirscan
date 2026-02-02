@@ -1,6 +1,6 @@
 //! Settings-file formats: INI, YAML, TOML, XML.
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::{FileType, ParseResult};
 use crate::results::MiningResult;
 use anyhow::Result;
@@ -17,7 +17,11 @@ pub use xml::{extract_xml_metadata, extract_xml_templates};
 pub use yaml::{extract_yaml_metadata, extract_yaml_templates};
 
 /// Dispatch by file type; fills the appropriate metadata field and returns templates.
-pub fn process(stats: &mut ParseResult, mmap: &Mmap, config: &Config) -> Result<MiningResult> {
+pub fn process(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &RuntimeConfig,
+) -> Result<MiningResult> {
     match stats.file_type {
         FileType::Toml => crate::process_with_metadata!(
             stats,

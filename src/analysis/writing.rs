@@ -1,7 +1,7 @@
 //! Writing footprint and SVO analysis utilities.
 //! Shared analysis functions for text and markdown parsers.
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::traits::AdaptiveParallel;
 use crate::results::{PunctuationMetrics, SVOAnalysis, Template, WritingFootprint};
 use dashmap::DashMap;
@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub fn calculate_template_entropy(
     examples: &BTreeMap<String, Vec<String>>,
     total_count: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> f64 {
     if examples.is_empty() || total_count == 0 {
         return 0.0;
@@ -98,7 +98,10 @@ pub fn calculate_template_entropy(
 /// Pivot points are words that appear frequently at the same position across sentences
 /// and have high variation in what follows them (indicating structural importance)
 /// Returns empty DashMap if there are too many sentences to process efficiently
-pub fn extract_pivot_points(sentences: &[String], config: &Config) -> DashMap<String, usize> {
+pub fn extract_pivot_points(
+    sentences: &[String],
+    config: &RuntimeConfig,
+) -> DashMap<String, usize> {
     if sentences.is_empty() {
         return DashMap::new();
     }
@@ -203,7 +206,7 @@ pub fn calculate_writing_footprint(
     sentences: &[String],
     templates: &[Template],
     content: &str,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> WritingFootprint {
     debug!(
         "Calculating vocabulary richness (content length: {})",
@@ -345,7 +348,7 @@ fn find_pivot_position(
 pub fn analyze_svo_structure(
     sentences: &[String],
     pivot_patterns: &DashMap<String, usize>,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> SVOAnalysis {
     let sentences_with_pivots = AtomicUsize::new(0);
     let total_subject_length = AtomicUsize::new(0);

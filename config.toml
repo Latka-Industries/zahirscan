@@ -1,5 +1,3 @@
-binary_name = "zahirscan"
-
 [concurrency]
 # Maximum number of parallel workers
 # Defaults to num_cpus - 1 if not set or set to 0

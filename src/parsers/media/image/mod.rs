@@ -10,7 +10,7 @@ mod png;
 mod tiff;
 mod webp;
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::ImageMetadata;
 use anyhow::Result;
@@ -23,7 +23,7 @@ use std::io::Cursor;
 pub fn extract_image_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<ImageMetadata> {
     let reader = ImageReader::new(Cursor::new(content));
     let stream_size = Some(stats.byte_count);

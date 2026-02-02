@@ -14,7 +14,7 @@ pub mod text;
 pub mod traits;
 pub use media_helpers::{BitrateMode, CompressionMode};
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::engine::tools::{detect_file_type, redact_path};
 use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
 use anyhow::Result;
@@ -105,7 +105,7 @@ macro_rules! no_template_mining {
         pub fn $name(
             _content: &[u8],
             stats: &$crate::parsers::ParseResult,
-            _config: &$crate::engine::config::Config,
+            _config: &$crate::config::RuntimeConfig,
         ) -> anyhow::Result<$crate::results::MiningResult> {
             Ok($crate::parsers::traits::empty_mining_result(stats))
         }
@@ -130,7 +130,7 @@ impl ParserCategory {
         self,
         stats: &mut ParseResult,
         mmap: &Mmap,
-        config: &Config,
+        config: &RuntimeConfig,
     ) -> Result<MiningResult> {
         match self {
             ParserCategory::Media => media::process(stats, mmap, config),
@@ -267,7 +267,7 @@ impl ParseResult {
     }
 
     /// Convert parse result to Output object
-    pub fn to_output(&self, mode: OutputMode, config: &crate::engine::config::Config) -> Output {
+    pub fn to_output(&self, mode: OutputMode, config: &RuntimeConfig) -> Output {
         match mode {
             OutputMode::Templates => self.build_templates_output(config),
             OutputMode::Full => self.build_full_output(config),
@@ -281,7 +281,7 @@ impl ParseResult {
     }
 
     /// Build templates-only output (with writing footprint and metadata)
-    fn build_templates_output(&self, config: &Config) -> Output {
+    fn build_templates_output(&self, config: &RuntimeConfig) -> Output {
         let source_path = match config.redact_paths {
             true => redact_path(&self.file_path),
             false => self.file_path.clone(),
@@ -308,7 +308,7 @@ impl ParseResult {
     }
 
     /// Build full output (with all metadata and compression stats)
-    fn build_full_output(&self, config: &Config) -> Output {
+    fn build_full_output(&self, config: &RuntimeConfig) -> Output {
         let source_path = match config.redact_paths {
             true => redact_path(&self.file_path),
             false => self.file_path.clone(),
@@ -358,7 +358,7 @@ impl ParseResult {
         &self,
         output_path: &str,
         mode: OutputMode,
-        config: &crate::engine::config::Config,
+        config: &crate::config::RuntimeConfig,
     ) -> Result<()> {
         let mut output_file = OpenOptions::new()
             .create(true)
@@ -382,48 +382,46 @@ pub(crate) fn open_mmap(path: &str) -> Result<Mmap> {
     Ok(mmap)
 }
 
-/// Phase 1: Initial file scan (fast pass to gather file metadata)
+/// Phase 1: Initial file scan (fast pass to gather file metadata).
+/// Returns stats only; use [`initial_file_scan_with_mmap`] when the mmap should be reused (e.g. Phase 2).
 pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
-    // Detect file type from extension
-    let file_type = detect_file_type(path);
+    let (stats, _) = initial_file_scan_with_mmap(path)?;
+    Ok(stats)
+}
 
-    // Open and memory-map the file
+/// Phase 1 scan that returns the mmap so Phase 2 can reuse it (avoids double open per path).
+pub(crate) fn initial_file_scan_with_mmap(path: &str) -> Result<(ParseResult, Mmap)> {
+    let file_type = detect_file_type(path);
     let mmap = open_mmap(path)?;
     let byte_count = mmap.len();
 
-    // Check if file is binary (invalid UTF-8)
     let (line_count, token_count, is_binary) = match std::str::from_utf8(&mmap) {
         Ok(content) => {
-            // Valid UTF-8 - collect stats
             let line_count = content.lines().count();
-            // Note: bytes_per_token is not available here, using default of 4
-            // This is Phase 1, so we use a simple estimate
             let token_count = byte_count / 4;
             (line_count, token_count, false)
         }
-        Err(_) => {
-            // Binary file - return metadata only
-            (0, 0, true)
-        }
+        Err(_) => (0, 0, true),
     };
 
-    Ok(ParseResult {
+    let stats = ParseResult {
         file_path: path.to_string(),
         file_type,
         line_count,
         byte_count,
         token_count,
-        duration: std::time::Duration::ZERO, // Will be set in Phase 2
+        duration: std::time::Duration::ZERO,
         is_binary,
         ..Default::default()
-    })
+    };
+    Ok((stats, mmap))
 }
 
 /// Process file types with no parser category (Log, Json, Text, Markdown, Unknown).
 fn process_text_or_unknown(
     stats: &mut ParseResult,
     mmap: &Mmap,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<MiningResult> {
     if stats.is_binary {
         return Ok(traits::empty_mining_result(stats));
@@ -439,14 +437,24 @@ fn process_text_or_unknown(
     }
 }
 
-/// Extract templates from a file using probabilistic template mining
-/// Main handler that routes to log or text parsers
-/// For images, also extracts image metadata
-pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<MiningResult> {
-    let mmap = open_mmap(&stats.file_path)?;
+/// Extract templates from a file using probabilistic template mining.
+/// If `mmap` is `Some`, it is reused (avoids double open when called from Phase 2); otherwise the file is opened.
+pub fn extract_templates(
+    stats: &mut ParseResult,
+    config: &RuntimeConfig,
+    mmap: Option<&Mmap>,
+) -> Result<MiningResult> {
+    let owned_mmap;
+    let mmap_ref: &Mmap = match mmap {
+        Some(m) => m,
+        None => {
+            owned_mmap = open_mmap(&stats.file_path)?;
+            &owned_mmap
+        }
+    };
     match stats.file_type.parser_category() {
-        Some(cat) => cat.process(stats, &mmap, config),
-        None => process_text_or_unknown(stats, &mmap, config),
+        Some(cat) => cat.process(stats, mmap_ref, config),
+        None => process_text_or_unknown(stats, mmap_ref, config),
     }
 }
 
@@ -454,7 +462,7 @@ pub fn extract_templates(stats: &mut ParseResult, config: &Config) -> Result<Min
 pub(crate) fn estimate_compressed_tokens_with_footprint(
     templates: &[Template],
     _total_lines: usize,
-    config: &crate::engine::config::Config,
+    config: &RuntimeConfig,
     writing_footprint: Option<&crate::results::WritingFootprint>,
 ) -> usize {
     // Rough estimate: template patterns + examples
@@ -491,7 +499,7 @@ pub(crate) fn estimate_compressed_tokens_with_footprint(
 fn extract_unknown_templates(
     content: &str,
     stats: &mut ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<MiningResult> {
     // Try JSON first (most structured), then log, then text
     serde_json::from_str::<serde_json::Value>(content.lines().next().unwrap_or("")).map_or_else(

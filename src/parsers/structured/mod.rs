@@ -1,6 +1,6 @@
 //! Structured formats: CSV, HTML, JSON, EPUB, PDF.
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::{FileType, ParseResult};
 use crate::results::MiningResult;
 use anyhow::Result;
@@ -21,7 +21,11 @@ pub use pdf::{extract_pdf_metadata, extract_pdf_templates};
 
 /// Dispatch by file type; fills csv_metadata or html_metadata and returns templates.
 /// For text-based formats we pass content (&str) so UTF-8 is validated once at the boundary.
-pub fn process(stats: &mut ParseResult, mmap: &Mmap, config: &Config) -> Result<MiningResult> {
+pub fn process(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &RuntimeConfig,
+) -> Result<MiningResult> {
     match stats.file_type {
         FileType::Csv => crate::process_with_metadata!(
             stats,

@@ -4,7 +4,7 @@ mod utils;
 
 pub(crate) use utils::infer_value_type;
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::parsers::column_stats;
 use crate::parsers::traits::AdaptiveParallel;
@@ -19,7 +19,7 @@ use std::io::Cursor;
 pub fn extract_csv_metadata(
     content: &[u8],
     _stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<CsvMetadata> {
     // Check if content is valid UTF-8
     let encoding = if std::str::from_utf8(content).is_ok() {
@@ -136,7 +136,7 @@ pub fn extract_csv_metadata(
 fn infer_column_types(
     sample_data: &[Vec<String>],
     column_count: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Vec<String> {
     // Use DashMap for thread-safe parallel updates
     let type_scores: Vec<DashMap<String, usize>> =
@@ -171,7 +171,7 @@ fn infer_column_types(
 fn compute_column_statistics(
     sample_data: &[Vec<String>],
     column_count: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> (Vec<f64>, Vec<usize>) {
     let total_rows = sample_data.len();
     if total_rows == 0 {
@@ -204,7 +204,7 @@ fn compute_type_specific_statistics(
     sample_data: &[Vec<String>],
     column_types: &[String],
     column_count: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> TypeSpecificStats {
     let mut numeric_stats: Vec<Option<NumericStats>> = vec![None; column_count];
     let mut date_stats: Vec<Option<DateStats>> = vec![None; column_count];
@@ -241,7 +241,7 @@ fn compute_type_specific_statistics(
 fn compute_numeric_stats(
     sample_data: &[Vec<String>],
     col_idx: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Option<NumericStats> {
     let values = column_stats::extract_column_values(sample_data, col_idx);
     column_stats::compute_numeric_stats_from_strings(&values, config)
@@ -251,7 +251,7 @@ fn compute_numeric_stats(
 fn compute_date_stats(
     sample_data: &[Vec<String>],
     col_idx: usize,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Option<DateStats> {
     let values = column_stats::extract_column_values(sample_data, col_idx);
     column_stats::compute_date_stats_from_strings(&values)
@@ -261,7 +261,7 @@ fn compute_date_stats(
 fn compute_boolean_stats(
     sample_data: &[Vec<String>],
     col_idx: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Option<BooleanStats> {
     let values = column_stats::extract_column_values(sample_data, col_idx);
     column_stats::compute_boolean_stats_from_strings(&values, config)

@@ -2,7 +2,7 @@
 //! Used by markdown and text parsers for sentence boundaries and structure.
 
 use crate::analysis::Punctuation;
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use dashmap::DashMap;
 use log::debug;
 
@@ -16,7 +16,7 @@ pub trait SentenceAnalyzer {
     fn analyze_sentence_structure(sentence: &str) -> SentenceStats;
 
     /// Extract common sentence patterns from a collection of sentences
-    fn extract_sentence_patterns(sentences: &[String], config: &Config) -> Vec<String>;
+    fn extract_sentence_patterns(sentences: &[String], config: &RuntimeConfig) -> Vec<String>;
 }
 
 /// Statistics about a sentence's structure
@@ -176,7 +176,7 @@ impl SentenceAnalyzer for DefaultSentenceAnalyzer {
     }
 
     /// Extract common sentence patterns (simplified patterns based on structure)
-    fn extract_sentence_patterns(sentences: &[String], config: &Config) -> Vec<String> {
+    fn extract_sentence_patterns(sentences: &[String], config: &RuntimeConfig) -> Vec<String> {
         let pattern_freq: DashMap<String, usize> = DashMap::new();
 
         for sentence in sentences {

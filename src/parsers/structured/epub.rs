@@ -2,7 +2,7 @@
 
 use std::io::{Cursor, Read};
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::EpubMetadata;
 use anyhow::Result;
@@ -52,7 +52,7 @@ macro_rules! set_metadata_field {
 pub fn extract_epub_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<EpubMetadata> {
     let metadata = EpubMetadata {
         file_size: Some(stats.byte_count),

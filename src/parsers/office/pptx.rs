@@ -4,7 +4,7 @@ use std::io::Read;
 
 use super::constants::{OFFICE_CORE_XML, PPTX_CORE_PROPERTIES};
 use super::utils::{has_namespace, open_office_archive};
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::PptxMetadata;
 use anyhow::Result;
@@ -18,7 +18,7 @@ use quick_xml::events::Event;
 pub fn extract_pptx_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<PptxMetadata> {
     let mut metadata = PptxMetadata {
         file_size: Some(stats.byte_count),

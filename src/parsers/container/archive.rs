@@ -7,8 +7,8 @@
 
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
+use crate::config::RuntimeConfig;
 use crate::engine::chunking::optimal_chunk_size;
-use crate::engine::config::Config;
 use crate::parsers::ParseResult;
 use crate::results::metadata::{ArchiveEntry, ArchiveMetadata};
 use anyhow::Result;
@@ -67,7 +67,7 @@ fn detect_archive_format(path: &str) -> TarFormat {
 pub fn extract_archive_metadata(
     content: &[u8],
     stats: &ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<ArchiveMetadata> {
     let format = detect_archive_format(&stats.file_path);
     let compressed_size = stats.byte_count as u64;
@@ -103,7 +103,7 @@ pub fn extract_archive_metadata(
 fn stream_tar_entries(
     content: &[u8],
     format: TarFormat,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<(Option<usize>, u64, Vec<ArchiveEntry>)> {
     match format {
         TarFormat::Tar => {
@@ -175,7 +175,7 @@ fn parse_tar_path(bytes: &[u8]) -> String {
 /// header boundaries.
 fn stream_tar_entries_seek(
     content: &[u8],
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<(usize, u64, Vec<ArchiveEntry>)> {
     let mut r = Cursor::new(content);
     let mut _raw_count = 0usize;

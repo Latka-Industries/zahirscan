@@ -6,6 +6,7 @@ mod csv_metadata;
 mod filename_sanitization;
 mod image_metadata;
 mod jpeg_subsampling;
+mod metadata_macro_sync;
 mod minimal_fallback;
 mod placeholder_formatting;
 mod serialization;

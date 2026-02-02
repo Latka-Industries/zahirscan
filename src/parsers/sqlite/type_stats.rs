@@ -3,7 +3,7 @@
 use log::debug;
 use rusqlite::Connection;
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::engine::tools::{is_boolean, parse_date_to_timestamp, parse_timestamp_to_seconds};
 use crate::parsers::column_stats;
 use crate::results::{BlobStats, ColumnInfo, TextStats};
@@ -16,7 +16,7 @@ pub(super) fn compute_stats_for_type(
     quoted_col: &str,
     col: &mut ColumnInfo,
     values: &[String],
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     match col.type_name.as_deref() {
         Some("INTEGER") | Some("REAL") => {
@@ -64,7 +64,7 @@ fn compute_numeric_and_bool_stats(
     quoted_col: &str,
     col: &mut ColumnInfo,
     values: &[String],
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     let f64_query = format!("SELECT {} FROM {};", quoted_col, quoted_table);
     let numeric_values: Vec<f64> = match conn.prepare(&f64_query) {
@@ -100,7 +100,7 @@ fn compute_numeric_and_bool_stats(
 }
 
 /// Fills text_stats, unique_count (from text), and date_stats when >50% values look like dates.
-fn compute_text_and_date_stats(col: &mut ColumnInfo, values: &[String], config: &Config) {
+fn compute_text_and_date_stats(col: &mut ColumnInfo, values: &[String], config: &RuntimeConfig) {
     if let Some((min_len, max_len, avg_len, unique_ct)) =
         column_stats::compute_text_stats_from_strings(values, config)
     {
@@ -146,8 +146,9 @@ fn compute_blob_stats(
         Err(_) => Vec::new(),
     };
     if !sizes.is_empty() {
-        let min_size = *sizes.iter().min().unwrap();
-        let max_size = *sizes.iter().max().unwrap();
+        // Guard above guarantees sizes is non-empty.
+        let min_size = *sizes.iter().min().expect("sizes non-empty");
+        let max_size = *sizes.iter().max().expect("sizes non-empty");
         let avg_size = sizes.iter().sum::<usize>() as f64 / sizes.len() as f64;
         col.blob_stats = Some(BlobStats {
             min_size: Some(min_size),

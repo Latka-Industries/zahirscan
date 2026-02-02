@@ -1,6 +1,6 @@
 //! Log file template extraction using position-based analysis
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::engine::tools::{
     PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed,
 };
@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 pub fn extract_log_templates(
     content: &str,
     stats: &ParseResult,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Result<MiningResult> {
     let lines: Vec<&str> = content.lines().collect();
     let total_lines = lines.len();

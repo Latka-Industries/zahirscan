@@ -3,16 +3,19 @@
 //! This module provides functions for calculating optimal chunk sizes
 //! and adaptive chunking strategies based on file statistics.
 
-use super::config::Config;
 use super::tools::format_bytes;
+use crate::config::RuntimeConfig;
 use crate::parsers::{FileType, ParseResult};
 use log::debug;
+use memmap2::Mmap;
 
-/// File processing task with stats and output path
-/// Defined here to avoid circular dependency between chunking and orchestrator
+/// File processing task with stats, output path, and optional mmap from Phase 1 (reused in Phase 2 to avoid double open).
+#[derive(Debug)]
 pub struct ProcessingTask {
     pub stats: ParseResult,
     pub output_path: String,
+    /// When set, Phase 2 reuses this mmap instead of opening the file again.
+    pub mmap: Option<Mmap>,
 }
 
 /// Adaptive chunking settings calculated from Phase 1 stats
@@ -52,7 +55,7 @@ pub fn optimal_chunk_size(
 pub fn calculate_adaptive_chunking(
     tasks: &[ProcessingTask],
     max_workers: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> AdaptiveChunking {
     let num_files = tasks.len();
 

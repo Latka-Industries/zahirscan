@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::FileType;
 use anyhow::Result;
 use chrono::{DateTime, NaiveDateTime};
@@ -223,7 +223,7 @@ pub fn redact_path(path: &str) -> String {
 /// Whether to skip a path based on `[filter]` ignore_patterns and ignore_hidden_files.
 /// Patterns: exact basename (case-insensitive), `*suffix` (ends with), or `prefix*` (starts with).
 /// Used for both top-level file paths and ZIP entry paths.
-pub fn should_ignore_path(path: &str, config: &Config) -> bool {
+pub fn should_ignore_path(path: &str, config: &RuntimeConfig) -> bool {
     let basename = Path::new(path)
         .file_name()
         .and_then(|n| n.to_str())
@@ -254,13 +254,13 @@ pub fn should_ignore_path(path: &str, config: &Config) -> bool {
 }
 
 /// Get temporary output path for a file
-pub fn get_temp_output_path(input_path: &str, config: &Config) -> String {
+pub fn get_temp_output_path(input_path: &str, config: &RuntimeConfig) -> String {
     let path = Path::new(input_path);
     // Get filename with extension (e.g., "file.txt" -> "file.txt.zahirscan.out")
     let input_name = path
         .file_name()
         .and_then(|s| s.to_str())
-        .unwrap_or("zahirscan");
+        .unwrap_or(crate::PKG_NAME);
     let sanitized_name = sanitize_filename(input_name);
     let temp_dir = std::env::temp_dir();
     temp_dir
@@ -275,13 +275,17 @@ pub fn get_temp_output_path(input_path: &str, config: &Config) -> String {
 
 /// Determine output path for a given input file.
 /// When output is Some we treat it as a directory and write filename.ext.zahirscan.out there; when None we use a temp file.
-pub fn determine_output_path(input_path: &str, output: Option<&str>, config: &Config) -> String {
+pub fn determine_output_path(
+    input_path: &str,
+    output: Option<&str>,
+    config: &RuntimeConfig,
+) -> String {
     if let Some(out_dir) = output {
         let path = Path::new(input_path);
         let input_name = path
             .file_name()
             .and_then(|s| s.to_str())
-            .unwrap_or("zahirscan");
+            .unwrap_or(crate::PKG_NAME);
         let sanitized_name = sanitize_filename(input_name);
         PathBuf::from(out_dir)
             .join(format!(

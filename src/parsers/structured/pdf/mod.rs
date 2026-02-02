@@ -2,7 +2,7 @@
 
 mod utils;
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::PdfMetadata;
 use anyhow::Result;
@@ -32,7 +32,7 @@ fn extract_document_info(info: &pdf::object::InfoDict, metadata: &mut PdfMetadat
 pub fn extract_pdf_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<PdfMetadata> {
     let mut metadata = PdfMetadata {
         file_size: Some(stats.byte_count),

@@ -1,5 +1,5 @@
 [tools]
-rust = "1.92"
+rust = "1.93"
 
 [tasks.clip]
 description = "Run clippy linter"
@@ -20,3 +20,7 @@ run = ["cargo fmt --all --check", "cargo clippy -- -D warnings", "cargo test"]
 [tasks.fmt]
 description = "Run rustfmt"
 run = "cargo fmt --all"
+
+[tasks.meta]
+description = "Run metadata macro sync test (copy_metadata_fields! vs Output)"
+run = "cargo test metadata_macro_sync"

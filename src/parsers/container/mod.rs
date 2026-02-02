@@ -1,4 +1,4 @@
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::{FileType, ParseResult};
 use crate::results::MiningResult;
 use anyhow::Result;
@@ -8,7 +8,11 @@ pub mod archive;
 pub mod zip;
 
 /// Dispatch by file type; fills zip_metadata or archive_metadata and returns templates.
-pub fn process(stats: &mut ParseResult, mmap: &Mmap, config: &Config) -> Result<MiningResult> {
+pub fn process(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &RuntimeConfig,
+) -> Result<MiningResult> {
     match stats.file_type {
         FileType::Zip => crate::process_with_metadata!(
             stats,

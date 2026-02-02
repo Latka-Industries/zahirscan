@@ -5,7 +5,7 @@
 use anyhow::Result;
 use memmap2::Mmap;
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::traits::empty_mining_result;
 use crate::parsers::{FileType, ParseResult};
 use crate::results::{CodeMetadata, MiningResult};
@@ -242,7 +242,7 @@ fn leading_whitespace(line: &[u8]) -> Option<String> {
 pub fn extract_code_metadata(
     mmap: &Mmap,
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<CodeMetadata> {
     let script_type = script_type_from_path_and_content(&stats.file_path, mmap);
     let scan = zero_copy_scan(mmap);
@@ -327,13 +327,17 @@ fn script_type_from_shebang(shebang: &str) -> Option<String> {
 pub fn extract_code_templates(
     _content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<MiningResult> {
     Ok(empty_mining_result(stats))
 }
 
 /// Extract metadata and templates for code/script; single file type in this module.
-pub fn process(stats: &mut ParseResult, mmap: &Mmap, config: &Config) -> Result<MiningResult> {
+pub fn process(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &RuntimeConfig,
+) -> Result<MiningResult> {
     crate::process_with_metadata!(
         stats,
         mmap,

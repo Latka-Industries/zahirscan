@@ -1,7 +1,7 @@
 //! Office Open XML formats: DOCX, PPTX, XLSX.
 //! Shared utilities in `utils`, constants in `constants`.
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::{FileType, ParseResult};
 use crate::results::MiningResult;
 use anyhow::Result;
@@ -18,7 +18,11 @@ pub use pptx::{extract_pptx_metadata, extract_pptx_templates};
 pub use xlsx::{extract_xlsx_metadata, extract_xlsx_templates};
 
 /// Dispatch by file type; fills docx_metadata or pptx_metadata and returns templates.
-pub fn process(stats: &mut ParseResult, mmap: &Mmap, config: &Config) -> Result<MiningResult> {
+pub fn process(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &RuntimeConfig,
+) -> Result<MiningResult> {
     match stats.file_type {
         FileType::Docx => crate::process_with_metadata!(
             stats,

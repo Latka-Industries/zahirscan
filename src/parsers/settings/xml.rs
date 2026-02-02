@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::XmlMetadata;
 use crate::results::metadata::settings::xml::XmlTypeInfo;
@@ -100,7 +100,7 @@ fn merge_child(children: &mut BTreeMap<String, XmlTypeInfo>, key: String, value:
 pub fn extract_xml_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &Config,
+    _config: &RuntimeConfig,
 ) -> Result<XmlMetadata> {
     let mut reader = Reader::from_reader(Cursor::new(content));
     reader.config_mut().trim_text(true);

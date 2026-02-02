@@ -1,7 +1,7 @@
 //! N-gram and phrase frequency utilities for text template extraction.
 //! Builds structural and token-based patterns, collects frequent n-grams/phrases, extracts examples.
 
-use crate::engine::config::Config;
+use crate::config::RuntimeConfig;
 use crate::engine::tools::{
     PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed,
 };
@@ -31,7 +31,7 @@ pub fn filter_frequent_ngrams_and_phrases(
     phrase_freq: &DashMap<String, usize>,
     threshold: usize,
     total_sentences: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> (FrequentEntries, FrequentEntries) {
     let frequent_ngrams = collect_frequent_entries(ngram_freq, threshold);
     let frequent_phrases = collect_frequent_entries(phrase_freq, threshold);
@@ -51,7 +51,7 @@ pub fn build_ngram_and_phrase_freq(
     sentences: &[String],
     ngram_freq: &DashMap<String, usize>,
     phrase_freq: &DashMap<String, usize>,
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     sentences
         .par_iter_adaptive(config)
@@ -95,7 +95,7 @@ fn tokens_to_pattern_parts(
     placeholder_idx: &mut usize,
     pattern_parts: &mut Vec<String>,
     frequent_ngrams: &[(String, usize)],
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     let mut i = 0;
     while i < tokens.len() {
@@ -130,7 +130,7 @@ pub fn build_enriched_structural_pattern(
     pivot_patterns: &DashMap<String, usize>,
     frequent_ngrams: &[(String, usize)],
     _frequent_phrases: &[(String, usize)],
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> Option<String> {
     if tokens.is_empty() {
         return None;
@@ -193,7 +193,7 @@ pub fn build_text_pattern(
     tokens: &[&str],
     frequent_ngrams: &[(String, usize)],
     frequent_phrases: &[(String, usize)],
-    config: &Config,
+    config: &RuntimeConfig,
 ) -> String {
     if tokens.is_empty() {
         return String::new();
@@ -244,7 +244,7 @@ pub fn extract_text_examples(
     frequent_ngrams: &[(String, usize)],
     frequent_phrases: &[(String, usize)],
     examples: &mut BTreeMap<String, Vec<String>>,
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     let mut i = 0;
     let mut placeholder_idx = 0;

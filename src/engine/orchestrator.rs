@@ -1,13 +1,13 @@
 //! Orchestration logic for processing multiple files
 
 use super::chunking::{AdaptiveChunking, ProcessingTask};
-use super::config::Config;
 use super::progress::{ProgressBarConfig, create_progress_bar};
 use super::tools::{
     determine_output_path, format_bytes, print_progress_handler, should_ignore_path,
 };
-use crate::parsers::{extract_templates, initial_file_scan};
-use crate::results::Output;
+use crate::config::RuntimeConfig;
+use crate::parsers::{extract_templates, initial_file_scan_with_mmap};
+use crate::results::{Output, Phase1Result, Phase2Result};
 use anyhow::Result;
 use kdam::Animation;
 use log::{debug, error, info};
@@ -22,7 +22,7 @@ fn log_phase1_metrics(
     path_duration: Duration,
     input_file_count: usize,
     tasks: &[ProcessingTask],
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     let duration_secs = duration.as_secs_f64();
     let scan_secs = scan_duration.as_secs_f64();
@@ -43,7 +43,7 @@ fn log_phase2_metrics(
     duration: Duration,
     tasks: &[ProcessingTask],
     max_workers: usize,
-    config: &Config,
+    config: &RuntimeConfig,
 ) {
     let total_bytes = tasks.iter().map(|t| t.stats.byte_count).sum::<usize>();
     let file_count = tasks.len();
@@ -76,7 +76,7 @@ fn log_phase2_metrics(
 }
 
 /// Filter input paths for Phase 1: skip directories and paths that match ignore patterns
-fn phase1_path_filter(p: &str, config: &Config) -> bool {
+fn phase1_path_filter(p: &str, config: &RuntimeConfig) -> bool {
     if Path::new(p).is_dir() {
         info!("Skipping directory: {}", p);
         false
@@ -88,12 +88,13 @@ fn phase1_path_filter(p: &str, config: &Config) -> bool {
     }
 }
 
-/// Phase 1: Initial scan to collect stats and prepare for template mining
+/// Phase 1: Initial scan to collect stats and prepare for template mining.
+/// Returns tasks and failed paths with error messages (for TUI/lib to display).
 pub fn phase1_scan(
     input_paths: &[String],
     output: Option<&str>,
-    config: &Config,
-) -> Vec<ProcessingTask> {
+    config: &RuntimeConfig,
+) -> Phase1Result {
     use std::time::Instant;
 
     let input_paths: Vec<String> = input_paths
@@ -122,7 +123,7 @@ pub fn phase1_scan(
     // Progress bar will close automatically on drop
     let stats_results: Vec<_> = input_paths
         .par_iter()
-        .map(|input_path| crate::with_progress!(&pb, initial_file_scan(input_path)))
+        .map(|input_path| crate::with_progress!(&pb, initial_file_scan_with_mmap(input_path)))
         .collect();
     let scan_duration = scan_start.elapsed();
     debug!(
@@ -130,20 +131,40 @@ pub fn phase1_scan(
         scan_duration.as_secs_f64()
     );
 
-    // Determine output paths and collect valid stats
+    // Determine output paths and collect valid stats; collect failed (path, message) for TUI/lib
     let path_start = Instant::now();
     let mut tasks = Vec::new();
+    let mut failed: Vec<(String, String)> = Vec::new();
     for (i, result) in stats_results.into_iter().enumerate() {
         match result {
-            Ok(stats) => {
+            Ok((stats, mmap)) => {
                 let input_path = &input_paths[i];
                 let output_path = determine_output_path(input_path, output, config);
-                tasks.push(ProcessingTask { stats, output_path });
+                tasks.push(ProcessingTask {
+                    stats,
+                    output_path,
+                    mmap: Some(mmap),
+                });
             }
             Err(e) => {
-                error!("Error collecting stats for {}: {}", input_paths[i], e);
+                let path = input_paths[i].clone();
+                let msg = e.to_string();
+                error!("Error collecting stats for {}: {}", path, e);
+                failed.push((path, msg));
             }
         }
+    }
+    if !failed.is_empty() {
+        debug!(
+            "Phase 1: {} of {} paths failed: {}",
+            failed.len(),
+            input_paths.len(),
+            failed
+                .iter()
+                .map(|(p, _)| p.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
     let path_duration = path_start.elapsed();
 
@@ -157,17 +178,17 @@ pub fn phase1_scan(
         config,
     );
 
-    tasks
+    Phase1Result { tasks, failed }
 }
 
-/// Phase 2: Template mining and processing
-/// Writes to files (unless `skip_file_write` is true) and returns Output objects
+/// Phase 2: Template mining and processing.
+/// Writes to files (unless `skip_file_write` is true). Returns outputs and per-file failures (no short-circuit).
 pub fn phase2_mining(
     tasks: Vec<ProcessingTask>,
-    config: &Config,
+    config: &RuntimeConfig,
     adaptive: &AdaptiveChunking,
     skip_file_write: bool,
-) -> Result<Vec<Output>> {
+) -> Phase2Result {
     use std::time::Instant;
 
     let phase2_start = Instant::now();
@@ -175,6 +196,11 @@ pub fn phase2_mining(
         "Phase 2: Starting template mining for {} files",
         tasks.len()
     );
+
+    // One config with target_chunks_per_file set for the whole batch (same value for every file)
+    let target_chunks = adaptive.chunks_per_file_multiplier * config.max_workers;
+    let mut phase2_config = config.clone();
+    phase2_config.target_chunks_per_file = target_chunks;
 
     // Process files in parallel with adaptive batching
     let pb = if config.show_progress {
@@ -194,7 +220,7 @@ pub fn phase2_mining(
         |task| {
             crate::with_progress!(
                 &pb,
-                process_task_phase2(task, config, adaptive, config.max_workers, skip_file_write)
+                process_task_phase2(task, &phase2_config, skip_file_write)
             )
         },
     );
@@ -202,13 +228,29 @@ pub fn phase2_mining(
     // Calculate and log Phase 2 metrics
     log_phase2_metrics(phase2_start.elapsed(), &tasks, config.max_workers, config);
 
-    // Collect all outputs (or handle errors)
+    // Collect outputs and failures (partial success; no short-circuit)
     let mut outputs = Vec::new();
-    for result in results {
-        outputs.push(result?);
+    let mut failed = Vec::new();
+    for (result, task) in results.into_iter().zip(tasks.iter()) {
+        match result {
+            Ok(out) => outputs.push(out),
+            Err(e) => failed.push((task.stats.file_path.clone(), e.to_string())),
+        }
+    }
+    if !failed.is_empty() {
+        debug!(
+            "Phase 2: {} of {} paths failed: {}",
+            failed.len(),
+            tasks.len(),
+            failed
+                .iter()
+                .map(|(p, _)| p.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 
-    Ok(outputs)
+    Phase2Result { outputs, failed }
 }
 
 /// Process files with adaptive batching based on file count and worker count
@@ -260,9 +302,7 @@ where
 /// Process a single file task (extracted for reuse)
 fn process_task_phase2(
     task: &ProcessingTask,
-    config: &Config,
-    adaptive: &AdaptiveChunking,
-    max_workers: usize,
+    config: &RuntimeConfig,
     skip_file_write: bool,
 ) -> Result<Output> {
     use std::time::Instant;
@@ -274,14 +314,8 @@ fn process_task_phase2(
     let needs_processing = !stats.is_binary || stats.file_type.binary_needs_processing();
 
     if needs_processing {
-        // Create modified config with adaptive chunking
-        // Calculate target number of chunks: multiplier * max_workers
-        let target_chunks = adaptive.chunks_per_file_multiplier * max_workers;
-        let mut phase2_config = config.clone();
-        phase2_config.target_chunks_per_file = target_chunks;
-
-        // Template mining (and image metadata extraction for images)
-        stats.mining_result = extract_templates(&mut stats, &phase2_config)
+        // config already has target_chunks_per_file set (once per batch in phase2_mining)
+        stats.mining_result = extract_templates(&mut stats, config, task.mmap.as_ref())
             .inspect_err(|e| {
                 error!("Error extracting templates for {}: {}", stats.file_path, e);
             })
