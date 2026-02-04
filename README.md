@@ -25,10 +25,10 @@ A high-performance Rust CLI that uses probabilistic template mining to extract s
 
 ## Key Features
 
-- **Template mining**: Identifies repeated patterns in logs/text and extracts them as templates with placeholders
-- **Memory-mapped I/O**: Uses `memmap2` for large files; each path is opened once (Phase 1 mmap reused in Phase 2)
-- **Adaptive parallelization**: Chunk sizes and worker usage tuned from Phase 1 statistics
-- **Size reduction**: Typically 80–95% smaller than raw content while preserving structure and metadata
+- **Template mining**: Repeated patterns in logs/text → templates with placeholders
+- **Memory-mapped I/O**: `memmap2`; single open per path
+- **Adaptive parallelization**: Chunk sizes and workers tuned from Phase 1 stats
+- **Size reduction**: Typically 80–95% smaller than raw while preserving structure and metadata
 
 ### Metadata extraction by format
 
@@ -49,17 +49,11 @@ A high-performance Rust CLI that uses probabilistic template mining to extract s
 ## Installation
 
 ```bash
-# library
-cargo add zahirscan
-
-# CLI (from crates.io)
-cargo install zahirscan
-
-# Source archive (from GitHub Releases)
-# Download from: https://github.com/thicclatka/zahirscan/releases
+cargo add zahirscan        # library
+cargo install zahirscan    # CLI
 ```
 
-**Note**: `ffprobe` (from FFmpeg) is optional but required for video/audio metadata extraction.
+`ffprobe` (FFmpeg) is optional and required for video/audio metadata.
 
 ## Usage
 
@@ -99,113 +93,19 @@ Options:
 ZahirScan can be used as a Rust library to extract schemas (templates and metadata) from files programmatically.
 
 ```rust
-use zahirscan::{RuntimeConfig, OutputMode, extract_zahir};
+use zahirscan::{extract_zahir, OutputMode, RuntimeConfig};
 
-// Default config (no overlay); no file write (output_dir = None)
+// Default config, no file write
 let result = extract_zahir("file.log", OutputMode::Full, None, None, None)?;
-let outputs = result.outputs;
-
-// With your config; overlay is only for CLI via setup::load_config()
-let config = RuntimeConfig::new();
-let result = extract_zahir(files, OutputMode::Full, Some(&config), None, None)?;
-
-// With callback
-use std::sync::Mutex;
-use zahirscan::Output;
-
-let collected: Mutex<Vec<Output>> = Mutex::new(Vec::new());
-let result = extract_zahir(
-    ["file1.log", "file2.log"],
-    OutputMode::Full,
-    None,
-    None,
-    Some(&|out: Output| {
-        collected.lock().unwrap().push(out);
-    }),
-)?;
-
-// Streaming input
-use std::sync::mpsc;
-use std::thread;
-use zahirscan::extract_zahir_from_stream;
-
-let (tx, rx) = mpsc::channel();
-thread::spawn(move || {
-    // Producer: with on_entry: Some(|e| { tx.send(e.path.to_string_lossy().into_owned()).ok(); });
-    tx.send("file1.log".to_string()).ok();
-    tx.send("file2.log".to_string()).ok();
-    // drop(tx) when done
-});
-let result = extract_zahir_from_stream(rx, OutputMode::Full, None, None, None)?;
-
-// For all:
 // result.outputs, result.phase1_failed, result.phase2_failed
+
+// With callback: pass Some(&|out: Output| { ... }) as 5th argument.
+// Streaming input: extract_zahir_from_stream(rx, OutputMode::Full, None, None, None).
 ```
 
-**Supported input types** (via `ToPathIter` trait):
-
-- Single file: `&str`, `String`, `&String`
-- Multiple files: `&[&str]`, `&[String]`, `Vec<String>`, `[&str; N]`
-
-#### Return types
-
-**`extract_zahir()`** returns `Result<ZahirScanResult>`. **`ZahirScanResult`** has:
-
-- **`outputs: Vec<Output>`** — successful results (one per file that passed Phase 1 and Phase 2)
-- **`phase1_failed: Vec<(String, String)>`** — paths that failed initial scan `(path, error_message)`
-- **`phase2_failed: Vec<(String, String)>`** — paths that failed template mining or write `(path, error_message)`
-
-Use `phase1_failed` and `phase2_failed` for TUI/reporting when some paths fail; partial success is returned, not an error. Pass `config: None` for embedded default only (no overlay); pass `Some(&config)` to use your config. Overlay is for CLI via `setup::load_config()`.
-
-Each **`Output`** object contains:
-
-**Always present (both modes):**
-
-- `templates: Vec<Template>` - Extracted template patterns
-- `source: Option<String>` - Source file path
-- `file_type: Option<String>` - Detected file type (e.g., "Log", "Text", "Code", "Sqlite", "Image")
-
-**Mode 2 (Full) only (all optional):**
-
-- `line_count: Option<usize>` - Number of lines in file
-- `byte_count: Option<usize>` - File size in bytes
-- `token_count: Option<usize>` - Estimated token count
-- `processing_time_ms: Option<f64>` - Processing duration
-- `is_binary: Option<bool>` - Whether file is binary
-- `compression: Option<CompressionStats>` - Compression metrics
-
-**Conditional fields** (per-format metadata when applicable): `writing_footprint`, `image_metadata`, `video_metadata`, `audio_metadata`, `code_metadata`, `csv_metadata`, `sqlite_metadata`, `toml_metadata`, `zip_metadata`, `archive_metadata`, `xml_metadata`, `html_metadata`, `yaml_metadata`, `ini_metadata`, `pdf_metadata`, `docx_metadata`, `pptx_metadata`, `epub_metadata`. See [Metadata extraction by format](#metadata-extraction-by-format) and [docs.rs](https://docs.rs/zahirscan) for field details.
-
-#### Template Structure
-
-Each `Template` contains:
-
-- `pattern: String` - Template pattern with placeholders (e.g., `"[DATE] [TIME] ERROR: [MESSAGE]"`)
-- `count: usize` - Number of lines matching this template
-- `examples: BTreeMap<String, Vec<String>>` - Example values for each placeholder
-
-#### Writing Footprint Structure
-
-`WritingFootprint` (for text/markdown files) contains:
-
-- `vocabulary_richness: f64` - Unique words / total words (0.0-1.0)
-- `avg_sentence_length: f64` - Average sentence length in words
-- `punctuation: PunctuationMetrics` - Punctuation usage statistics
-- `template_diversity: usize` - Number of unique template patterns
-- `avg_entropy: f64` - Average entropy across templates (0.0-1.0)
-- `svo_analysis: Option<SVOAnalysis>` - Sentence structure analysis
-
-#### Compression Stats Structure
-
-`CompressionStats` contains:
-
-- `original_tokens: usize` - Original content token count
-- `compressed_tokens: usize` - Compressed template token count
-- `reduction_percent: f64` - Percentage reduction (0.0-100.0)
+Inputs: single path (`&str`, `String`) or multiple (`&[&str]`, `Vec<String>`, etc.). Full API, `ZahirScanResult`, `Output`, `Template`, `WritingFootprint`, and per-format metadata: [docs.rs](https://docs.rs/zahirscan).
 
 ### Configuration
-
-Runtime config is `RuntimeConfig`. How it’s loaded:
 
 - **CLI**: Embedded default (`config.toml`), merged with a user config in the app data dir if present. Only keys in the user file override.
   - User config path: Unix `~/.config/zahirscan/zahirscan.toml` (or `$XDG_CONFIG_HOME/zahirscan/zahirscan.toml`), Windows `%APPDATA%\zahirscan\zahirscan.toml`.
@@ -227,31 +127,13 @@ Full schema: [config.toml](config.toml).
 
 ## Architecture
 
-### Phase 1: Initial File Scan
+**Phase 1**: Format detection, stats (lines/bytes/tokens), mmap for text, content-type classification.
 
-- File format detection and statistics collection (line count, byte count, token count)
-- Memory-mapped file access for text files (`memmap2`); mmap reused in Phase 2 (single open per path)
-- Content type determination (log vs. text/markdown vs. media)
-- Prepares tasks for Phase 2
-
-### Phase 2: Template Mining and Metadata Extraction
-
-- **Metadata extraction** (media, document, database, settings, structured, archives, code): see the [Metadata extraction by format](#metadata-extraction-by-format) table above for what is extracted per format.
-- **Template Mining**: Frequency-based analysis to identify static vs. dynamic fields, extracts patterns as templates
-- **Tokenization**: Content-aware (whitespace for logs, structure for JSON logs, sentence/paragraph for text/markdown)
-- **Writing Footprint**: Two writing-analysis passes for text/markdown:
-  1. **Exact-pattern pass**: Groups sentences by n-gram/phrase-derived pattern; used when repetition is sufficient to yield templates.
-  2. **Shape fallback**: If pass 1 yields no templates, groups by sentence shape (word count + end punctuation). Produces stable, interpretable templates for short or highly varied text.
-     Footprint metrics: vocabulary richness, sentence structure, punctuation, template diversity, SVO analysis.
-- **Parallel Processing**: Single Rayon thread pool with adaptive chunk sizing based on Phase 1 statistics
+**Phase 2**: Metadata extraction per format, template mining, writing footprint (exact-pattern then shape fallback for text/markdown), single Rayon pool with adaptive chunk sizing.
 
 ## Security
 
-ZahirScan implements non-invasive file operations:
-
-- Path sanitization to prevent directory traversal attacks
-- File existence validation before processing
-- Read-only file access (never modifies source files)
+Read-only, non-invasive: path sanitization, existence checks, no source modification.
 
 ## License
 
