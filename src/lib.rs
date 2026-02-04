@@ -39,6 +39,7 @@
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
+// Binary name
 pub const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub use config::DEFAULT_CONFIG_TOML;

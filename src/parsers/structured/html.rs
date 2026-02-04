@@ -144,6 +144,14 @@ fn get_html_selectors() -> &'static HtmlSelectors {
     crate::cached_static!(SELECTORS: HtmlSelectors = HtmlSelectors::new())
 }
 
+/// Extract plain text from HTML/XHTML (content-bearing elements only).
+/// Used by HTML metadata/templates and by EPUB for spine content documents.
+pub fn extract_plain_text_from_html(html_str: &str) -> String {
+    let document = Html::parse_document(html_str);
+    let selectors = get_html_selectors();
+    extract_plain_text(&document, selectors)
+}
+
 /// Extract HTML metadata from document content.
 pub fn extract_html_metadata(
     content: &[u8],

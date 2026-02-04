@@ -1,3 +1,5 @@
+//! Setup utilities for ZahirScan: logger, config, CLI flag application, input/output path resolution.
+
 use anyhow::Context;
 use env_logger;
 use log::{debug, warn};
