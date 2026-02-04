@@ -1,12 +1,8 @@
 use anyhow::Context;
 use clap::Parser;
-use log::warn;
 use std::fs;
 use std::time::Instant;
-use zahirscan::{
-    calculate_adaptive_chunking, format_duration, phase1_scan, phase2_mining,
-    print_progress_handler, setup,
-};
+use zahirscan::{engine, extract_zahir, format_duration, print_progress_handler, setup};
 
 #[derive(Parser)]
 #[command(name = zahirscan::PKG_NAME)]
@@ -59,12 +55,6 @@ enum SubCmd {
     Init,
 }
 
-/// Processed arguments with computed values
-struct ProcessedArgs {
-    paths: Vec<String>,
-    output: Option<String>,
-}
-
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
@@ -88,34 +78,19 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     let (paths, output) = setup::resolve_output_paths(args.input.clone(), args.output.clone())?;
-    let processed_paths = ProcessedArgs { paths, output };
 
-    // Set up rayon thread pool
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(config.max_workers)
-        .build_global()
-        .unwrap_or_else(|_| {
-            warn!("Failed to set thread pool, using default");
-        });
+    engine::chunking::setup_rayon_thread_pool(config.max_workers as usize);
 
-    // Phase 1: Initial scan to prepare for template mining
-    let phase1 = phase1_scan(
-        &processed_paths.paths,
-        processed_paths.output.as_deref(),
-        &config,
-    );
-
-    // Calculate adaptive chunking based on Phase 1 stats
-    let adaptive = calculate_adaptive_chunking(&phase1.tasks, config.max_workers, &config);
-
-    // Phase 2: Template mining and write output (skip_file_write=false)
-    let phase2 = phase2_mining(phase1.tasks, &config, &adaptive, false);
-    let _outputs = phase2.outputs;
-
-    let total_duration = start.elapsed();
+    let _result = extract_zahir(
+        &paths,
+        config.output_mode,
+        Some(&config),
+        output.as_deref(),
+        None,
+    )?;
 
     print_progress_handler(
-        &format!("Total time: {}", format_duration(total_duration)),
+        &format!("Total time: {}", format_duration(start.elapsed())),
         config.show_progress,
     );
 

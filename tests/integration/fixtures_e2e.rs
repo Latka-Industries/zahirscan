@@ -1,9 +1,9 @@
-//! End-to-end integration tests for simple fixture files: file on disk → extract_schema → Output.
+//! End-to-end integration tests for simple fixture files: file on disk → extract_zahir → Output.
 
 use crate::get_test_config;
 use std::path::PathBuf;
 use std::process::Command;
-use zahirscan::{OutputMode, extract_schema, extract_schema_with_config};
+use zahirscan::{OutputMode, extract_zahir};
 
 fn fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -43,7 +43,8 @@ fn simple_fixtures_full_mode() {
     for (filename, expected_type) in SIMPLE_FIXTURES {
         let path = fixture_path(filename);
         let path_str = path.to_str().expect("path is valid UTF-8");
-        let result = extract_schema(path_str, OutputMode::Full).expect("extract_schema");
+        let result =
+            extract_zahir(path_str, OutputMode::Full, None, None, None).expect("extract_zahir");
         let outputs = &result.outputs;
         assert_eq!(outputs.len(), 1, "{}", filename);
         assert_eq!(
@@ -60,7 +61,8 @@ fn simple_fixtures_templates_mode() {
     for (filename, expected_type) in SIMPLE_FIXTURES {
         let path = fixture_path(filename);
         let path_str = path.to_str().expect("path is valid UTF-8");
-        let result = extract_schema(path_str, OutputMode::Templates).expect("extract_schema");
+        let result = extract_zahir(path_str, OutputMode::Templates, None, None, None)
+            .expect("extract_zahir");
         let outputs = &result.outputs;
         assert_eq!(outputs.len(), 1, "{}", filename);
         assert_eq!(
@@ -73,7 +75,7 @@ fn simple_fixtures_templates_mode() {
 }
 
 #[test]
-fn multi_file_extract_schema_returns_one_output_per_file() {
+fn multi_file_extract_zahir_returns_one_output_per_file() {
     let p1 = fixture_path("sample.txt")
         .into_os_string()
         .into_string()
@@ -83,7 +85,8 @@ fn multi_file_extract_schema_returns_one_output_per_file() {
         .into_string()
         .unwrap();
     let paths: Vec<String> = vec![p1, p2];
-    let result = extract_schema(paths.as_slice(), OutputMode::Full).expect("extract_schema");
+    let result =
+        extract_zahir(paths.as_slice(), OutputMode::Full, None, None, None).expect("extract_zahir");
     let outputs = &result.outputs;
     assert_eq!(outputs.len(), 2);
     assert_eq!(outputs[0].file_type.as_deref(), Some("Text"));
@@ -91,9 +94,9 @@ fn multi_file_extract_schema_returns_one_output_per_file() {
 }
 
 #[test]
-fn extract_schema_empty_paths_returns_err() {
+fn extract_zahir_empty_paths_returns_err() {
     let empty: &[&str] = &[];
-    let err = extract_schema(empty, OutputMode::Full).unwrap_err();
+    let err = extract_zahir(empty, OutputMode::Full, None, None, None).unwrap_err();
     assert!(
         err.to_string().contains("No file paths provided"),
         "expected 'No file paths provided', got: {}",
@@ -102,10 +105,13 @@ fn extract_schema_empty_paths_returns_err() {
 }
 
 #[test]
-fn extract_schema_nonexistent_path_returns_err() {
-    let err = extract_schema(
+fn extract_zahir_nonexistent_path_returns_err() {
+    let err = extract_zahir(
         "/nonexistent/path/that/does/not/exist.txt",
         OutputMode::Full,
+        None,
+        None,
+        None,
     )
     .unwrap_err();
     assert!(
@@ -123,7 +129,8 @@ fn extended_fixtures_full_mode() {
             continue; // skip if fixture not present (e.g. optional)
         }
         let path_str = path.to_str().expect("path is valid UTF-8");
-        let result = extract_schema(path_str, OutputMode::Full).expect("extract_schema");
+        let result =
+            extract_zahir(path_str, OutputMode::Full, None, None, None).expect("extract_zahir");
         let outputs = &result.outputs;
         assert_eq!(outputs.len(), 1, "{}", filename);
         assert_eq!(
@@ -200,7 +207,7 @@ fn cli_invalid_output_dir_fails() {
 }
 
 #[test]
-fn extract_schema_with_config_reuses_config() {
+fn extract_zahir_with_config_reuses_config() {
     // Load config once
     let config = get_test_config();
 
@@ -212,8 +219,8 @@ fn extract_schema_with_config_reuses_config() {
         let path_str = path.to_str().expect("path is valid UTF-8");
 
         // This should work without loading config from disk each time
-        let result = extract_schema_with_config(path_str, OutputMode::Full, &config)
-            .expect("extract_schema_with_config should succeed");
+        let result = extract_zahir(path_str, OutputMode::Full, Some(&config), None, None)
+            .expect("extract_zahir should succeed");
         let outputs = result.outputs;
 
         assert_eq!(outputs.len(), 1, "Should process one file: {}", filename);
@@ -222,7 +229,7 @@ fn extract_schema_with_config_reuses_config() {
 }
 
 #[test]
-fn extract_schema_with_config_multiple_files_at_once() {
+fn extract_zahir_with_config_multiple_files_at_once() {
     let config = get_test_config();
 
     // Process multiple files in a single call
@@ -231,8 +238,14 @@ fn extract_schema_with_config_multiple_files_at_once() {
         .map(|f| fixture_path(f).to_string_lossy().to_string())
         .collect();
 
-    let result = extract_schema_with_config(paths.as_slice(), OutputMode::Full, &config)
-        .expect("extract_schema_with_config should succeed with multiple files");
+    let result = extract_zahir(
+        paths.as_slice(),
+        OutputMode::Full,
+        Some(&config),
+        None,
+        None,
+    )
+    .expect("extract_zahir should succeed with multiple files");
     let outputs = result.outputs;
 
     assert_eq!(outputs.len(), 3, "Should process all three files");

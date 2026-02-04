@@ -9,36 +9,66 @@
 //! 1. **Phase 1**: Initial file scan to collect statistics and prepare for processing
 //! 2. **Phase 2**: Template mining and metadata extraction
 //!
-//! # Simple API Example
+//! # API Example
 //!
 //! ```no_run
-//! use zahirscan::{extract_schema, OutputMode};
+//! use zahirscan::{extract_zahir, OutputMode};
 //!
-//! // Process a single file
-//! let result = extract_schema("file.log", OutputMode::Full)?;
-//! println!("Found {} templates", result.outputs[0].templates.len());
+//! // Process with default config (no overlay)
+//! let result = extract_zahir("file.log", OutputMode::Full, None, None, None)?;
 //!
-//! // Process multiple files
-//! let files = vec!["file1.log", "file2.log"];
-//! let result = extract_schema(files.as_slice(), OutputMode::Full)?;
+//! // Process with explicit config and optional output dir (None = no file write)
+//! let config = zahirscan::RuntimeConfig::new();
+//! let result = extract_zahir(
+//!     vec!["file1.log", "file2.log"],
+//!     OutputMode::Templates,
+//!     Some(&config),
+//!     None,
+//!     None,
+//! )?;
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 //!
-//! # Advanced API Example
+//! # Callback example (store each output in an object outside the call)
+//!
+//! Pass `on_output` to run a function as each file completes; store results in your own structure (e.g. TUI DB).
 //!
 //! ```no_run
-//! use zahirscan::{RuntimeConfig, phase1_scan, phase2_mining, calculate_adaptive_chunking};
+//! use std::sync::Mutex;
+//! use zahirscan::{extract_zahir, Output, OutputMode};
 //!
-//! let config = RuntimeConfig::new();
-//! let paths = vec!["file.log".to_string()];
-//! let phase1 = phase1_scan(&paths, None, &config);
-//! let tasks = phase1.tasks;
-//! let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, &config);
-//! let phase2 = phase2_mining(tasks, &config, &adaptive, false);
-//! let outputs = phase2.outputs;
+//! let collected: Mutex<Vec<Output>> = Mutex::new(Vec::new());
+//! let result = extract_zahir(
+//!     ["file1.log", "file2.log"],
+//!     OutputMode::Full,
+//!     None,
+//!     None,
+//!     Some(&|out: Output| {
+//!         collected.lock().unwrap().push(out);
+//!     }),
+//! )?;
+//! // collected has each file's Output as it completed; result.outputs has the same layout
+//! # Ok::<(), anyhow::Error>(())
+//! ```
+//!
+//! # Streaming input
+//!
+//! Use [`extract_zahir_from_stream`] when paths come from a channel (e.g. nefaxer's `on_entry`
+//! callback). Producer sends path strings; when the sender is dropped, zahirscan drains the
+//! receiver and runs the pipeline, streaming results via `on_output`.
+//!
+//! ```no_run
+//! use std::sync::mpsc;
+//! use zahirscan::{extract_zahir_from_stream, OutputMode};
+//!
+//! let (tx, rx) = mpsc::channel();
+//! // In another thread: run nefaxer with on_entry: Some(|e| { tx.send(e.path.to_string_lossy().into_owned()).ok(); });
+//! // Then drop(tx). This thread:
+//! let result = extract_zahir_from_stream(rx, OutputMode::Full, None, None, None)?;
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
+// Binary name
 pub const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub use config::DEFAULT_CONFIG_TOML;
@@ -53,133 +83,81 @@ pub mod setup;
 // Re-export all public types and functions
 pub use config::RuntimeConfig;
 pub use engine::chunking::{ProcessingTask, calculate_adaptive_chunking};
-pub use engine::orchestrator::{phase1_scan, phase2_mining};
+pub use engine::orchestrator::{phase1_scan, phase2_mining, run_pipeline};
 pub use engine::tools::*;
 pub use parsers::{FileType, ParseResult, extract_templates, initial_file_scan};
 pub use results::*;
 
-// Simple API wrapper functions
+// Single entry-point API
 use anyhow::Result;
 use engine::ToPathIter;
+use std::sync::mpsc::Receiver;
 
-/// Extract schema (templates and metadata) from one or more files.
+/// Single entry point: extract templates and metadata from one or more files.
 ///
-/// Same return type as [`extract_schema_with_config`]: a [`ZahirScanResult`] with
-/// `outputs`, `phase1_failed`, and `phase2_failed`. Uses embedded default config only
-/// (no user config file).
+/// * `paths` - A single path or multiple paths (see [`ToPathIter`]).
+/// * `mode` - Output mode (Templates or Full).
+/// * `config` - If `None`, uses embedded default config only (no overlay). Overlay is for CLI via `setup::load_config()`.
+/// * `output_dir` - If `Some(dir)`, writes per-file output under that directory; if `None`, skips file write (library usage) or uses temp (CLI).
+/// * `on_output` - If `Some`, invoked from worker threads as each file's [`Output`] is ready. Errors are in the returned [`ZahirScanResult::phase1_failed`] and [`phase2_failed`](ZahirScanResult::phase2_failed).
 ///
-/// # Arguments
+/// Returns [`ZahirScanResult`] with `outputs`, `phase1_failed`, and `phase2_failed`.
 ///
-/// * `paths` - A single file path (`&str`), multiple paths (`&[&str]` or `Vec<&str>`), or a single String (`&String` or `String`)
-/// * `mode` - Output mode (Templates or Full)
+/// # Example
 ///
-/// # Example - Single file
-///
-/// ```no_run
-/// use zahirscan::{extract_schema, OutputMode};
-///
-/// let result = extract_schema("document.log", OutputMode::Full)?;
-/// println!("Templates: {}", result.outputs[0].templates.len());
-/// # Ok::<(), anyhow::Error>(())
-/// ```
-///
-/// # Example - Multiple files
-///
-/// ```no_run
-/// use zahirscan::{extract_schema, OutputMode};
-///
-/// let files = vec!["file1.log", "file2.log", "file3.log"];
-/// let result = extract_schema(&files, OutputMode::Full)?;
-/// for output in &result.outputs {
-///     println!("Templates: {}", output.templates.len());
-/// }
-/// # Ok::<(), anyhow::Error>(())
-/// ```
-///
+/// See crate-level docs for examples (i.e. no callback, with callback).
 #[allow(private_bounds)]
-pub fn extract_schema<P: ToPathIter>(paths: P, mode: OutputMode) -> Result<ZahirScanResult> {
-    let config =
-        RuntimeConfig::load_config_with_overlay(DEFAULT_CONFIG_TOML, None::<&std::path::Path>)
-            .unwrap_or_default();
-    config.validate_external()?;
-    extract_schema_with_config(paths, mode, &config)
-}
-
-/// Extract schema and metadata from files with a provided configuration.
-///
-/// This is the advanced version of [`extract_schema`] that allows you to provide a custom
-/// configuration. Use this when you need to:
-/// - Reuse the same config across multiple calls (optimal for TUI/loops)
-/// - Provide a programmatically constructed config
-/// - Avoid repeated disk I/O from loading `config.toml`
-///
-/// For simple one-time usage, prefer [`extract_schema`] which loads config automatically.
-///
-/// # Example - Reusing config (optimal for loops/TUI)
-///
-/// ```no_run
-/// use zahirscan::{extract_schema_with_config, OutputMode, RuntimeConfig};
-///
-/// let config = RuntimeConfig::new();
-/// let file_batches = vec![
-///     vec!["batch1_file1.log", "batch1_file2.log"],
-///     vec!["batch2_file1.log", "batch2_file2.log"],
-/// ];
-///
-/// for batch in file_batches {
-///     let result = extract_schema_with_config(batch.as_slice(), OutputMode::Templates, &config)?;
-///     let outputs = result.outputs;
-///     // result.phase1_failed, result.phase2_failed for TUI display
-/// }
-/// # Ok::<(), anyhow::Error>(())
-/// ```
-#[allow(private_bounds)]
-pub fn extract_schema_with_config<P: ToPathIter>(
+pub fn extract_zahir<P: ToPathIter>(
     paths: P,
     mode: OutputMode,
-    config: &RuntimeConfig,
+    config: Option<&RuntimeConfig>,
+    output_dir: Option<&str>,
+    on_output: Option<&(dyn Fn(Output) + Send + Sync)>,
 ) -> Result<ZahirScanResult> {
+    let config = match config {
+        Some(c) => c.clone(),
+        None => {
+            RuntimeConfig::load_config_with_overlay(DEFAULT_CONFIG_TOML, None::<&std::path::Path>)
+                .unwrap_or_default()
+        }
+    };
     config.validate_external()?;
 
     let path_strings = paths.to_path_iter();
-
-    // Validate input - fail fast with clear error
     if path_strings.is_empty() {
         return Err(anyhow::anyhow!("No file paths provided"));
     }
 
-    // Phase 1: Initial scan
-    let phase1 = phase1_scan(&path_strings, None, config);
-    let tasks = phase1.tasks;
-    if tasks.is_empty() {
-        let msg = if phase1.failed.is_empty() {
-            "No valid files found. All provided paths failed to scan or do not exist".to_string()
-        } else {
-            let details: Vec<String> = phase1
-                .failed
-                .iter()
-                .map(|(p, e)| format!("{}: {}", p, e))
-                .collect();
-            format!(
-                "No valid files found. {} path(s) failed: {}",
-                phase1.failed.len(),
-                details.join("; ")
-            )
-        };
-        return Err(anyhow::anyhow!("{}", msg));
-    }
-
-    // Calculate adaptive chunking
-    let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, config);
-
-    // Phase 2: Template mining and metadata extraction
-    let mut config_with_mode = config.clone();
+    let mut config_with_mode = config;
     config_with_mode.output_mode = mode;
-    let phase2 = phase2_mining(tasks, &config_with_mode, &adaptive, true);
+    let (phase1_failed, phase2) =
+        run_pipeline(&path_strings, output_dir, &config_with_mode, on_output)?;
 
     Ok(ZahirScanResult {
         outputs: phase2.outputs,
-        phase1_failed: phase1.failed,
+        phase1_failed,
         phase2_failed: phase2.failed,
     })
+}
+
+/// Extract templates and metadata from paths received over a channel (streaming input).
+///
+/// Drains `paths_rx` until the sender is dropped (channel closed), then runs the same pipeline
+/// as [`extract_zahir`]. Use this when paths are produced by another component (e.g. [nefaxer]'s
+/// `on_entry` callback): spawn a thread that sends paths into the channel; when the producer is
+/// done, drop the sender; this function then processes all received paths and streams results
+/// via `on_output`.
+///
+/// * `paths_rx` - Channel receiver; block until closed, collecting all path strings.
+/// * `mode`, `config`, `output_dir`, `on_output` - Same as [`extract_zahir`].
+#[allow(clippy::module_name_repetitions)]
+pub fn extract_zahir_from_stream(
+    paths_rx: Receiver<String>,
+    mode: OutputMode,
+    config: Option<&RuntimeConfig>,
+    output_dir: Option<&str>,
+    on_output: Option<&(dyn Fn(Output) + Send + Sync)>,
+) -> Result<ZahirScanResult> {
+    let path_strings: Vec<String> = paths_rx.iter().collect();
+    extract_zahir(&path_strings, mode, config, output_dir, on_output)
 }

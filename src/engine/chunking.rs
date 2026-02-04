@@ -6,7 +6,7 @@
 use super::tools::format_bytes;
 use crate::config::RuntimeConfig;
 use crate::parsers::{FileType, ParseResult};
-use log::debug;
+use log::{debug, warn};
 use memmap2::Mmap;
 
 /// File processing task with stats, output path, and optional mmap from Phase 1 (reused in Phase 2 to avoid double open).
@@ -148,4 +148,13 @@ pub fn calculate_adaptive_chunking(
     AdaptiveChunking {
         chunks_per_file_multiplier: chunks_per_worker_multiplier,
     }
+}
+
+pub fn setup_rayon_thread_pool(max_workers: usize) {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(max_workers)
+        .build_global()
+        .unwrap_or_else(|_| {
+            warn!("Failed to set thread pool, using default");
+        });
 }
