@@ -345,7 +345,7 @@ impl RuntimeConfig {
 
     /// Validate config that did not come from file (e.g. programmatic or user overlay).
     ///
-    /// Use before [`extract_schema_with_config`](crate::extract_schema_with_config) or after merging
+    /// Use before [`extract_zahir`](crate::extract_zahir) or after merging
     /// overlay so invalid values yield a clear error. Config loaded via [`load_from_path`](Self::load_from_path)
     /// or [`load_config_with_overlay`](Self::load_config_with_overlay) is already validated; this is for external config.
     ///

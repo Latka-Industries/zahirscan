@@ -1,6 +1,6 @@
 //! Orchestration logic for processing multiple files
 
-use super::chunking::{AdaptiveChunking, ProcessingTask};
+use super::chunking::{AdaptiveChunking, ProcessingTask, calculate_adaptive_chunking};
 use super::progress::{ProgressBarConfig, create_progress_bar};
 use super::tools::{
     determine_output_path, format_bytes, print_progress_handler, should_ignore_path,
@@ -92,7 +92,7 @@ fn phase1_path_filter(p: &str, config: &RuntimeConfig) -> bool {
 /// Returns tasks and failed paths with error messages (for TUI/lib to display).
 pub fn phase1_scan(
     input_paths: &[String],
-    output: Option<&str>,
+    output_dir: Option<&str>,
     config: &RuntimeConfig,
 ) -> Phase1Result {
     use std::time::Instant;
@@ -139,7 +139,7 @@ pub fn phase1_scan(
         match result {
             Ok((stats, mmap)) => {
                 let input_path = &input_paths[i];
-                let output_path = determine_output_path(input_path, output, config);
+                let output_path = determine_output_path(input_path, output_dir, config);
                 tasks.push(ProcessingTask {
                     stats,
                     output_path,
@@ -183,11 +183,13 @@ pub fn phase1_scan(
 
 /// Phase 2: Template mining and processing.
 /// Writes to files (unless `skip_file_write` is true). Returns outputs and per-file failures (no short-circuit).
+/// Optional callback is invoked from worker threads as each file completes. Errors are in the returned [`Phase2Result::failed`].
 pub fn phase2_mining(
     tasks: Vec<ProcessingTask>,
     config: &RuntimeConfig,
     adaptive: &AdaptiveChunking,
     skip_file_write: bool,
+    on_output: Option<&(dyn Fn(Output) + Send + Sync)>,
 ) -> Phase2Result {
     use std::time::Instant;
 
@@ -218,10 +220,16 @@ pub fn phase2_mining(
         config.max_workers,
         config.threshold_multiplier,
         |task| {
-            crate::with_progress!(
+            let r = crate::with_progress!(
                 &pb,
                 process_task_phase2(task, &phase2_config, skip_file_write)
-            )
+            );
+            if let Ok(out) = &r
+                && let Some(cb) = on_output
+            {
+                cb(out.clone());
+            }
+            r
         },
     );
 
@@ -251,6 +259,40 @@ pub fn phase2_mining(
     }
 
     Phase2Result { outputs, failed }
+}
+
+/// Run the full pipeline: Phase 1 → empty-tasks check → adaptive chunking → Phase 2.
+/// Caller must set `config.output_mode` before calling. Returns phase1 failed list and phase2 result.
+/// Optional callback is invoked from Phase 2 worker threads as each file completes (e.g. for TUI to persist to DB). Errors are in the returned result.
+pub fn run_pipeline(
+    input_paths: &[String],
+    output_dir: Option<&str>,
+    config: &RuntimeConfig,
+    on_output: Option<&(dyn Fn(Output) + Send + Sync)>,
+) -> Result<(Vec<(String, String)>, Phase2Result)> {
+    let skip_file_write = output_dir.is_none();
+    let phase1 = phase1_scan(input_paths, output_dir, config);
+    let tasks = phase1.tasks;
+    if tasks.is_empty() {
+        let msg = if phase1.failed.is_empty() {
+            "No valid files found. All provided paths failed to scan or do not exist".to_string()
+        } else {
+            let details: Vec<String> = phase1
+                .failed
+                .iter()
+                .map(|(p, e)| format!("{}: {}", p, e))
+                .collect();
+            format!(
+                "No valid files found. {} path(s) failed: {}",
+                phase1.failed.len(),
+                details.join("; ")
+            )
+        };
+        return Err(anyhow::anyhow!("{}", msg));
+    }
+    let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, config);
+    let phase2 = phase2_mining(tasks, config, &adaptive, skip_file_write, on_output);
+    Ok((phase1.failed, phase2))
 }
 
 /// Process files with adaptive batching based on file count and worker count

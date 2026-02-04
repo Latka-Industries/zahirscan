@@ -274,13 +274,13 @@ pub fn get_temp_output_path(input_path: &str, config: &RuntimeConfig) -> String 
 }
 
 /// Determine output path for a given input file.
-/// When output is Some we treat it as a directory and write filename.ext.zahirscan.out there; when None we use a temp file.
+/// When output_dir is Some we write filename.ext.zahirscan.out there; when None we use a temp file.
 pub fn determine_output_path(
     input_path: &str,
-    output: Option<&str>,
+    output_dir: Option<&str>,
     config: &RuntimeConfig,
 ) -> String {
-    if let Some(out_dir) = output {
+    if let Some(out_dir) = output_dir {
         let path = Path::new(input_path);
         let input_name = path
             .file_name()

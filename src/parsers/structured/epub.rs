@@ -11,8 +11,8 @@ use crate::parsers::traits::empty_mining_result;
 use crate::results::{EpubMetadata, MiningResult};
 use anyhow::Result;
 use log::{debug, warn};
-use quick_xml::events::{BytesEnd, BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesEnd, BytesStart, Event};
 use zip::ZipArchive;
 
 /// Return the value of the first attribute whose name is in `names`, or None.
@@ -152,12 +152,13 @@ fn parse_container_rootfile(xml: &str) -> Option<String> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
-                if start_local_name_eq(e, EpubElements::ROOTFILE) {
-                    if let Some(path) =
-                        get_first_attr_value(e, &[EpubElements::FULL_PATH, EpubElements::FULL_PATH_ALT])
-                    {
-                        return Some(path);
-                    }
+                if start_local_name_eq(e, EpubElements::ROOTFILE)
+                    && let Some(path) = get_first_attr_value(
+                        e,
+                        &[EpubElements::FULL_PATH, EpubElements::FULL_PATH_ALT],
+                    )
+                {
+                    return Some(path);
                 }
             }
             Ok(Event::Eof) => break,
@@ -284,10 +285,11 @@ fn parse_spine_order_from_opf(xml: &str) -> Vec<String> {
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
                 if start_local_name_eq(e, EpubElements::SPINE) {
                     in_spine = true;
-                } else if in_spine && start_local_name_eq(e, EpubElements::ITEMREF) {
-                    if let Some(idref) = get_first_attr_value(e, &[EpubElements::IDREF]) {
-                        order.push(idref);
-                    }
+                } else if in_spine
+                    && start_local_name_eq(e, EpubElements::ITEMREF)
+                    && let Some(idref) = get_first_attr_value(e, &[EpubElements::IDREF])
+                {
+                    order.push(idref);
                 }
             }
             Ok(Event::End(ref e)) => {
