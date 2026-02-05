@@ -123,7 +123,8 @@ pub fn extract_zahir<P: ToPathIter>(
         }
     };
     config.validate_external()?;
-    debug!("ZAHIRSCAN CONFIG: {:?}", config);
+    let config_str = format!("{} CONFIG: {:#?}", PKG_NAME.to_uppercase(), config);
+    debug!("{}", config_str);
 
     let path_strings = paths.to_path_iter();
     if path_strings.is_empty() {

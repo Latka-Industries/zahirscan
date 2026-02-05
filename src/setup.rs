@@ -1,9 +1,11 @@
 //! Setup utilities for ZahirScan: logger, config, CLI flag application, input/output path resolution.
 
 use anyhow::Context;
+use colored::Colorize;
 use env_logger;
 use log::{debug, warn};
 use std::fs;
+use std::io::Write;
 
 use crate::PKG_NAME;
 use crate::config::RuntimeConfig;
@@ -21,6 +23,24 @@ pub fn build_logger(dev_mode: bool) {
     } else {
         env_logger::Builder::from_default_env()
             .filter_level(log::LevelFilter::Info)
+            .format(|buf, record| {
+                let level_str = record.level().to_string();
+                let level_display = match record.level() {
+                    log::Level::Error => level_str.red().to_string(),
+                    log::Level::Warn => level_str.yellow().to_string(),
+                    _ => level_str,
+                };
+                writeln!(
+                    buf,
+                    "{}{} {} {}{} {}",
+                    "[".bright_green().bold(),
+                    PKG_NAME.bright_green().bold(),
+                    level_display,
+                    record.target().white(),
+                    "]".bright_green().bold(),
+                    record.args()
+                )
+            })
             .init();
     }
 }

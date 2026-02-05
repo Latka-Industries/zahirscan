@@ -10,7 +10,7 @@ use crate::parsers::{extract_templates, initial_file_scan_with_mmap};
 use crate::results::{Output, Phase1Result, Phase2Result};
 use anyhow::Result;
 use kdam::Animation;
-use log::{debug, error, info};
+use log::{debug, error};
 use rayon::prelude::*;
 use std::path::Path;
 use std::time::Duration;
@@ -78,7 +78,7 @@ fn log_phase2_metrics(
 /// Filter input paths for Phase 1: skip directories and paths that match ignore patterns
 fn phase1_path_filter(p: &str, config: &RuntimeConfig) -> bool {
     if Path::new(p).is_dir() {
-        info!("Skipping directory: {}", p);
+        debug!("Skipping directory: {}", p);
         false
     } else if should_ignore_path(p, config) {
         debug!("Skipping {} (matches ignore filter)", p);
