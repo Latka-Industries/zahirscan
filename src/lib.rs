@@ -91,6 +91,7 @@ pub use results::*;
 // Single entry-point API
 use anyhow::Result;
 use engine::ToPathIter;
+use log::debug;
 use std::sync::mpsc::Receiver;
 
 /// Single entry point: extract templates and metadata from one or more files.
@@ -122,6 +123,7 @@ pub fn extract_zahir<P: ToPathIter>(
         }
     };
     config.validate_external()?;
+    debug!("ZAHIRSCAN CONFIG: {:?}", config);
 
     let path_strings = paths.to_path_iter();
     if path_strings.is_empty() {

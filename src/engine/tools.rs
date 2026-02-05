@@ -222,6 +222,7 @@ pub fn redact_path(path: &str) -> String {
 
 /// Whether to skip a path based on `[filter]` ignore_patterns and ignore_hidden_files.
 /// Patterns: exact basename (case-insensitive), `*suffix` (ends with), or `prefix*` (starts with).
+/// Note: ignore_hidden_files only skips when basename starts with `.` (dotfiles). .DS_Store / Thumbs.db / temp patterns come from the default ignore_patterns list.
 /// Used for both top-level file paths and ZIP entry paths.
 pub fn should_ignore_path(path: &str, config: &RuntimeConfig) -> bool {
     let basename = Path::new(path)
