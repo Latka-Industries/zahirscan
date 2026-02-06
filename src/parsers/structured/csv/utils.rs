@@ -1,5 +1,7 @@
 //! Utility functions for CSV parsing and type inference
 
+use crate::utils::typecheck::{is_boolean, is_date, is_number, parse_timestamp_to_seconds};
+
 /// Common CSV characters and patterns
 struct CsvSyntax {
     delimiters: [char; 5],
@@ -180,12 +182,10 @@ pub(crate) fn infer_value_type(value: &str) -> String {
         {
             CsvValueTypes::NULL.to_string()
         }
-        _ if crate::engine::tools::is_boolean(value) => CsvValueTypes::BOOLEAN.to_string(),
-        _ if crate::engine::tools::parse_timestamp_to_seconds(value).is_some() => {
-            CsvValueTypes::TIMESTAMP.to_string()
-        }
-        _ if crate::engine::tools::is_number(value) => CsvValueTypes::NUMBER.to_string(),
-        _ if crate::engine::tools::is_date(value) => CsvValueTypes::DATE.to_string(),
+        _ if is_boolean(value) => CsvValueTypes::BOOLEAN.to_string(),
+        _ if parse_timestamp_to_seconds(value).is_some() => CsvValueTypes::TIMESTAMP.to_string(),
+        _ if is_number(value) => CsvValueTypes::NUMBER.to_string(),
+        _ if is_date(value) => CsvValueTypes::DATE.to_string(),
         _ => CsvValueTypes::STRING.to_string(),
     }
 }

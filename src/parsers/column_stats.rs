@@ -205,8 +205,8 @@ pub fn compute_date_stats_from_strings(values: &[String]) -> Option<DateStats> {
         .filter_map(|val| {
             // First try parsing as Unix timestamp (if it's a numeric timestamp)
             // Otherwise try parsing as date string
-            crate::engine::tools::parse_timestamp_to_seconds(val)
-                .or_else(|| crate::engine::tools::parse_date_to_timestamp(val))
+            crate::utils::typecheck::parse_timestamp_to_seconds(val)
+                .or_else(|| crate::utils::typecheck::parse_date_to_timestamp(val))
         })
         .collect();
 

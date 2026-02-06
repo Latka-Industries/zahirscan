@@ -4,9 +4,10 @@ use std::collections::BTreeMap;
 use std::io::Cursor;
 
 use crate::config::RuntimeConfig;
-use crate::engine::tools::{detect_file_type, should_ignore_path};
 use crate::parsers::ParseResult;
 use crate::results::metadata::{ZipEntry, ZipMetadata};
+use crate::utils::filetypes::detect_file_type;
+use crate::utils::path_string_helper::should_ignore_path;
 use anyhow::Result;
 use zip::ZipArchive;
 

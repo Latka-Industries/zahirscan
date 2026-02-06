@@ -4,9 +4,9 @@ use log::debug;
 use rusqlite::Connection;
 
 use crate::config::RuntimeConfig;
-use crate::engine::tools::{is_boolean, parse_date_to_timestamp, parse_timestamp_to_seconds};
 use crate::parsers::column_stats;
 use crate::results::{BlobStats, ColumnInfo, TextStats};
+use crate::utils::typecheck::{is_boolean, parse_date_to_timestamp, parse_timestamp_to_seconds};
 
 /// Compute type-specific statistics for a column based on its SQLite type.
 /// Dispatches to appropriate compute function: numeric, text/date, or blob stats.

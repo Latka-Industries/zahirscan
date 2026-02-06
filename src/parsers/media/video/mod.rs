@@ -1,9 +1,9 @@
 //! Video file metadata extraction
 
 use crate::config::RuntimeConfig;
-use crate::engine::tools::{check_ffprobe_available, run_ffprobe_safe};
 use crate::parsers::{ParseResult, media_helpers};
 use crate::results::VideoMetadata as OutputVideoMetadata;
+use crate::utils::ffprobe_handler::{check_ffprobe_available, run_ffprobe_safe};
 use anyhow::Result;
 use ffprobe::Stream;
 

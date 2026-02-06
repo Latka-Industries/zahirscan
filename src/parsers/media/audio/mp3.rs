@@ -1,8 +1,8 @@
 //! MP3-specific parsing utilities, including LAME tag reading
 
-use crate::engine::tools::is_codec_for_file_type;
 use crate::parsers::FileType;
 use crate::parsers::media_helpers::BitrateMode;
+use crate::utils::filetypes::is_codec_for_file_type;
 
 /// Check if a codec string represents MP3
 /// Verifies against FILE_EXTENSION_MAP so we only treat known audio codecs as MP3.

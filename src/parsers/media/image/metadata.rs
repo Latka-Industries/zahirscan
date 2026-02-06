@@ -1,7 +1,7 @@
 //! Format-specific image metadata extraction
 
-use crate::engine::tools::get_extensions_for_file_type;
 use crate::parsers::FileType;
+use crate::utils::filetypes::get_extensions_for_file_type;
 
 use super::{bmp, gif, jpeg, png, tiff, webp};
 
