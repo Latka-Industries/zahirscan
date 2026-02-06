@@ -3,11 +3,14 @@
 //! This module provides functions for calculating optimal chunk sizes
 //! and adaptive chunking strategies based on file statistics.
 
-use super::tools::format_bytes;
-use crate::config::RuntimeConfig;
-use crate::parsers::{FileType, ParseResult};
 use log::{debug, warn};
 use memmap2::Mmap;
+use rayon::iter::IntoParallelRefIterator;
+use rayon::prelude::*;
+
+use crate::config::RuntimeConfig;
+use crate::parsers::{FileType, ParseResult};
+use crate::utils::path_string_helper::format_bytes;
 
 /// File processing task with stats, output path, and optional mmap from Phase 1 (reused in Phase 2 to avoid double open).
 #[derive(Debug)]
@@ -157,4 +160,108 @@ pub fn setup_rayon_thread_pool(max_workers: usize) {
         .unwrap_or_else(|_| {
             warn!("Failed to set thread pool, using default");
         });
+}
+
+/// Reserve this many fds for stdio, libs, progress, etc., when deriving batch size from the process limit.
+const RESERVED_FDS: usize = 256;
+/// Upper bound on auto batch size when the fd limit is very high or unlimited.
+const MAX_AUTO_BATCH: usize = 100_000;
+/// Fallback batch size when the fd limit cannot be read (e.g. unsupported platform).
+pub const DEFAULT_AUTO_BATCH: usize = 10_000;
+
+/// Returns a safe path batch size from the process file descriptor limit so we don't exceed "too many open files".
+/// Used when `config.path_batch_size` is 0. Leaves [`RESERVED_FDS`] headroom and caps at [`MAX_AUTO_BATCH`].
+pub fn fd_limit_batch_size() -> Option<usize> {
+    #[cfg(unix)]
+    {
+        let (soft, _hard) = rlimit::getrlimit(rlimit::Resource::NOFILE).ok()?;
+        // Soft limit can be "unlimited" (often u64::MAX or a very large value)
+        let limit = if soft == rlimit::INFINITY || soft > MAX_AUTO_BATCH as u64 {
+            MAX_AUTO_BATCH as u64
+        } else {
+            soft
+        };
+        let batch = limit.saturating_sub(RESERVED_FDS as u64) as usize;
+        Some(batch.max(1))
+    }
+
+    #[cfg(windows)]
+    {
+        // Windows: getmaxstdio() is the C runtime limit for open streams; use it as a conservative proxy.
+        let limit = rlimit::getmaxstdio();
+        if limit <= 0 {
+            return Some(DEFAULT_AUTO_BATCH);
+        }
+        let batch = (limit as usize).saturating_sub(RESERVED_FDS).max(1);
+        Some(batch.min(MAX_AUTO_BATCH))
+    }
+}
+
+/// Whether to run the pipeline in a single batch or in path batches (to limit open files).
+#[derive(Debug, Clone, Copy)]
+pub enum PathBatchMode {
+    /// Process all paths in one go (Phase 1 + Phase 2 on full set).
+    Single,
+    /// Process paths in chunks of this size; mmaps dropped between chunks.
+    Batched { batch_size: usize },
+}
+
+pub fn determine_batch_size(input_paths: &[String]) -> PathBatchMode {
+    let batch_size = fd_limit_batch_size().unwrap_or(DEFAULT_AUTO_BATCH);
+    if input_paths.len() > batch_size {
+        debug!(
+            "Path batch size: {} (path count {}), running in batches",
+            batch_size,
+            input_paths.len()
+        );
+        PathBatchMode::Batched { batch_size }
+    } else {
+        PathBatchMode::Single
+    }
+}
+
+/// Process files with adaptive batching based on file count and worker count
+/// Uses a scaled heuristic: batching kicks in when files > workers * threshold_multiplier
+/// This prevents thread pool saturation for large batches while maintaining
+/// optimal performance for smaller batches (tested: 224 files = 40s without batching)
+pub fn process_files_with_adaptive_batching<R, F>(
+    tasks: &[ProcessingTask],
+    max_workers: usize,
+    threshold_multiplier: usize,
+    f: F,
+) -> Vec<R>
+where
+    F: Fn(&ProcessingTask) -> R + Send + Sync,
+    R: Send,
+{
+    // Scaled heuristic: threshold = workers * multiplier
+    // This scales with available parallelism rather than a fixed number
+    // Multiplier of 50 means: 13 workers = 650 file threshold, 20 workers = 1000 threshold
+    let batching_threshold = max_workers * threshold_multiplier;
+
+    if tasks.len() > batching_threshold {
+        // Large batches: use adaptive batching to prevent thread pool saturation
+        // Batch size scales with how far above threshold we are:
+        let ratio = tasks.len() as f64 / batching_threshold as f64;
+        let batch_multiplier = if ratio < 2.0 {
+            2 // Light batching for 1-2x threshold
+        } else if ratio < 3.0 {
+            3 // Moderate batching for 2-3x threshold
+        } else {
+            4 // Heavy batching for 3x+ threshold
+        };
+        let batch_size = (max_workers * batch_multiplier).max(1);
+        debug!(
+            "Adaptive batching: files={}, threshold={}, ratio={:.2}, batch_multiplier={}, batch_size={}",
+            tasks.len(),
+            batching_threshold,
+            ratio,
+            batch_multiplier,
+            batch_size
+        );
+        tasks.par_iter().with_min_len(batch_size).map(f).collect()
+    } else {
+        // Small batches: full parallelism is optimal
+        tasks.par_iter().map(f).collect()
+    }
 }
