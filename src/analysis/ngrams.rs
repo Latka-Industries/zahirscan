@@ -1,15 +1,16 @@
 //! N-gram and phrase frequency utilities for text template extraction.
 //! Builds structural and token-based patterns, collects frequent n-grams/phrases, extracts examples.
 
-use crate::config::RuntimeConfig;
-use crate::engine::tools::{
-    PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed,
-};
-use crate::parsers::traits::AdaptiveParallel;
 use dashmap::DashMap;
 use log::debug;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
+
+use crate::config::RuntimeConfig;
+use crate::parsers::traits::AdaptiveParallel;
+use crate::utils::path_string_helper::{
+    PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed,
+};
 
 /// (item, count) list for frequent n-grams or phrases; used to avoid complex inline types.
 pub type FrequentEntries = Vec<(String, usize)>;
