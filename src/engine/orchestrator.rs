@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 
-use super::chunking::{calculate_adaptive_chunking, determine_batch_size, PathBatchMode};
+use super::chunking::{PathBatchMode, calculate_adaptive_chunking, determine_batch_size};
 use super::phases::{mining::phase2_mining, scanning::phase1_scan};
 use crate::config::RuntimeConfig;
 use crate::results::Phase2Result;
