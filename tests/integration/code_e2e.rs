@@ -1,7 +1,7 @@
 //! End-to-end integration tests for code/script metadata: file on disk → extract_zahir → Output/JSON.
 
 use std::fs;
-use zahirscan::{OutputMode, extract_zahir};
+use zahirscan::{OutputMode, OutputSink, extract_zahir};
 
 #[test]
 fn code_file_type_detection_py() {
@@ -10,8 +10,14 @@ fn code_file_type_detection_py() {
     let content = "print(1)\n";
     fs::write(&path, content).expect("write");
     let path_str = path.to_string_lossy();
-    let result = extract_zahir::<&str>(path_str.as_ref(), OutputMode::Full, None, None, None)
-        .expect("extract_zahir");
+    let result = extract_zahir::<&str>(
+        path_str.as_ref(),
+        OutputMode::Full,
+        None,
+        None,
+        OutputSink::Collect,
+    )
+    .expect("extract_zahir");
     assert_eq!(result.outputs.len(), 1);
     assert_eq!(result.outputs[0].file_type.as_deref(), Some("Code"));
     let meta = result.outputs[0]
@@ -30,8 +36,14 @@ fn code_e2e_full_mode() {
     let content = "fn main() {\n    println!(\"hi\");\n}\n";
     fs::write(&path, content).expect("write");
     let path_str = path.to_string_lossy();
-    let result = extract_zahir::<&str>(path_str.as_ref(), OutputMode::Full, None, None, None)
-        .expect("extract_zahir");
+    let result = extract_zahir::<&str>(
+        path_str.as_ref(),
+        OutputMode::Full,
+        None,
+        None,
+        OutputSink::Collect,
+    )
+    .expect("extract_zahir");
     assert_eq!(result.outputs.len(), 1);
     assert_eq!(result.outputs[0].file_type.as_deref(), Some("Code"));
     let meta = result.outputs[0]
@@ -49,8 +61,14 @@ fn code_e2e_templates_mode() {
     let path = dir.path().join("app.js");
     fs::write(&path, "console.log('hello');\n").expect("write");
     let path_str = path.to_string_lossy();
-    let result = extract_zahir::<&str>(path_str.as_ref(), OutputMode::Templates, None, None, None)
-        .expect("extract_zahir");
+    let result = extract_zahir::<&str>(
+        path_str.as_ref(),
+        OutputMode::Templates,
+        None,
+        None,
+        OutputSink::Collect,
+    )
+    .expect("extract_zahir");
     assert_eq!(result.outputs.len(), 1);
     assert_eq!(result.outputs[0].file_type.as_deref(), Some("Code"));
     assert!(result.outputs[0].templates.is_empty());
@@ -63,8 +81,14 @@ fn code_e2e_json_contains_code_metadata() {
     let path = dir.path().join("script.py");
     fs::write(&path, "x = 1\n").expect("write");
     let path_str = path.to_string_lossy();
-    let result = extract_zahir::<&str>(path_str.as_ref(), OutputMode::Full, None, None, None)
-        .expect("extract_zahir");
+    let result = extract_zahir::<&str>(
+        path_str.as_ref(),
+        OutputMode::Full,
+        None,
+        None,
+        OutputSink::Collect,
+    )
+    .expect("extract_zahir");
     let json = serde_json::to_value(&result.outputs[0]).expect("serialize");
     assert!(json.get("code_metadata").is_some());
     let meta = json.get("code_metadata").unwrap();

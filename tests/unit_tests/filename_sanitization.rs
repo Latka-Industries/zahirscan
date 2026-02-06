@@ -1,6 +1,6 @@
 //! Tests for filename sanitization rules
 
-use zahirscan::sanitize_filename;
+use zahirscan::utils::path_string_helper::sanitize_filename;
 
 #[test]
 fn test_sanitize_removes_whitespace() {

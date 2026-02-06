@@ -1,6 +1,6 @@
 //! Tests for placeholder formatting functions
 
-use zahirscan::engine::tools::{
+use zahirscan::utils::path_string_helper::{
     PlaceholderType, format_placeholder, format_placeholder_bracketed,
     format_placeholder_bracketed_typed, format_placeholder_typed,
 };
