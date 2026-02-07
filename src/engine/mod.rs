@@ -2,8 +2,5 @@
 
 pub mod chunking;
 pub mod orchestrator;
-mod path_iter;
+pub mod phases;
 mod progress;
-pub mod tools;
-
-pub(crate) use path_iter::ToPathIter;

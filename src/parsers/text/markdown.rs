@@ -3,10 +3,10 @@
 use crate::analysis::calculate_writing_footprint;
 use crate::analysis::{DefaultSentenceAnalyzer, SentenceAnalyzer};
 use crate::config::RuntimeConfig;
-use crate::engine::tools::{PlaceholderType, format_placeholder_bracketed_typed};
 use crate::parsers::ParseResult;
 use crate::parsers::traits::AdaptiveParallel;
 use crate::results::{MiningResult, Template};
+use crate::utils::path_string_helper::{PlaceholderType, format_placeholder_bracketed_typed};
 use anyhow::Result;
 use dashmap::DashMap;
 use rayon::prelude::*;

@@ -15,8 +15,8 @@ pub mod traits;
 pub use media_helpers::{BitrateMode, CompressionMode};
 
 use crate::config::RuntimeConfig;
-use crate::engine::tools::{detect_file_type, redact_path};
 use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
+use crate::utils;
 use anyhow::Result;
 use memmap2::Mmap;
 use serde_json;
@@ -283,7 +283,7 @@ impl ParseResult {
     /// Build templates-only output (with writing footprint and metadata)
     fn build_templates_output(&self, config: &RuntimeConfig) -> Output {
         let source_path = match config.redact_paths {
-            true => redact_path(&self.file_path),
+            true => utils::path_string_helper::redact_path(&self.file_path),
             false => self.file_path.clone(),
         };
 
@@ -310,7 +310,7 @@ impl ParseResult {
     /// Build full output (with all metadata and compression stats)
     fn build_full_output(&self, config: &RuntimeConfig) -> Output {
         let source_path = match config.redact_paths {
-            true => redact_path(&self.file_path),
+            true => utils::path_string_helper::redact_path(&self.file_path),
             false => self.file_path.clone(),
         };
 
@@ -391,7 +391,7 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
 
 /// Phase 1 scan that returns the mmap so Phase 2 can reuse it (avoids double open per path).
 pub(crate) fn initial_file_scan_with_mmap(path: &str) -> Result<(ParseResult, Mmap)> {
-    let file_type = detect_file_type(path);
+    let file_type = utils::filetypes::detect_file_type(path);
     let mmap = open_mmap(path)?;
     let byte_count = mmap.len();
 

@@ -2,11 +2,20 @@
 
 mod mp3;
 
+use anyhow::Result;
+use lofty::{
+    file::TaggedFileExt,
+    picture::PictureType,
+    read_from_path,
+    tag::{Accessor, ItemKey},
+};
+
 use crate::config::RuntimeConfig;
-use crate::engine::tools::{get_extensions_for_file_type, is_codec_for_file_type};
 use crate::parsers::media::image;
 use crate::parsers::{CompressionMode, FileType, ParseResult, media_helpers};
 use crate::results::{AudioMetadata as OutputAudioMetadata, ImageMetadata};
+use crate::utils::ffprobe_handler::{check_ffprobe_available, run_ffprobe_safe};
+use crate::utils::filetypes::{get_extensions_for_file_type, is_codec_for_file_type};
 
 /// Lossless audio codec extensions
 /// Maps codec extensions to their compression mode
@@ -27,14 +36,6 @@ pub(crate) fn is_lossless_codec(codec: &str) -> bool {
 pub fn is_opus_codec(s: &str) -> bool {
     is_codec_for_file_type(s, FileType::Audio) && s.to_lowercase().contains("opus")
 }
-use crate::engine::tools::{check_ffprobe_available, run_ffprobe_safe};
-use anyhow::Result;
-use lofty::{
-    file::TaggedFileExt,
-    picture::PictureType,
-    read_from_path,
-    tag::{Accessor, ItemKey},
-};
 
 /// Rich tag metadata extracted from audio files
 #[derive(Default)]

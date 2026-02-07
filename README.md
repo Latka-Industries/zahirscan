@@ -27,7 +27,9 @@ A high-performance Rust CLI that uses probabilistic template mining to extract s
 
 - **Template mining**: Repeated patterns in logs/text → templates with placeholders
 - **Memory-mapped I/O**: `memmap2`; single open per path
-- **Adaptive parallelization**: Chunk sizes and workers tuned from Phase 1 stats
+- **Adaptive parallelization**: Phase 2 chunk sizes and worker usage tuned from Phase 1 stats (file count, bytes, variance); Rayon parallel iteration with adaptive batching when task count exceeds `workers × threshold_multiplier`
+- **Path batching**: For large path sets, the pipeline runs in batches (batch size from process fd limit) so mmaps are dropped between batches—avoids “too many open files” on huge scans (e.g. 900k+ paths)
+- **Streamable output**: `OutputSink::Collect` (default), `OutputSink::StreamOnly` (callback per file, no collection), or `OutputSink::Channel` (send on channel); works with path batching
 - **Size reduction**: Typically 80–95% smaller than raw while preserving structure and metadata
 
 ### Metadata extraction by format
@@ -92,18 +94,54 @@ Options:
 
 ZahirScan can be used as a Rust library to extract schemas (templates and metadata) from files programmatically.
 
+#### Basic: collect all outputs\*\*
+
 ```rust
-use zahirscan::{extract_zahir, OutputMode, RuntimeConfig};
+use zahirscan::{extract_zahir, OutputMode, OutputSink};
 
-// Default config, no file write
-let result = extract_zahir("file.log", OutputMode::Full, None, None, None)?;
+// Default config, no file write; all results in result.outputs
+let result = extract_zahir(
+    "file.log",
+    OutputMode::Full,
+    None,
+    None,
+    OutputSink::Collect,
+)?;
 // result.outputs, result.phase1_failed, result.phase2_failed
-
-// With callback: pass Some(&|out: Output| { ... }) as 5th argument.
-// Streaming input: extract_zahir_from_stream(rx, OutputMode::Full, None, None, None).
 ```
 
-Inputs: single path (`&str`, `String`) or multiple (`&[&str]`, `Vec<String>`, etc.). Full API, `ZahirScanResult`, `Output`, `Template`, `WritingFootprint`, and per-format metadata: [docs.rs](https://docs.rs/zahirscan).
+#### Stream-only: callback or channel (no collection, bounded memory)
+
+```rust
+use std::sync::{Arc, Mutex};
+use zahirscan::{extract_zahir, Output, OutputMode, OutputSink};
+
+let collected = Arc::new(Mutex::new(Vec::<(String, zahirscan::Output)>::new()));
+let c = Arc::clone(&collected);
+let result = extract_zahir(
+    ["a.log", "b.log"],
+    OutputMode::Full,
+    None,
+    None,
+    OutputSink::StreamOnly(Box::new(move |path, out| {
+        c.lock().unwrap().push((path, out));
+    })),
+)?;
+// result.outputs is empty; results are in collected
+```
+
+#### Streaming input (paths from a channel)
+
+```rust
+use std::sync::mpsc;
+use zahirscan::{extract_zahir_from_stream, OutputMode, OutputSink};
+
+let (tx, rx) = mpsc::channel();
+// Producer sends paths, then drops tx
+let result = extract_zahir_from_stream(rx, OutputMode::Full, None, None, OutputSink::Collect)?;
+```
+
+**Inputs**: single path (`&str`, `String`) or multiple (`&[&str]`, `Vec<String>`, etc.). **Config**: pass `Some(&config)` for custom `RuntimeConfig`; `None` uses embedded default. Full API: `ZahirScanResult`, `Output`, `OutputSink`, `Template`, `WritingFootprint`, and per-format metadata: [docs.rs](https://docs.rs/zahirscan).
 
 ### Configuration
 
@@ -114,11 +152,12 @@ Inputs: single path (`&str`, `String`) or multiple (`&[&str]`, `Vec<String>`, et
 
 Full schema: [config.toml](config.toml).
 
-**Adaptive defaults:**
+**Adaptive batching and parallelization:**
 
-- `max_workers = 0` uses a sensible default based on CPU cores
-- Phase 2 uses **adaptive chunking** based on Phase 1 file statistics (count/bytes/variance) and targets a neat multiple of `max_workers`
-- No manual batching configuration is required for typical workloads
+- **Path batching**: If the number of paths exceeds the batch size (derived from the process fd limit), the pipeline runs in batches; mmaps are dropped between batches so open file count stays bounded.
+- **Phase 2 adaptive chunking**: Chunk sizes and “chunks per file” are derived from Phase 1 stats (file count, mean bytes, variance); targets a neat multiple of `max_workers` for load balancing.
+- **Phase 2 parallel batching**: When task count exceeds `workers × threshold_multiplier`, Rayon uses `with_min_len(batch_size)` to avoid thread-pool saturation; otherwise full parallelism.
+- `max_workers = 0` uses a sensible default (e.g. num_cpus - 1). No manual tuning is required for typical workloads.
 
 **File filtering (`[filter]`):**
 
@@ -127,9 +166,11 @@ Full schema: [config.toml](config.toml).
 
 ## Architecture
 
-**Phase 1**: Format detection, stats (lines/bytes/tokens), mmap for text, content-type classification.
+**Phase 1**: Format detection, stats (lines/bytes/tokens), mmap per path, content-type classification. Runs in parallel over paths (Rayon).
 
-**Phase 2**: Metadata extraction per format, template mining, writing footprint (exact-pattern then shape fallback for text/markdown), single Rayon pool with adaptive chunk sizing.
+**Path batching**: When path count exceeds the batch size (from the process fd limit), the pipeline runs Phase 1 + Phase 2 per chunk of paths, then drops the chunk (and mmaps) before the next chunk.
+
+**Phase 2**: Metadata extraction per format, template mining, writing footprint (exact-pattern then shape fallback for text/markdown). Single Rayon pool; adaptive chunk sizing from Phase 1 stats and adaptive parallel batching (min chunk length) when task count is large.
 
 ## Security
 

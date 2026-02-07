@@ -4,9 +4,9 @@ use crate::get_test_config;
 use std::fs::File;
 use std::time::Duration;
 use tempfile::TempDir;
-use zahirscan::engine::tools::detect_file_type;
 use zahirscan::parsers::code::extract_code_metadata;
 use zahirscan::parsers::{FileType, ParseResult};
+use zahirscan::utils::filetypes::detect_file_type;
 
 fn get_test_stats(file_path: &str, byte_count: usize, line_count: usize) -> ParseResult {
     ParseResult {

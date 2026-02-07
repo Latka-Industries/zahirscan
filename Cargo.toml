@@ -1,6 +1,6 @@
 [package]
 name = "zahirscan"
-version = "0.2.11"
+version = "0.2.12"
 edition = "2024"
 rust-version = "1.93"
 authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
@@ -32,6 +32,7 @@ anyhow = "1.0.100"
 calamine = "0.33.0"
 chrono = { version = "0.4.43", features = ["serde"] }
 clap = { version = "4.5.54", features = ["derive"] }
+colored = "3.1.1"
 csv = "1.4.0"
 dashmap = "6.1.0"
 env_logger = "0.11.8"
@@ -50,6 +51,7 @@ png = "0.18.0"
 quick-xml = { version = "0.39.0", features = ["serialize"] }
 rayon = "1.11.0"
 regex = "1.12.2"
+rlimit = "0.11"
 rusqlite = { version = "0.38.0", features = ["bundled"] }
 scraper = "0.25.0"
 serde = { version = "1.0.228", features = ["derive"] }

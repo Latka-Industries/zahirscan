@@ -2,7 +2,7 @@ use anyhow::Context;
 use clap::Parser;
 use std::fs;
 use std::time::Instant;
-use zahirscan::{engine, extract_zahir, format_duration, print_progress_handler, setup};
+use zahirscan::{engine, extract_zahir, setup, utils};
 
 #[derive(Parser)]
 #[command(name = zahirscan::PKG_NAME)]
@@ -86,11 +86,14 @@ fn main() -> anyhow::Result<()> {
         config.output_mode,
         Some(&config),
         output.as_deref(),
-        None,
+        zahirscan::OutputSink::Collect,
     )?;
 
-    print_progress_handler(
-        &format!("Total time: {}", format_duration(start.elapsed())),
+    utils::path_string_helper::print_progress_handler(
+        &format!(
+            "Total time: {}",
+            utils::path_string_helper::format_duration(start.elapsed())
+        ),
         config.show_progress,
     );
 

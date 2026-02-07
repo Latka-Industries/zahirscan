@@ -20,7 +20,9 @@ pub(crate) struct TomlConfig {
 #[derive(Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub(crate) struct FilterConfig {
+    /// Basename patterns to skip (exact, *suffix, prefix*). Defaults include .DS_Store, Thumbs.db, desktop.ini, and temp patterns (*.swp, *.tmp, *~, ~$*, etc.).
     pub ignore_patterns: Vec<String>,
+    /// When true, skip any file whose basename starts with `.` (Unix dotfiles). Does not control .DS_Store / temp patterns—those come from ignore_patterns.
     pub ignore_hidden_files: bool,
 }
 

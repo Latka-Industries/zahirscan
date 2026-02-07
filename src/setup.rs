@@ -1,14 +1,31 @@
 //! Setup utilities for ZahirScan: logger, config, CLI flag application, input/output path resolution.
 
 use anyhow::Context;
+use colored::Colorize;
 use env_logger;
 use log::{debug, warn};
 use std::fs;
+use std::io::Write;
+use std::sync::mpsc::Sender;
 
 use crate::PKG_NAME;
 use crate::config::RuntimeConfig;
-use crate::engine::tools::is_stderr_tty;
-use crate::results::OutputMode;
+use crate::results::{Output, OutputMode};
+use crate::utils::typecheck::is_stderr_tty;
+
+/// Controls where scan results go and whether they are collected.
+///
+/// * [`Collect`](OutputSink::Collect): Engine collects all outputs and returns them in [`ZahirScanResult::outputs`].
+/// * [`StreamOnly`](OutputSink::StreamOnly): Each `(path, Output)` is passed to the callback; nothing is collected (bounded memory).
+/// * [`Channel`](OutputSink::Channel): Each `(path, Output)` is sent on the channel; nothing is collected.
+pub enum OutputSink {
+    /// Collect all outputs and return them (default).
+    Collect,
+    /// Invoke the callback for each file; do not collect.
+    StreamOnly(Box<dyn Fn(String, Output) + Send + Sync>),
+    /// Send each `(path, Output)` on the channel; do not collect.
+    Channel(Sender<(String, Output)>),
+}
 
 /// Build logger based on development mode.
 /// If dev_mode is true, set log level to Debug.
@@ -21,6 +38,24 @@ pub fn build_logger(dev_mode: bool) {
     } else {
         env_logger::Builder::from_default_env()
             .filter_level(log::LevelFilter::Info)
+            .format(|buf, record| {
+                let level_str = record.level().to_string();
+                let level_display = match record.level() {
+                    log::Level::Error => level_str.red().to_string(),
+                    log::Level::Warn => level_str.yellow().to_string(),
+                    _ => level_str,
+                };
+                writeln!(
+                    buf,
+                    "{}{} {} {}{} {}",
+                    "[".bright_green().bold(),
+                    PKG_NAME.bright_green().bold(),
+                    level_display,
+                    record.target().white(),
+                    "]".bright_green().bold(),
+                    record.args()
+                )
+            })
             .init();
     }
 }

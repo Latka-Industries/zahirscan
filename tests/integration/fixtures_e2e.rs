@@ -3,7 +3,7 @@
 use crate::get_test_config;
 use std::path::PathBuf;
 use std::process::Command;
-use zahirscan::{OutputMode, extract_zahir};
+use zahirscan::{OutputMode, OutputSink, extract_zahir};
 
 fn fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -43,8 +43,8 @@ fn simple_fixtures_full_mode() {
     for (filename, expected_type) in SIMPLE_FIXTURES {
         let path = fixture_path(filename);
         let path_str = path.to_str().expect("path is valid UTF-8");
-        let result =
-            extract_zahir(path_str, OutputMode::Full, None, None, None).expect("extract_zahir");
+        let result = extract_zahir(path_str, OutputMode::Full, None, None, OutputSink::Collect)
+            .expect("extract_zahir");
         let outputs = &result.outputs;
         assert_eq!(outputs.len(), 1, "{}", filename);
         assert_eq!(
@@ -61,8 +61,14 @@ fn simple_fixtures_templates_mode() {
     for (filename, expected_type) in SIMPLE_FIXTURES {
         let path = fixture_path(filename);
         let path_str = path.to_str().expect("path is valid UTF-8");
-        let result = extract_zahir(path_str, OutputMode::Templates, None, None, None)
-            .expect("extract_zahir");
+        let result = extract_zahir(
+            path_str,
+            OutputMode::Templates,
+            None,
+            None,
+            OutputSink::Collect,
+        )
+        .expect("extract_zahir");
         let outputs = &result.outputs;
         assert_eq!(outputs.len(), 1, "{}", filename);
         assert_eq!(
@@ -85,8 +91,14 @@ fn multi_file_extract_zahir_returns_one_output_per_file() {
         .into_string()
         .unwrap();
     let paths: Vec<String> = vec![p1, p2];
-    let result =
-        extract_zahir(paths.as_slice(), OutputMode::Full, None, None, None).expect("extract_zahir");
+    let result = extract_zahir(
+        paths.as_slice(),
+        OutputMode::Full,
+        None,
+        None,
+        OutputSink::Collect,
+    )
+    .expect("extract_zahir");
     let outputs = &result.outputs;
     assert_eq!(outputs.len(), 2);
     assert_eq!(outputs[0].file_type.as_deref(), Some("Text"));
@@ -96,7 +108,7 @@ fn multi_file_extract_zahir_returns_one_output_per_file() {
 #[test]
 fn extract_zahir_empty_paths_returns_err() {
     let empty: &[&str] = &[];
-    let err = extract_zahir(empty, OutputMode::Full, None, None, None).unwrap_err();
+    let err = extract_zahir(empty, OutputMode::Full, None, None, OutputSink::Collect).unwrap_err();
     assert!(
         err.to_string().contains("No file paths provided"),
         "expected 'No file paths provided', got: {}",
@@ -111,7 +123,7 @@ fn extract_zahir_nonexistent_path_returns_err() {
         OutputMode::Full,
         None,
         None,
-        None,
+        OutputSink::Collect,
     )
     .unwrap_err();
     assert!(
@@ -129,8 +141,8 @@ fn extended_fixtures_full_mode() {
             continue; // skip if fixture not present (e.g. optional)
         }
         let path_str = path.to_str().expect("path is valid UTF-8");
-        let result =
-            extract_zahir(path_str, OutputMode::Full, None, None, None).expect("extract_zahir");
+        let result = extract_zahir(path_str, OutputMode::Full, None, None, OutputSink::Collect)
+            .expect("extract_zahir");
         let outputs = &result.outputs;
         assert_eq!(outputs.len(), 1, "{}", filename);
         assert_eq!(
@@ -219,8 +231,14 @@ fn extract_zahir_with_config_reuses_config() {
         let path_str = path.to_str().expect("path is valid UTF-8");
 
         // This should work without loading config from disk each time
-        let result = extract_zahir(path_str, OutputMode::Full, Some(&config), None, None)
-            .expect("extract_zahir should succeed");
+        let result = extract_zahir(
+            path_str,
+            OutputMode::Full,
+            Some(&config),
+            None,
+            OutputSink::Collect,
+        )
+        .expect("extract_zahir should succeed");
         let outputs = result.outputs;
 
         assert_eq!(outputs.len(), 1, "Should process one file: {}", filename);
@@ -243,7 +261,7 @@ fn extract_zahir_with_config_multiple_files_at_once() {
         OutputMode::Full,
         Some(&config),
         None,
-        None,
+        OutputSink::Collect,
     )
     .expect("extract_zahir should succeed with multiple files");
     let outputs = result.outputs;

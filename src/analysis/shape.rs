@@ -1,14 +1,15 @@
 //! Coarse / shape-based sentence grouping for text templates.
 //! Groups by (word count, end punctuation) so more sentences share a template than exact-pattern.
 
-use crate::analysis::Punctuation;
-use crate::config::RuntimeConfig;
-use crate::engine::tools::{
-    PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed,
-};
 use dashmap::DashMap;
 use log::debug;
 use std::collections::{BTreeMap, HashMap};
+
+use crate::analysis::Punctuation;
+use crate::config::RuntimeConfig;
+use crate::utils::path_string_helper::{
+    PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed,
+};
 
 /// How the sentence ends (period, question, exclamation). Used as part of shape for coarser grouping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
