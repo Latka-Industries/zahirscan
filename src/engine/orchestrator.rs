@@ -7,6 +7,7 @@ use super::phases::{mining::phase2_mining, scanning::phase1_scan};
 use crate::config::RuntimeConfig;
 use crate::results::Phase2Result;
 use crate::setup::OutputSink;
+use crate::utils::{BATCHED_NO_VALID_FILES_DETAIL_CAP, no_valid_files_error};
 
 /// Run the full pipeline: Phase 1 → empty-tasks check → adaptive chunking → Phase 2.
 /// When path count exceeds the batch size, processes in batches so mmaps are dropped between batches (avoids "too many open files").
@@ -51,21 +52,7 @@ fn run_pipeline_single(
     let phase1 = phase1_scan(input_paths, output_dir, config);
     let tasks = phase1.tasks;
     if tasks.is_empty() {
-        let msg = if phase1.failed.is_empty() {
-            "No valid files found. All provided paths failed to scan or do not exist".to_string()
-        } else {
-            let details: Vec<String> = phase1
-                .failed
-                .iter()
-                .map(|(p, e)| format!("{}: {}", p, e))
-                .collect();
-            format!(
-                "No valid files found. {} path(s) failed: {}",
-                phase1.failed.len(),
-                details.join("; ")
-            )
-        };
-        return Err(anyhow::anyhow!("{}", msg));
+        return Err(no_valid_files_error(&phase1.failed, None));
     }
     let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, config);
     let phase2 = phase2_mining(tasks, config, &adaptive, skip_file_write, output_sink);
@@ -110,28 +97,10 @@ fn run_pipeline_batched(
     }
 
     if !any_batch_had_tasks {
-        let msg = if all_phase1_failed.is_empty() {
-            "No valid files found. All provided paths failed to scan or do not exist".to_string()
-        } else {
-            let details: Vec<String> = all_phase1_failed
-                .iter()
-                .take(5)
-                .map(|(p, e)| format!("{}: {}", p, e))
-                .collect::<Vec<_>>();
-            let more = all_phase1_failed.len().saturating_sub(5);
-            let suffix = if more > 0 {
-                format!(" (and {} more)", more)
-            } else {
-                String::new()
-            };
-            format!(
-                "No valid files found. {} path(s) failed: {}{}",
-                all_phase1_failed.len(),
-                details.join("; "),
-                suffix
-            )
-        };
-        return Err(anyhow::anyhow!("{}", msg));
+        return Err(no_valid_files_error(
+            &all_phase1_failed,
+            Some(BATCHED_NO_VALID_FILES_DETAIL_CAP),
+        ));
     }
 
     Ok((
