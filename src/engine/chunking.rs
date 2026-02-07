@@ -189,7 +189,7 @@ pub fn fd_limit_batch_size() -> Option<usize> {
     {
         // Windows: getmaxstdio() is the C runtime limit for open streams; use it as a conservative proxy.
         let limit = rlimit::getmaxstdio();
-        if limit <= 0 {
+        if limit == 0 {
             return Some(DEFAULT_AUTO_BATCH);
         }
         let batch = (limit as usize).saturating_sub(RESERVED_FDS).max(1);
