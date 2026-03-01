@@ -127,10 +127,7 @@ pub fn extract_json_metadata(content: &str, stats: &ParseResult) -> JsonMetadata
     };
 
     let max_line_length = content.lines().map(|l| l.len()).max();
-    let blank_count = content
-        .lines()
-        .filter(|l| l.trim().is_empty())
-        .count();
+    let blank_count = content.lines().filter(|l| l.trim().is_empty()).count();
     let blank_line_count = if blank_count > 0 {
         Some(blank_count)
     } else {

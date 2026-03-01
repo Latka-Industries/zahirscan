@@ -60,24 +60,18 @@ pub fn extract_log_metadata(content: &str, stats: &ParseResult) -> LogMetadata {
     };
 
     let max_line_length = content.lines().map(|l| l.len()).max();
-    let blank_line_count = content
-        .lines()
-        .filter(|l| l.trim().is_empty())
-        .count();
+    let blank_line_count = content.lines().filter(|l| l.trim().is_empty()).count();
 
     // Sample first N lines: if any line has a token that parses as timestamp/date, set has_timestamps
-    let has_timestamps = content
-        .lines()
-        .take(TIMESTAMP_SAMPLE_LINES)
-        .any(|line| {
-            line.split_whitespace()
-                .next()
-                .map(|first_token| {
-                    parse_timestamp_to_seconds(first_token).is_some()
-                        || parse_date_to_timestamp(first_token).is_some()
-                })
-                .unwrap_or(false)
-        });
+    let has_timestamps = content.lines().take(TIMESTAMP_SAMPLE_LINES).any(|line| {
+        line.split_whitespace()
+            .next()
+            .map(|first_token| {
+                parse_timestamp_to_seconds(first_token).is_some()
+                    || parse_date_to_timestamp(first_token).is_some()
+            })
+            .unwrap_or(false)
+    });
 
     LogMetadata {
         byte_count,
