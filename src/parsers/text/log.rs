@@ -7,14 +7,16 @@ use crate::results::{LogMetadata, MiningResult, Template};
 use crate::utils::path_string_helper::{
     PlaceholderType, format_placeholder_bracketed_typed, format_placeholder_typed,
 };
-use crate::utils::typecheck::{parse_date_to_timestamp, parse_timestamp_to_seconds};
+use crate::utils::typecheck::{
+    contains_unix_timestamp, parse_date_to_timestamp, parse_timestamp_to_seconds,
+};
 use anyhow::Result;
 use dashmap::DashMap;
 use rayon::prelude::*;
 use std::collections::BTreeMap;
 
 /// Maximum number of lines to sample when detecting timestamps in log files.
-const TIMESTAMP_SAMPLE_LINES: usize = 10;
+const TIMESTAMP_SAMPLE_LINES: usize = 50;
 
 /// Extract log metadata: line stats (line_ending, max_line_length, blank_line_count) and has_timestamps.
 pub fn extract_log_metadata(content: &str, stats: &ParseResult) -> LogMetadata {
@@ -62,15 +64,31 @@ pub fn extract_log_metadata(content: &str, stats: &ParseResult) -> LogMetadata {
     let max_line_length = content.lines().map(|l| l.len()).max();
     let blank_line_count = content.lines().filter(|l| l.trim().is_empty()).count();
 
-    // Sample first N lines: if any line has a token that parses as timestamp/date, set has_timestamps
+    // Sample first N lines: if any line has a token (or run of tokens) that parses as timestamp/date, set has_timestamps.
+    // Try first token only, then sliding windows of 2..=6 consecutive tokens (catches e.g. "Mon Dec 1 19:26:16 2025" mid-line).
+    const MAX_TIMESTAMP_TOKENS: usize = 6;
     let has_timestamps = content.lines().take(TIMESTAMP_SAMPLE_LINES).any(|line| {
-        line.split_whitespace()
-            .next()
-            .map(|first_token| {
-                parse_timestamp_to_seconds(first_token).is_some()
-                    || parse_date_to_timestamp(first_token).is_some()
-            })
-            .unwrap_or(false)
+        let tokens: Vec<&str> = line.split_whitespace().collect();
+        if tokens.is_empty() {
+            return false;
+        }
+        for token in &tokens {
+            if contains_unix_timestamp(token) {
+                return true;
+            }
+        }
+        for start in 0..tokens.len().min(MAX_TIMESTAMP_TOKENS) {
+            for len in 1..=MAX_TIMESTAMP_TOKENS.min(tokens.len().saturating_sub(start)) {
+                let slice = &tokens[start..start + len];
+                let candidate = slice.join(" ");
+                if parse_timestamp_to_seconds(&candidate).is_some()
+                    || parse_date_to_timestamp(&candidate).is_some()
+                {
+                    return true;
+                }
+            }
+        }
+        false
     });
 
     LogMetadata {
