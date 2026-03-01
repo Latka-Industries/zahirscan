@@ -199,22 +199,20 @@ fn extract_rich_tags(file_path: &str) -> RichTags {
     // Track number (position) - already returns Option<u32>
     let track = tag.track();
 
-    // Track total - try to get as string and parse
-    let track_total = tag
-        .get_string(&ItemKey::TrackTotal)
-        .and_then(|s| s.parse::<u32>().ok());
+    // Track total - returns Option<u32> in lofty 0.23
+    let track_total = tag.track_total();
 
-    // Year - returns Option<u32>
-    let year = tag.year();
+    // Year - lofty 0.23: date() returns Option<Timestamp>, Timestamp has .year (u16)
+    let year = tag.date().map(|ts| u32::from(ts.year));
 
     // Genre - use ItemKey::Genre
-    let genre = tag.get_string(&ItemKey::Genre).map(|s| s.to_string());
+    let genre = tag.get_string(ItemKey::Genre).map(|s| s.to_string());
 
     // Album artist - use ItemKey::AlbumArtist
-    let album_artist = tag.get_string(&ItemKey::AlbumArtist).map(|s| s.to_string());
+    let album_artist = tag.get_string(ItemKey::AlbumArtist).map(|s| s.to_string());
 
     // Comments - use ItemKey::Comment
-    let comments = tag.get_string(&ItemKey::Comment).map(|s| s.to_string());
+    let comments = tag.get_string(ItemKey::Comment).map(|s| s.to_string());
 
     // Extract and analyze artwork (cover art)
     let artwork = extract_artwork(tag);

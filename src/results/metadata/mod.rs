@@ -2,6 +2,7 @@
 
 pub mod code;
 pub mod container;
+pub mod logging;
 pub mod media;
 pub mod office;
 pub mod settings;
@@ -12,9 +13,10 @@ pub mod structured;
 // Re-export all metadata types for convenience
 pub use code::CodeMetadata;
 pub use container::{ArchiveEntry, ArchiveMetadata, ZipEntry, ZipMetadata};
+pub use logging::LogMetadata;
 pub use media::{AudioMetadata, ImageMetadata, VideoMetadata};
 pub use office::{DocumentMetadata, PptxMetadata};
 pub use settings::{IniMetadata, TomlMetadata, XmlMetadata, YamlMetadata};
 pub use sqlite::{ColumnInfo, ForeignKeyInfo, IndexInfo, SqliteMetadata, TableInfo};
 pub use stats::{BlobStats, BooleanStats, DateStats, NumericStats, TextStats};
-pub use structured::{CsvMetadata, EpubMetadata, HtmlMetadata, PdfMetadata};
+pub use structured::{CsvMetadata, EpubMetadata, HtmlMetadata, JsonMetadata, PdfMetadata};
