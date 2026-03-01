@@ -92,6 +92,8 @@ macro_rules! copy_metadata_fields {
         $to.epub_metadata = $from.epub_metadata.clone();
         $to.archive_metadata = $from.archive_metadata.clone();
         $to.code_metadata = $from.code_metadata.clone();
+        $to.log_metadata = $from.log_metadata.clone();
+        $to.json_metadata = $from.json_metadata.clone();
     };
 }
 
@@ -258,6 +260,10 @@ pub struct ParseResult {
     pub archive_metadata: Option<crate::results::ArchiveMetadata>,
     /// Code/script metadata (for source code files)
     pub code_metadata: Option<crate::results::CodeMetadata>,
+    /// Log file metadata (for log files)
+    pub log_metadata: Option<crate::results::LogMetadata>,
+    /// JSON file metadata (for JSON files)
+    pub json_metadata: Option<crate::results::JsonMetadata>,
 }
 
 impl ParseResult {
@@ -428,7 +434,10 @@ fn process_text_or_unknown(
     }
     let content = std::str::from_utf8(mmap)?;
     match stats.file_type {
-        FileType::Log => text::log::extract_log_templates(content, stats, config),
+        FileType::Log => {
+            stats.log_metadata = Some(text::log::extract_log_metadata(content, stats));
+            text::log::extract_log_templates(content, stats, config)
+        }
         FileType::Markdown => text::markdown::extract_markdown_templates(content, stats, config),
         FileType::Text => text::plain_text::extract_text_templates(content, stats, config),
         FileType::Unknown => extract_unknown_templates(content, stats, config),

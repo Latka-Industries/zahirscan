@@ -7,15 +7,15 @@ use crate::parsers::ParseResult;
 use crate::results::YamlMetadata;
 use crate::results::metadata::settings::yaml::YamlTypeInfo;
 use anyhow::Result;
-use serde_yaml::Value;
+use serde_norway::Value;
 
-/// Convert a `serde_yaml::Value` to a `YamlTypeInfo`.
+/// Convert a `serde_norway::Value` to a `YamlTypeInfo`.
 fn value_to_yaml_type_info(v: &Value) -> YamlTypeInfo {
     match v {
         Value::Null => YamlTypeInfo::Scalar("null".to_string()),
         Value::Bool(_) => YamlTypeInfo::Scalar("boolean".to_string()),
         Value::Number(n) => {
-            // serde_yaml::Number: prefer integer when it fits
+            // serde_norway::Number: prefer integer when it fits
             let s = if n.as_i64().is_some() || n.as_u64().is_some() {
                 "integer"
             } else if n.as_f64().is_some() {
@@ -47,7 +47,7 @@ fn value_to_yaml_type_info(v: &Value) -> YamlTypeInfo {
     }
 }
 
-/// Recursively walk `serde_yaml::Value` to count keys, scalars, sequences, and maps.
+/// Recursively walk `serde_norway::Value` to count keys, scalars, sequences, and maps.
 fn walk(
     v: &Value,
     depth: usize,
@@ -122,8 +122,8 @@ pub fn extract_yaml_metadata(
     stats: &ParseResult,
     _config: &RuntimeConfig,
 ) -> Result<YamlMetadata> {
-    let value: Value =
-        serde_yaml::from_slice(content).map_err(|e| anyhow::anyhow!("YAML parse error: {}", e))?;
+    let value: Value = serde_norway::from_slice(content)
+        .map_err(|e| anyhow::anyhow!("YAML parse error: {}", e))?;
 
     let mut key_count = 0;
     let mut scalar_count = 0;

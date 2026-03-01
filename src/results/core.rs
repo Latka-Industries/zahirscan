@@ -6,11 +6,7 @@ use std::collections::BTreeMap;
 
 use crate::engine::chunking::ProcessingTask;
 
-use super::metadata::{
-    ArchiveMetadata, AudioMetadata, CodeMetadata, DocumentMetadata, EpubMetadata, HtmlMetadata,
-    ImageMetadata, IniMetadata, PptxMetadata, SqliteMetadata, TomlMetadata, VideoMetadata,
-    XmlMetadata, YamlMetadata, ZipMetadata,
-};
+use super::metadata::*;
 use super::writing::{CompressionStats, WritingFootprint};
 
 /// Output mode for results
@@ -105,6 +101,10 @@ pub struct Output {
     pub archive_metadata: Option<ArchiveMetadata>,
     /// Code/script metadata (Mode 2 only, for source code files)
     pub code_metadata: Option<CodeMetadata>,
+    /// Log file metadata (Mode 2 only, for log files)
+    pub log_metadata: Option<LogMetadata>,
+    /// JSON file metadata (Mode 2 only, for JSON files)
+    pub json_metadata: Option<JsonMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -124,8 +124,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 27 fields: 1 required (templates) + 26 optional fields
-        let mut state = serializer.serialize_struct("Output", 27)?;
+        // Maximum 29 fields: 1 required (templates) + 28 optional fields
+        let mut state = serializer.serialize_struct("Output", 29)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -157,6 +157,8 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.epub_metadata, "epub_metadata");
         crate::serialize_optional!(state, self.archive_metadata, "archive_metadata");
         crate::serialize_optional!(state, self.code_metadata, "code_metadata");
+        crate::serialize_optional!(state, self.log_metadata, "log_metadata");
+        crate::serialize_optional!(state, self.json_metadata, "json_metadata");
 
         state.end()
     }

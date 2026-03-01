@@ -32,7 +32,7 @@ impl CsvValueTypes {
 }
 
 /// Detect CSV delimiter by trying common delimiters
-pub(crate) fn detect_delimiter(content: &str) -> Option<String> {
+pub fn detect_delimiter(content: &str) -> Option<String> {
     // Try common delimiters in order of frequency
     let syntax = CsvSyntax::new();
     let delimiters = syntax.delimiters;
@@ -73,7 +73,7 @@ pub(crate) fn detect_delimiter(content: &str) -> Option<String> {
 }
 
 /// Detect CSV quote character by analyzing field patterns
-pub(crate) fn detect_quote_character(content: &str) -> Option<String> {
+pub fn detect_quote_character(content: &str) -> Option<String> {
     // Common quote characters: double quote (") and single quote (')
     let syntax = CsvSyntax::new();
     let quote_chars = syntax.quote_chars;
@@ -126,7 +126,7 @@ pub(crate) fn detect_quote_character(content: &str) -> Option<String> {
 }
 
 /// Detect CSV escape character by analyzing escape patterns
-pub(crate) fn detect_escape_character(
+pub fn detect_escape_character(
     content: &str,
     _delimiter: Option<&str>,
     quote: Option<&str>,
@@ -174,7 +174,7 @@ pub(crate) fn detect_escape_character(
 }
 
 /// Infer the data type of a single value
-pub(crate) fn infer_value_type(value: &str) -> String {
+pub fn infer_value_type(value: &str) -> String {
     match () {
         _ if value.is_empty()
             || value.eq_ignore_ascii_case("null")

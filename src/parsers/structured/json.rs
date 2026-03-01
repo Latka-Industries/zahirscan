@@ -3,8 +3,7 @@
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::parsers::traits::{AdaptiveParallel, build_mining_result, empty_mining_result};
-use crate::results::MiningResult;
-use crate::results::Template;
+use crate::results::{JsonMetadata, MiningResult, Template};
 use crate::utils::path_string_helper::{PlaceholderType, format_placeholder_typed};
 use anyhow::Result;
 use dashmap::DashMap;
@@ -62,6 +61,124 @@ impl JsonPlaceholders {
     /// Format array type and length for frequency tracking: [type:N]
     fn format_array_type_length(value_type: &str, length: usize) -> String {
         format!("[{}:{}]", value_type, length)
+    }
+}
+
+/// Compute max nesting depth of a JSON value (1-based: object/array = 1, children add 1).
+fn json_max_depth(value: &Value) -> usize {
+    match value {
+        Value::Array(arr) => arr
+            .iter()
+            .map(json_max_depth)
+            .max()
+            .map(|d| d + 1)
+            .unwrap_or(1),
+        Value::Object(map) => map
+            .values()
+            .map(json_max_depth)
+            .max()
+            .map(|d| d + 1)
+            .unwrap_or(1),
+        _ => 1,
+    }
+}
+
+/// Extract JSON metadata: line stats, root type/size, max depth, pretty-printed heuristic.
+pub fn extract_json_metadata(content: &str, stats: &ParseResult) -> JsonMetadata {
+    let line_count = stats.line_count;
+    let byte_count = stats.byte_count;
+
+    // Line ending from raw bytes
+    let bytes = content.as_bytes();
+    let mut lf = 0usize;
+    let mut crlf = 0usize;
+    let mut cr = 0usize;
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\r' {
+            if i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
+                crlf += 1;
+                i += 2;
+            } else {
+                cr += 1;
+                i += 1;
+            }
+        } else if bytes[i] == b'\n' {
+            lf += 1;
+            i += 1;
+        } else {
+            i += 1;
+        }
+    }
+
+    let line_ending = if lf + crlf + cr == 0 {
+        None
+    } else {
+        let total = lf + crlf + cr;
+        Some(if crlf == total {
+            "crlf".to_string()
+        } else if lf == total {
+            "lf".to_string()
+        } else if cr == total {
+            "cr".to_string()
+        } else {
+            "mixed".to_string()
+        })
+    };
+
+    let max_line_length = content.lines().map(|l| l.len()).max();
+    let blank_count = content
+        .lines()
+        .filter(|l| l.trim().is_empty())
+        .count();
+    let blank_line_count = if blank_count > 0 {
+        Some(blank_count)
+    } else {
+        None
+    };
+
+    // Parse root for type/size/depth; if line-by-line JSON, use first line
+    let (root_type, root_array_length, root_object_key_count, max_depth) =
+        if let Ok(root) = serde_json::from_str::<Value>(content) {
+            match &root {
+                Value::Array(arr) => (
+                    Some("array".to_string()),
+                    Some(arr.len()),
+                    None,
+                    Some(json_max_depth(&root)),
+                ),
+                Value::Object(map) => (
+                    Some("object".to_string()),
+                    None,
+                    Some(map.len()),
+                    Some(json_max_depth(&root)),
+                ),
+                _ => (None, None, None, Some(1)),
+            }
+        } else {
+            // NDJSON / line-by-line: optional depth from first line
+            let first_line = content.lines().next().unwrap_or("");
+            if let Ok(v) = serde_json::from_str::<Value>(first_line) {
+                (None, None, None, Some(json_max_depth(&v)))
+            } else {
+                (None, None, None, None)
+            }
+        };
+
+    // Pretty-printed: has newline followed by space/tab (common in pretty-printed JSON)
+    let pretty_printed = Some(content.contains("\n  ") || content.contains("\n\t"));
+
+    JsonMetadata {
+        byte_count,
+        line_count,
+        line_ending,
+        max_line_length,
+        blank_line_count,
+        root_type,
+        root_array_length,
+        root_object_key_count,
+        max_depth,
+        pretty_printed,
     }
 }
 

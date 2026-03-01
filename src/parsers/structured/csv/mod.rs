@@ -1,8 +1,8 @@
 //! CSV file metadata extraction
 
-mod utils;
+pub mod utils;
 
-pub(crate) use utils::infer_value_type;
+pub use utils::*;
 
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;

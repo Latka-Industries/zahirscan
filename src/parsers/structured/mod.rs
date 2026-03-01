@@ -12,11 +12,10 @@ mod html;
 mod json;
 mod pdf;
 
-pub(crate) use csv::infer_value_type;
-pub use csv::{extract_csv_metadata, extract_csv_templates};
+pub use csv::{extract_csv_metadata, extract_csv_templates, infer_value_type};
 pub use epub::{extract_epub_metadata, extract_epub_templates};
 pub use html::{extract_html_metadata, extract_html_templates};
-pub use json::extract_json_templates;
+pub use json::{extract_json_metadata, extract_json_templates};
 pub use pdf::{extract_pdf_metadata, extract_pdf_templates};
 
 /// Dispatch by file type; fills csv_metadata or html_metadata and returns templates.
@@ -39,6 +38,7 @@ pub fn process(
         ),
         FileType::Json => {
             let content = std::str::from_utf8(mmap)?;
+            stats.json_metadata = Some(extract_json_metadata(content, stats));
             extract_json_templates(content, stats, config)
         }
         FileType::Epub => crate::process_with_metadata!(
