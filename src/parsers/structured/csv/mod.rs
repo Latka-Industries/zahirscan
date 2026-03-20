@@ -1,4 +1,7 @@
-//! CSV file metadata extraction
+//! Delimiter-separated text metadata (CSV, TSV, pipe-separated, etc.).
+//!
+//! Extensions `csv`, `tsv`, `tab`, and `psv` map to this parser; the `csv` crate reads rows using a
+//! detected or path-hinted delimiter.
 
 pub mod utils;
 
@@ -16,10 +19,14 @@ use rayon::prelude::*;
 use std::io::Cursor;
 
 /// Extract CSV metadata
+///
+/// # Errors
+///
+/// Currently always returns [`Ok`]; malformed rows are skipped rather than failing.
 pub fn extract_csv_metadata(
     content: &[u8],
-    _stats: &ParseResult,
-    _config: &RuntimeConfig,
+    stats: &ParseResult,
+    config: &RuntimeConfig,
 ) -> Result<CsvMetadata> {
     // Check if content is valid UTF-8
     let encoding = if std::str::from_utf8(content).is_ok() {
@@ -30,24 +37,25 @@ pub fn extract_csv_metadata(
     };
 
     // Try to read as UTF-8 first
-    let content_str = match std::str::from_utf8(content) {
-        Ok(s) => s,
-        Err(_) => {
-            // If not UTF-8, return minimal metadata with encoding info
-            return Ok(CsvMetadata {
-                encoding,
-                ..Default::default()
-            });
-        }
+    let Ok(content_str) = std::str::from_utf8(content) else {
+        // If not UTF-8, return minimal metadata with encoding info
+        return Ok(CsvMetadata {
+            encoding,
+            ..Default::default()
+        });
     };
 
-    // Build CSV reader with flexible delimiter detection
+    // Delimiter: content sniffing + path hints (`.tsv`/`.tab` → tab, `.psv` → pipe)
+    let delim_byte = utils::delimiter_byte_for_reader(content_str, &stats.file_path);
+    let field_sep = char::from_u32(u32::from(delim_byte)).unwrap_or(',');
+
     let mut reader = ReaderBuilder::new()
+        .delimiter(delim_byte)
         .has_headers(true) // Try to read headers first
         .flexible(true) // Allow varying number of fields per row
         .from_reader(Cursor::new(content_str));
 
-    // Try to read headers and detect delimiter
+    // Try to read headers
     let headers_result = reader.headers();
     let (column_names, column_count_from_headers, has_header) = match headers_result {
         Ok(headers) => {
@@ -58,9 +66,8 @@ pub fn extract_csv_metadata(
         Err(_) => (None, None, Some(false)),
     };
 
-    // Detect delimiter, quote, and escape characters
-    let delimiter = utils::detect_delimiter(content_str);
-    let quote_character = utils::detect_quote_character(content_str);
+    let delimiter = utils::format_delimiter_for_metadata(delim_byte);
+    let quote_character = utils::detect_quote_character(content_str, field_sep);
     let escape_character = utils::detect_escape_character(
         content_str,
         delimiter.as_deref(),
@@ -68,7 +75,7 @@ pub fn extract_csv_metadata(
     );
 
     // Sample rows for data type inference
-    let max_sample_rows = _config.max_csv_sample_rows;
+    let max_sample_rows = config.max_csv_sample_rows;
     let mut row_count = 0;
     let mut column_count: usize = column_count_from_headers.unwrap_or(0);
     let mut sample_data: Vec<Vec<String>> = Vec::new();
@@ -97,11 +104,11 @@ pub fn extract_csv_metadata(
     // Infer column types and compute statistics using probabilistic analysis
     let (column_types, null_percentages, unique_counts, numeric_stats, date_stats, boolean_stats) =
         if !sample_data.is_empty() && column_count > 0 {
-            let types = infer_column_types(&sample_data, column_count, _config);
+            let types = infer_column_types(&sample_data, column_count, config);
             let (null_pcts, unique_cts) =
-                compute_column_statistics(&sample_data, column_count, _config);
+                compute_column_statistics(&sample_data, column_count, config);
             let (num_stats, dt_stats, bool_stats) =
-                compute_type_specific_statistics(&sample_data, &types, column_count, _config);
+                compute_type_specific_statistics(&sample_data, &types, column_count, config);
             (
                 Some(types),
                 Some(null_pcts),
@@ -161,8 +168,7 @@ fn infer_column_types(
             scores
                 .into_iter()
                 .max_by_key(|(_, count)| *count)
-                .map(|(type_name, _)| type_name)
-                .unwrap_or_else(|| "string".to_string())
+                .map_or_else(|| "string".to_string(), |(type_name, _)| type_name)
         })
         .collect()
 }

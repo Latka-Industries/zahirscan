@@ -18,7 +18,7 @@ macro_rules! file_extension_map {
     };
 }
 
-/// File extension to FileType mapping. Grouped by FileType for easier maintenance.
+/// File extension to `FileType` mapping. Grouped by `FileType` for easier maintenance.
 const FILE_EXTENSION_MAP: &[(&str, FileType)] = file_extension_map! {
     Log: "log";
     Json: "json";
@@ -27,7 +27,7 @@ const FILE_EXTENSION_MAP: &[(&str, FileType)] = file_extension_map! {
     Image: "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "ico", "svg";
     Video: "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ogv";
     Audio: "mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma", "ape", "dsd", "dsf";
-    Csv: "csv";
+    Csv: "csv", "tsv", "tab", "psv";
     Html: "html", "htm";
     Docx: "docx";
     Xlsx: "xlsx";
@@ -43,10 +43,10 @@ const FILE_EXTENSION_MAP: &[(&str, FileType)] = file_extension_map! {
     Pdf: "pdf";
 };
 
-/// Get FileType from extension using linear search
-/// Returns FileType::Unknown if extension is not recognized
+/// Get `FileType` from extension using linear search
+/// Returns `FileType::Unknown` if extension is not recognized
 ///
-/// For ~44 extensions, linear search is faster than HashMap due to:
+/// For ~44 extensions, linear search is faster than `HashMap` due to:
 /// - No hash computation overhead
 /// - No memory allocation
 /// - Cache-friendly sequential access
@@ -55,12 +55,12 @@ fn get_file_type_from_extension(extension: &str) -> FileType {
     FILE_EXTENSION_MAP
         .iter()
         .find(|(ext, _)| *ext == extension)
-        .map(|(_, file_type)| *file_type)
-        .unwrap_or(FileType::Unknown)
+        .map_or(FileType::Unknown, |(_, file_type)| *file_type)
 }
 
-/// Get all file extensions for a given FileType
+/// Get all file extensions for a given `FileType`
 /// Useful for validation, documentation, or UI display
+#[must_use]
 pub fn get_extensions_for_file_type(file_type: FileType) -> Vec<&'static str> {
     FILE_EXTENSION_MAP
         .iter()
@@ -68,7 +68,7 @@ pub fn get_extensions_for_file_type(file_type: FileType) -> Vec<&'static str> {
         .collect()
 }
 
-/// Check if a codec name (string) matches any extension for a given FileType
+/// Check if a codec name (string) matches any extension for a given `FileType`
 /// Useful for checking codec names from ffprobe against our known file types
 ///
 /// Example:
@@ -80,6 +80,7 @@ pub fn get_extensions_for_file_type(file_type: FileType) -> Vec<&'static str> {
 /// assert!(is_codec_for_file_type("flac", FileType::Audio));
 /// assert!(!is_codec_for_file_type("mp3", FileType::Video));
 /// ```
+#[must_use]
 pub fn is_codec_for_file_type(codec: &str, file_type: FileType) -> bool {
     let codec_lower = codec.to_lowercase();
     FILE_EXTENSION_MAP
@@ -90,6 +91,7 @@ pub fn is_codec_for_file_type(codec: &str, file_type: FileType) -> bool {
 /// Detect file type from extension.
 /// Compound extensions (e.g. .tar.gz, .tar.bz2, .tgz, .tar.xz) are checked first.
 /// If extension is unknown, tries linguist (extension + filename) as fallback for code/script files.
+#[must_use]
 pub fn detect_file_type(path: &str) -> FileType {
     let lo = path.to_lowercase();
     if lo.ends_with(".tar.xz")
@@ -103,7 +105,7 @@ pub fn detect_file_type(path: &str) -> FileType {
     let extension = Path::new(path)
         .extension()
         .and_then(|ext| ext.to_str())
-        .map(|s| s.to_lowercase())
+        .map(str::to_lowercase)
         .unwrap_or_default();
 
     let file_type = get_file_type_from_extension(&extension);

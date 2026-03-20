@@ -31,19 +31,17 @@ impl CsvValueTypes {
     const STRING: &'static str = "string";
 }
 
-/// Detect CSV delimiter by trying common delimiters
-pub fn detect_delimiter(content: &str) -> Option<String> {
-    // Try common delimiters in order of frequency
+/// Sample the first lines and pick the most frequent delimiter among common separators.
+#[must_use]
+pub fn dominant_delimiter_char(content: &str) -> Option<char> {
     let syntax = CsvSyntax::new();
     let delimiters = syntax.delimiters;
 
-    // Sample first few lines to detect delimiter
     let sample_lines: Vec<&str> = content.lines().take(5).collect();
     if sample_lines.is_empty() {
         return None;
     }
 
-    // Count occurrences of each delimiter in the sample
     let mut delimiter_counts: Vec<(char, usize)> = delimiters
         .iter()
         .map(|&delim| {
@@ -55,25 +53,50 @@ pub fn detect_delimiter(content: &str) -> Option<String> {
         })
         .collect();
 
-    // Sort by count (descending) and pick the most common
     delimiter_counts.sort_by(|a, b| b.1.cmp(&a.1));
 
-    // Return the most common delimiter if it appears consistently
     match delimiter_counts.first() {
-        Some((delim, count)) if *count > 0 => {
-            // Format delimiter for display (escape special characters)
-            let display = match delim {
-                '\t' => "\\t".to_string(),
-                _ => delim.to_string(),
-            };
-            Some(display)
-        }
+        Some((delim, count)) if *count > 0 => Some(*delim),
         _ => None,
     }
 }
 
-/// Detect CSV quote character by analyzing field patterns
-pub fn detect_quote_character(content: &str) -> Option<String> {
+/// Byte to pass to [`csv::ReaderBuilder::delimiter`]. Defaults to comma if none dominates.
+#[must_use]
+pub fn detect_delimiter_byte(content: &str) -> u8 {
+    dominant_delimiter_char(content)
+        .map(|c| u8::try_from(u32::from(c)).unwrap_or(b','))
+        .unwrap_or(b',')
+}
+
+/// Format a single-byte delimiter for [`crate::results::CsvMetadata::delimiter`].
+#[must_use]
+pub fn format_delimiter_for_metadata(byte: u8) -> Option<String> {
+    Some(match char::from(byte) {
+        '\t' => "\\t".to_string(),
+        c => c.to_string(),
+    })
+}
+
+/// Delimiter used for parsing: content-based detection, with optional path hints for
+/// `.tsv`/`.tab` (tab) and `.psv` (pipe). Other extensions use [`detect_delimiter_byte`].
+#[must_use]
+pub fn delimiter_byte_for_reader(content: &str, file_path: &str) -> u8 {
+    use std::path::Path;
+    let ext = Path::new(file_path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_lowercase);
+    match ext.as_deref() {
+        Some("tsv" | "tab") => b'\t',
+        Some("psv") => b'|',
+        _ => detect_delimiter_byte(content),
+    }
+}
+
+/// Detect CSV quote character by analyzing field patterns.
+/// `field_separator` is the delimiter between fields (comma, tab, pipe, etc.).
+pub fn detect_quote_character(content: &str, field_separator: char) -> Option<String> {
     // Common quote characters: double quote (") and single quote (')
     let syntax = CsvSyntax::new();
     let quote_chars = syntax.quote_chars;
@@ -100,7 +123,9 @@ pub fn detect_quote_character(content: &str) -> Option<String> {
                 }
 
                 // Check for pattern: quote, content, quote (basic field pattern)
-                if line.contains(&format!("{quote},")) || line.contains(&format!(",{quote}")) {
+                if line.contains(&format!("{quote}{field_separator}"))
+                    || line.contains(&format!("{field_separator}{quote}"))
+                {
                     score += 1;
                 }
             }
@@ -167,13 +192,14 @@ pub fn detect_escape_character(
         Some("\\".to_string())
     } else if doubled_quote_escapes > 0 {
         // Doubled quote means escape is same as quote
-        quote.map(|q| q.to_string())
+        quote.map(std::string::ToString::to_string)
     } else {
         None
     }
 }
 
 /// Infer the data type of a single value
+#[must_use]
 pub fn infer_value_type(value: &str) -> String {
     match () {
         _ if value.is_empty()
