@@ -26,14 +26,12 @@ fn get_first_attr_value(e: &BytesStart, names: &[&[u8]]) -> Option<String> {
 }
 
 /// True if this Start/Empty element's local name equals `name`.
-#[inline(always)]
 fn start_local_name_eq(e: &BytesStart, name: &[u8]) -> bool {
     let local = e.name().local_name();
     local.as_ref() == name
 }
 
 /// True if this End element's local name equals `name`.
-#[inline(always)]
 fn end_local_name_eq(e: &BytesEnd, name: &[u8]) -> bool {
     let local = e.name().local_name();
     local.as_ref() == name
@@ -55,7 +53,7 @@ fn epub_has_encryption(archive: &mut ZipArchive<Cursor<&[u8]>>) -> bool {
     archive.by_name(EpubPaths::ENCRYPTION_XML).is_ok()
 }
 
-/// EPUB XML element and attribute names (as byte slices for quick_xml)
+/// EPUB XML element and attribute names (as byte slices for `quick_xml`)
 struct EpubElements;
 
 impl EpubElements {
@@ -88,6 +86,10 @@ macro_rules! set_metadata_field {
 /// EPUB is a ZIP containing META-INF/container.xml (rootfile path) and
 /// the rootfile OPF (e.g. content.opf) with <metadata> (dc:title, dc:creator, dc:language, dc:identifier)
 /// and <spine> (itemref count for chapters).
+///
+/// # Errors
+///
+/// Currently always returns [`Ok`]; ZIP/OPF failures yield partial metadata and warnings.
 pub fn extract_epub_metadata(
     content: &[u8],
     stats: &ParseResult,
@@ -101,7 +103,7 @@ pub fn extract_epub_metadata(
     let mut archive = match ZipArchive::new(Cursor::new(content)) {
         Ok(a) => a,
         Err(e) => {
-            warn!("EPUB: failed to open as ZIP: {}", e);
+            warn!("EPUB: failed to open as ZIP: {e}");
             return Ok(metadata);
         }
     };
@@ -114,12 +116,11 @@ pub fn extract_epub_metadata(
     let opf_path =
         read_container_rootfile(&mut archive).or_else(|| try_common_opf_paths(&mut archive));
 
-    let opf_path = match opf_path {
-        Some(p) => p,
-        None => return Ok(metadata),
+    let Some(opf_path) = opf_path else {
+        return Ok(metadata);
     };
 
-    parse_opf(&mut archive, &opf_path, metadata)
+    Ok(parse_opf(&mut archive, &opf_path, metadata))
 }
 
 /// Read container.xml file and parse the rootfile path
@@ -151,7 +152,7 @@ fn parse_container_rootfile(xml: &str) -> Option<String> {
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+            Ok(Event::Empty(ref e) | Event::Start(ref e)) => {
                 if start_local_name_eq(e, EpubElements::ROOTFILE)
                     && let Some(path) = get_first_attr_value(
                         e,
@@ -161,8 +162,7 @@ fn parse_container_rootfile(xml: &str) -> Option<String> {
                     return Some(path);
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
+            Ok(Event::Eof) | Err(_) => break,
             _ => {}
         }
         buf.clear();
@@ -175,21 +175,20 @@ fn parse_opf(
     archive: &mut ZipArchive<Cursor<&[u8]>>,
     path: &str,
     mut metadata: EpubMetadata,
-) -> Result<EpubMetadata> {
-    let mut f = match archive.by_name(path) {
-        Ok(file) => file,
-        Err(_) => return Ok(metadata),
+) -> EpubMetadata {
+    let Ok(mut f) = archive.by_name(path) else {
+        return metadata;
     };
 
     let mut xml = String::new();
     if f.read_to_string(&mut xml).is_err() {
-        return Ok(metadata);
+        return metadata;
     }
 
     extract_metadata_from_opf(&xml, &mut metadata);
     metadata.chapter_count = Some(count_spine_itemrefs(&xml));
 
-    Ok(metadata)
+    metadata
 }
 
 /// Extract metadata from OPF XML and set fields on the given metadata.
@@ -231,8 +230,7 @@ fn extract_metadata_from_opf(xml: &str, m: &mut EpubMetadata) {
                     text.push_str(s);
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
+            Ok(Event::Eof) | Err(_) => break,
             _ => {}
         }
         buf.clear();
@@ -253,7 +251,7 @@ fn parse_manifest_from_opf(xml: &str) -> HashMap<String, String> {
     let mut manifest = HashMap::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+            Ok(Event::Empty(ref e) | Event::Start(ref e)) => {
                 if !start_local_name_eq(e, EpubElements::ITEM) {
                     buf.clear();
                     continue;
@@ -264,8 +262,7 @@ fn parse_manifest_from_opf(xml: &str) -> HashMap<String, String> {
                     manifest.insert(id, href);
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
+            Ok(Event::Eof) | Err(_) => break,
             _ => {}
         }
         buf.clear();
@@ -282,7 +279,7 @@ fn parse_spine_order_from_opf(xml: &str) -> Vec<String> {
     let mut order = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => {
+            Ok(Event::Empty(ref e) | Event::Start(ref e)) => {
                 if start_local_name_eq(e, EpubElements::SPINE) {
                     in_spine = true;
                 } else if in_spine
@@ -297,8 +294,7 @@ fn parse_spine_order_from_opf(xml: &str) -> Vec<String> {
                     in_spine = false;
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
+            Ok(Event::Eof) | Err(_) => break,
             _ => {}
         }
         buf.clear();
@@ -308,18 +304,18 @@ fn parse_spine_order_from_opf(xml: &str) -> Vec<String> {
 
 /// Resolve content document path: OPF dir + href (handles relative hrefs).
 fn resolve_content_path(opf_path: &str, href: &str) -> String {
-    let opf_dir = opf_path.rfind('/').map(|i| &opf_path[..=i]).unwrap_or("");
+    let opf_dir = opf_path.rfind('/').map_or("", |i| &opf_path[..=i]);
     if opf_dir.is_empty() {
         href.to_string()
     } else {
-        format!("{}{}", opf_dir, href)
+        format!("{opf_dir}{href}")
     }
 }
 
 /// Extract full body text from EPUB in spine order (all content documents concatenated).
 fn extract_epub_body_text(content: &[u8]) -> Result<String> {
     let mut archive = ZipArchive::new(Cursor::new(content))
-        .map_err(|e| anyhow::anyhow!("EPUB: failed to open as ZIP: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("EPUB: failed to open as ZIP: {e}"))?;
 
     if epub_has_encryption(&mut archive) {
         debug!("EPUB: encryption.xml present, skipping body text extraction");
@@ -333,9 +329,9 @@ fn extract_epub_body_text(content: &[u8]) -> Result<String> {
     let mut opf_xml = String::new();
     archive
         .by_name(&opf_path)
-        .map_err(|e| anyhow::anyhow!("EPUB: cannot read OPF: {}", e))?
+        .map_err(|e| anyhow::anyhow!("EPUB: cannot read OPF: {e}"))?
         .read_to_string(&mut opf_xml)
-        .map_err(|e| anyhow::anyhow!("EPUB: OPF read error: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("EPUB: OPF read error: {e}"))?;
 
     let manifest = parse_manifest_from_opf(&opf_xml);
     let spine_order = parse_spine_order_from_opf(&opf_xml);
@@ -345,21 +341,17 @@ fn extract_epub_body_text(content: &[u8]) -> Result<String> {
 
     let mut body_parts = Vec::with_capacity(spine_order.len());
     for idref in spine_order {
-        let href = match manifest.get(&idref) {
-            Some(h) => h.as_str(),
-            None => {
-                debug!("EPUB: spine idref '{}' not in manifest, skipping", idref);
-                continue;
-            }
+        let href = if let Some(h) = manifest.get(&idref) {
+            h.as_str()
+        } else {
+            debug!("EPUB: spine idref '{idref}' not in manifest, skipping");
+            continue;
         };
         let content_path = resolve_content_path(&opf_path, href);
         let mut entry = match archive.by_name(&content_path) {
             Ok(e) => e,
             Err(e) => {
-                warn!(
-                    "EPUB: cannot open content document '{}': {}",
-                    content_path, e
-                );
+                warn!("EPUB: cannot open content document '{content_path}': {e}");
                 continue;
             }
         };
@@ -377,6 +369,10 @@ fn extract_epub_body_text(content: &[u8]) -> Result<String> {
 
 /// Extract templates and writing footprint from EPUB by extracting body text from all spine
 /// content documents (in reading order) and running the plain-text pipeline.
+///
+/// # Errors
+///
+/// Propagates errors from [`crate::parsers::text::plain_text::extract_text_templates`] when body text was extracted successfully.
 pub fn extract_epub_templates(
     content: &[u8],
     stats: &ParseResult,
@@ -385,7 +381,7 @@ pub fn extract_epub_templates(
     let body_text = match extract_epub_body_text(content) {
         Ok(t) => t,
         Err(e) => {
-            warn!("EPUB body text extraction failed: {}", e);
+            warn!("EPUB body text extraction failed: {e}");
             return Ok(empty_mining_result(stats));
         }
     };

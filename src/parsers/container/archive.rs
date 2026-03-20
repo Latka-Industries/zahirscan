@@ -3,7 +3,7 @@
 //! **Zero-copy / no decompression:** Plain .tar uses header seek only. Compressed
 //! TAR (.tar.gz, .tar.xz, .tar.bz2) never runs a decompressor: we read only the
 //! gzip trailer (last 4 bytes) for .tar.gz uncompressed size; entries and
-//! file_count are not available for compressed TAR. Use plain .tar for full listing.
+//! `file_count` are not available for compressed TAR. Use plain .tar for full listing.
 
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
@@ -38,7 +38,7 @@ impl TarFormat {
 }
 
 /// Returns true if the TAR entry path should be omitted from the listing (metadata/overhead or directory).
-/// Omits: AppleDouble/resource fork (._*), PAX extended header (PaxHeader), directory entries (path ends with /).
+/// Omits: AppleDouble/resource fork (._*), PAX extended header (`PaxHeader`), directory entries (path ends with /).
 fn should_omit_tar_entry_path(path: &str) -> bool {
     path.contains("/._")
         || path.starts_with("._")
@@ -60,10 +60,14 @@ fn detect_archive_format(path: &str) -> TarFormat {
 }
 
 /// Extract TAR (or compressed TAR) metadata. Zero-copy: no decompression.
-/// Plain .tar: full listing (file_count, entries) via header seek. Compressed
-/// .tar.gz/.tar.xz/.tar.bz2: compressed_size always; .tar.gz also gets
-/// uncompressed_size from gzip trailer (last 4 bytes). Entries and file_count
+/// Plain .tar: full listing (`file_count`, entries) via header seek. Compressed
+/// .tar.gz/.tar.xz/.tar.bz2: `compressed_size` always; .tar.gz also gets
+/// `uncompressed_size` from gzip trailer (last 4 bytes). Entries and `file_count`
 /// are None for compressed TAR.
+///
+/// # Errors
+///
+/// Currently always returns [`Ok`]; the [`Result`] type is for API consistency.
 pub fn extract_archive_metadata(
     content: &[u8],
     stats: &ParseResult,
@@ -72,7 +76,7 @@ pub fn extract_archive_metadata(
     let format = detect_archive_format(&stats.file_path);
     let compressed_size = stats.byte_count as u64;
 
-    let (file_count, uncompressed_size, entries) = stream_tar_entries(content, format, config)?;
+    let (file_count, uncompressed_size, entries) = stream_tar_entries(content, format, config);
 
     let note = match format {
         TarFormat::Tar => None,
@@ -104,11 +108,11 @@ fn stream_tar_entries(
     content: &[u8],
     format: TarFormat,
     config: &RuntimeConfig,
-) -> Result<(Option<usize>, u64, Vec<ArchiveEntry>)> {
+) -> (Option<usize>, u64, Vec<ArchiveEntry>) {
     match format {
         TarFormat::Tar => {
-            let (fc, u, e) = stream_tar_entries_seek(content, config)?;
-            Ok((Some(fc), u, e))
+            let (fc, u, e) = stream_tar_entries_seek(content, config);
+            (Some(fc), u, e)
         }
         _ => compressed_tar_metadata_no_decompress(content, format),
     }
@@ -116,11 +120,11 @@ fn stream_tar_entries(
 
 /// Compressed .tar.gz / .tar.xz / .tar.bz2: zero-copy. No decompression.
 /// We only read the gzip trailer (last 4 bytes) for .tar.gz uncompressed size.
-/// Entries and file_count are not available (would require decompression).
+/// Entries and `file_count` are not available (would require decompression).
 fn compressed_tar_metadata_no_decompress(
     content: &[u8],
     format: TarFormat,
-) -> Result<(Option<usize>, u64, Vec<ArchiveEntry>)> {
+) -> (Option<usize>, u64, Vec<ArchiveEntry>) {
     let uncompressed = match format {
         TarFormat::TarGz | TarFormat::Tgz => {
             // Gzip trailer: last 8 bytes = CRC32 (4) + ISIZE (4, LE). ISIZE = uncompressed size mod 2^32.
@@ -135,7 +139,7 @@ fn compressed_tar_metadata_no_decompress(
         TarFormat::TarBz2 | TarFormat::TarXz => 0,
         TarFormat::Tar => unreachable!("Tar uses seek path"),
     };
-    Ok((None, uncompressed, Vec::new()))
+    (None, uncompressed, Vec::new())
 }
 
 /// Parse 12-byte octal size at TAR header offset 124.
@@ -163,7 +167,7 @@ fn parse_tar_path(bytes: &[u8]) -> String {
     if bytes.len() >= 500 {
         let prefix = trim_nul(&bytes[345..500]);
         if !prefix.is_empty() {
-            return format!("{}/{}", prefix, name);
+            return format!("{prefix}/{name}");
         }
     }
     name
@@ -176,10 +180,8 @@ fn parse_tar_path(bytes: &[u8]) -> String {
 fn stream_tar_entries_seek(
     content: &[u8],
     config: &RuntimeConfig,
-) -> Result<(usize, u64, Vec<ArchiveEntry>)> {
+) -> (usize, u64, Vec<ArchiveEntry>) {
     let mut r = Cursor::new(content);
-    let mut _raw_count = 0usize;
-    let mut _raw_uncompressed = 0u64;
     let mut info: Vec<(u64, u64, Option<String>)> = Vec::new(); // (offset, size, longname)
     let mut maybe_long_name: Option<String> = None;
 
@@ -198,25 +200,24 @@ fn stream_tar_entries_seek(
         let typeflag = buf.get(156).copied().unwrap_or(0);
         let block_len = size.div_ceil(512) * 512;
 
-        _raw_count += 1;
-        _raw_uncompressed = _raw_uncompressed.saturating_add(size);
-
         if typeflag == b'L' {
             if size > 0 && size <= 4096 {
-                let mut name_buf = vec![0u8; size as usize];
+                // `size` is bounded; always fits `usize` on supported targets.
+                let len = usize::try_from(size).expect("long name size <= 4096 fits usize");
+                let mut name_buf = vec![0u8; len];
                 if r.read_exact(&mut name_buf).is_ok() {
                     maybe_long_name = Some(String::from_utf8_lossy(&name_buf).into_owned());
                 }
             }
             let skip = block_len.saturating_sub(size);
             if skip > 0 {
-                let _ = r.seek(SeekFrom::Current(skip as i64));
+                let _ = r.seek(SeekFrom::Current(skip.cast_signed()));
             }
         } else if typeflag == b'K' {
-            let _ = r.seek(SeekFrom::Current(block_len as i64));
+            let _ = r.seek(SeekFrom::Current(block_len.cast_signed()));
         } else {
             info.push((offset, size, maybe_long_name.take()));
-            let _ = r.seek(SeekFrom::Current(block_len as i64));
+            let _ = r.seek(SeekFrom::Current(block_len.cast_signed()));
         }
     }
 
@@ -274,7 +275,7 @@ fn stream_tar_entries_seek(
     let file_count = entries.len();
     let uncompressed_size: u64 = entries.iter().map(|e| e.size).sum();
 
-    Ok((file_count, uncompressed_size, entries))
+    (file_count, uncompressed_size, entries)
 }
 
 crate::no_template_mining!(

@@ -1,4 +1,4 @@
-//! Type-specific column statistics for SQLite (INTEGER, REAL, TEXT, BLOB).
+//! Type-specific column statistics for `SQLite` (INTEGER, REAL, TEXT, BLOB).
 
 use log::debug;
 use rusqlite::Connection;
@@ -8,7 +8,7 @@ use crate::parsers::column_stats;
 use crate::results::{BlobStats, ColumnInfo, TextStats};
 use crate::utils::typecheck::{is_boolean, parse_date_to_timestamp, parse_timestamp_to_seconds};
 
-/// Compute type-specific statistics for a column based on its SQLite type.
+/// Compute type-specific statistics for a column based on its `SQLite` type.
 /// Dispatches to appropriate compute function: numeric, text/date, or blob stats.
 pub(super) fn compute_stats_for_type(
     conn: &Connection,
@@ -19,7 +19,7 @@ pub(super) fn compute_stats_for_type(
     config: &RuntimeConfig,
 ) {
     match col.type_name.as_deref() {
-        Some("INTEGER") | Some("REAL") => {
+        Some("INTEGER" | "REAL") => {
             compute_numeric_and_bool_stats(conn, quoted_table, quoted_col, col, values, config);
         }
         Some("TEXT") => compute_text_and_date_stats(col, values, config),
@@ -36,28 +36,25 @@ pub(super) fn fetch_column_as_strings(
     table_name: &str,
     col_name: &str,
 ) -> Vec<String> {
-    let query = format!("SELECT CAST({} AS TEXT) FROM {};", quoted_col, quoted_table);
+    let query = format!("SELECT CAST({quoted_col} AS TEXT) FROM {quoted_table};");
     let all_values: Vec<Option<String>> = match conn.prepare(&query) {
         Ok(mut stmt) => stmt
             .query_map([], |row| row.get::<_, Option<String>>(0))
             .ok()
-            .map(|rows| rows.filter_map(|r| r.ok()).collect())
+            .map(|rows| rows.filter_map(std::result::Result::ok).collect())
             .unwrap_or_default(),
         Err(e) => {
-            debug!(
-                "SQLite query failed for column '{}' in table '{}': {}",
-                col_name, table_name, e
-            );
+            debug!("SQLite query failed for column '{col_name}' in table '{table_name}': {e}");
             return Vec::new();
         }
     };
     all_values
         .into_iter()
-        .map(|v| v.unwrap_or_default())
+        .map(std::option::Option::unwrap_or_default)
         .collect()
 }
 
-/// Fills numeric_stats and, for INTEGER with 0/1-only values, boolean_stats.
+/// Fills `numeric_stats` and, for INTEGER with 0/1-only values, `boolean_stats`.
 fn compute_numeric_and_bool_stats(
     conn: &Connection,
     quoted_table: &str,
@@ -66,7 +63,7 @@ fn compute_numeric_and_bool_stats(
     values: &[String],
     config: &RuntimeConfig,
 ) {
-    let f64_query = format!("SELECT {} FROM {};", quoted_col, quoted_table);
+    let f64_query = format!("SELECT {quoted_col} FROM {quoted_table};");
     let numeric_values: Vec<f64> = match conn.prepare(&f64_query) {
         Ok(mut stmt) => stmt
             .query_map([], |row| row.get::<_, Option<f64>>(0))
@@ -89,7 +86,7 @@ fn compute_numeric_and_bool_stats(
             .collect(),
     };
     if !numeric_values.is_empty() {
-        col.numeric_stats = column_stats::compute_numeric_stats_from_values(numeric_values);
+        col.numeric_stats = column_stats::compute_numeric_stats_from_values(&numeric_values);
     }
     if col.type_name.as_deref() == Some("INTEGER") && !values.is_empty() {
         let non_empty: Vec<&String> = values.iter().filter(|v| !v.is_empty()).collect();
@@ -99,7 +96,7 @@ fn compute_numeric_and_bool_stats(
     }
 }
 
-/// Fills text_stats, unique_count (from text), and date_stats when >50% values look like dates.
+/// Fills `text_stats`, `unique_count` (from text), and `date_stats` when >50% values look like dates.
 fn compute_text_and_date_stats(col: &mut ColumnInfo, values: &[String], config: &RuntimeConfig) {
     if let Some((min_len, max_len, avg_len, unique_ct)) =
         column_stats::compute_text_stats_from_strings(values, config)
@@ -123,23 +120,21 @@ fn compute_text_and_date_stats(col: &mut ColumnInfo, values: &[String], config: 
     }
 }
 
-/// Fills blob_stats (min/max/avg byte size) via SQLite length().
+/// Fills `blob_stats` (min/max/avg byte size) via `SQLite` `length()`.
 fn compute_blob_stats(
     conn: &Connection,
     quoted_table: &str,
     quoted_col: &str,
     col: &mut ColumnInfo,
 ) {
-    let sql = format!(
-        "SELECT length({}) FROM {} WHERE {} IS NOT NULL;",
-        quoted_col, quoted_table, quoted_col
-    );
+    let sql =
+        format!("SELECT length({quoted_col}) FROM {quoted_table} WHERE {quoted_col} IS NOT NULL;");
     let sizes: Vec<usize> = match conn.prepare(&sql) {
         Ok(mut stmt) => stmt
             .query_map([], |row| row.get::<_, Option<i64>>(0))
             .ok()
             .map(|rows| {
-                rows.filter_map(|r| r.ok().flatten().map(|s| s as usize))
+                rows.filter_map(|r| r.ok().flatten().and_then(|s| usize::try_from(s).ok()))
                     .collect()
             })
             .unwrap_or_default(),

@@ -23,14 +23,14 @@ impl JsonPlaceholders {
         format!("[{}]", Self::VALUE)
     }
 
-    /// Format a key with VALUE placeholder suffix: "key_VALUE"
+    /// Format a key with VALUE placeholder suffix: "`key_VALUE`"
     fn key_with_value_placeholder(key: &str) -> String {
         format!("{}_{}", key, Self::VALUE)
     }
 
-    /// Format a JSON key-value pair with actual value: "key": actual_value
+    /// Format a JSON key-value pair with actual value: "key": `actual_value`
     fn json_key_value_pair(key: &str, value_str: &str) -> String {
-        format!("\"{}\": {}", key, value_str)
+        format!("\"{key}\": {value_str}")
     }
 
     /// Format a JSON object with parts: {part1, part2, ...}
@@ -45,45 +45,36 @@ impl JsonPlaceholders {
 
     /// Format a quoted JSON string: "text"
     fn format_string(s: &str) -> String {
-        format!("\"{}\"", s)
+        format!("\"{s}\"")
     }
 
     /// Format array description: [N items]
     fn format_array_items(count: usize) -> String {
-        format!("[{} items]", count)
+        format!("[{count} items]")
     }
 
     /// Format object description: {N keys}
     fn format_object_keys(count: usize) -> String {
-        format!("{{{} keys}}", count)
+        format!("{{{count} keys}}")
     }
 
     /// Format array type and length for frequency tracking: [type:N]
     fn format_array_type_length(value_type: &str, length: usize) -> String {
-        format!("[{}:{}]", value_type, length)
+        format!("[{value_type}:{length}]")
     }
 }
 
 /// Compute max nesting depth of a JSON value (1-based: object/array = 1, children add 1).
 fn json_max_depth(value: &Value) -> usize {
     match value {
-        Value::Array(arr) => arr
-            .iter()
-            .map(json_max_depth)
-            .max()
-            .map(|d| d + 1)
-            .unwrap_or(1),
-        Value::Object(map) => map
-            .values()
-            .map(json_max_depth)
-            .max()
-            .map(|d| d + 1)
-            .unwrap_or(1),
+        Value::Array(arr) => arr.iter().map(json_max_depth).max().map_or(1, |d| d + 1),
+        Value::Object(map) => map.values().map(json_max_depth).max().map_or(1, |d| d + 1),
         _ => 1,
     }
 }
 
 /// Extract JSON metadata: line stats, root type/size, max depth, pretty-printed heuristic.
+#[must_use]
 pub fn extract_json_metadata(content: &str, stats: &ParseResult) -> JsonMetadata {
     let line_count = stats.line_count;
     let byte_count = stats.byte_count;
@@ -126,7 +117,7 @@ pub fn extract_json_metadata(content: &str, stats: &ParseResult) -> JsonMetadata
         })
     };
 
-    let max_line_length = content.lines().map(|l| l.len()).max();
+    let max_line_length = content.lines().map(str::len).max();
     let blank_count = content.lines().filter(|l| l.trim().is_empty()).count();
     let blank_line_count = if blank_count > 0 {
         Some(blank_count)
@@ -181,14 +172,18 @@ pub fn extract_json_metadata(content: &str, stats: &ParseResult) -> JsonMetadata
 
 /// Extract templates from JSON files (JSON-aware analysis).
 /// Accepts `content: &str` so the same function can be used when JSON is detected via
-/// structured::process (mmap → str at call site) or via extract_unknown_templates (content already available).
+/// `structured::process` (mmap → str at call site) or via `extract_unknown_templates` (content already available).
+///
+/// # Errors
+///
+/// Currently always returns [`Ok`].
 pub fn extract_json_templates(
     content: &str,
     stats: &ParseResult,
     config: &RuntimeConfig,
 ) -> Result<MiningResult> {
     let key_value_freq: DashMap<String, DashMap<String, usize>> = DashMap::new();
-    let (parsed_objects, headers) = parse_json_content(content)?;
+    let (parsed_objects, headers) = parse_json_content(content);
 
     if parsed_objects.is_empty() {
         return Ok(empty_mining_result(stats));
@@ -200,7 +195,7 @@ pub fn extract_json_templates(
         .as_slice()
         .par_iter_adaptive(config)
         .for_each(|value| {
-            collect_json_frequencies(value, &key_value_freq, &headers);
+            collect_json_frequencies(value, &key_value_freq, headers.as_ref());
         });
 
     // Second pass: extract patterns using frequency data in parallel with adaptive chunking
@@ -209,8 +204,13 @@ pub fn extract_json_templates(
         .as_slice()
         .par_iter_adaptive(config)
         .for_each(|value| {
-            let pattern =
-                extract_json_pattern(value, &key_value_freq, total_lines, config, &headers);
+            let pattern = extract_json_pattern(
+                value,
+                &key_value_freq,
+                total_lines,
+                config,
+                headers.as_ref(),
+            );
             template_groups
                 .entry(pattern)
                 .or_default()
@@ -228,7 +228,7 @@ pub fn extract_json_templates(
             let mut examples: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
             for obj in matching_objects.iter().take(config.max_sample_lines) {
-                extract_json_examples(obj, &mut examples, config, &headers);
+                extract_json_examples(obj, &mut examples, config, headers.as_ref());
             }
 
             Template {
@@ -263,11 +263,11 @@ fn extract_headers(first_arr: &[Value]) -> Vec<String> {
 }
 
 /// Parse JSON content and detect format (array of arrays, array of objects, single object, or line-by-line)
-/// Returns (parsed_objects, headers) where headers is Some if first array row contains all strings
-fn parse_json_content(content: &str) -> Result<(Vec<Value>, Option<Vec<String>>)> {
+/// Returns (`parsed_objects`, headers) where headers is Some if first array row contains all strings
+fn parse_json_content(content: &str) -> (Vec<Value>, Option<Vec<String>>) {
     // Try parsing entire content as single JSON
     if let Ok(root_value) = serde_json::from_str::<Value>(content) {
-        return Ok(parse_root_value(root_value));
+        return parse_root_value(root_value);
     }
 
     // Fallback: try line-by-line parsing
@@ -276,7 +276,7 @@ fn parse_json_content(content: &str) -> Result<(Vec<Value>, Option<Vec<String>>)
         .filter_map(|line| serde_json::from_str::<Value>(line).ok())
         .collect();
 
-    Ok((parsed_objects, None))
+    (parsed_objects, None)
 }
 
 /// Parse a root JSON value (array or object)
@@ -308,7 +308,7 @@ fn parse_json_array(arr: Vec<Value>) -> (Vec<Value>, Option<Vec<String>>) {
 }
 
 /// Get key name for array element at index (uses headers if available)
-fn get_array_key(idx: usize, headers: &Option<Vec<String>>) -> String {
+fn get_array_key(idx: usize, headers: Option<&Vec<String>>) -> String {
     if let Some(header_vec) = headers {
         if idx < header_vec.len() {
             header_vec[idx].clone()
@@ -339,7 +339,7 @@ fn update_frequency(
 fn collect_json_frequencies(
     value: &Value,
     key_value_freq: &DashMap<String, DashMap<String, usize>>,
-    headers: &Option<Vec<String>>,
+    headers: Option<&Vec<String>>,
 ) {
     match value {
         Value::Object(map) => {
@@ -391,7 +391,7 @@ fn extract_json_pattern(
     key_value_freq: &DashMap<String, DashMap<String, usize>>,
     total_lines: usize,
     config: &RuntimeConfig,
-    headers: &Option<Vec<String>>,
+    headers: Option<&Vec<String>>,
 ) -> String {
     match value {
         Value::Object(map) => {
@@ -477,14 +477,20 @@ fn format_json_value(value: &Value) -> String {
         Value::Number(n) => n.to_string(),
         Value::Bool(b) => b.to_string(),
         Value::Null => "null".to_string(),
-        Value::Array(arr) => match arr.is_empty() {
-            true => "[]".to_string(),
-            false => JsonPlaceholders::format_array_items(arr.len()),
-        },
-        Value::Object(obj) => match obj.is_empty() {
-            true => "{}".to_string(),
-            false => JsonPlaceholders::format_object_keys(obj.len()),
-        },
+        Value::Array(arr) => {
+            if arr.is_empty() {
+                "[]".to_string()
+            } else {
+                JsonPlaceholders::format_array_items(arr.len())
+            }
+        }
+        Value::Object(obj) => {
+            if obj.is_empty() {
+                "{}".to_string()
+            } else {
+                JsonPlaceholders::format_object_keys(obj.len())
+            }
+        }
     }
 }
 
@@ -493,7 +499,7 @@ fn extract_json_examples(
     value: &Value,
     examples: &mut BTreeMap<String, Vec<String>>,
     config: &RuntimeConfig,
-    headers: &Option<Vec<String>>,
+    headers: Option<&Vec<String>>,
 ) {
     match value {
         Value::Object(map) => {
@@ -529,7 +535,7 @@ fn add_example_value(
         Value::Number(n) => n.to_string(),
         Value::Bool(b) => b.to_string(),
         Value::Null => "null".to_string(),
-        _ => format!("{:?}", val),
+        _ => format!("{val:?}"),
     };
 
     if !entry.contains(&value_str) && entry.len() < config.max_examples_per_placeholder {

@@ -1,12 +1,13 @@
 //! Common utilities for parsers
 
 use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
+use crate::parsers::{ParseResult, estimate_compressed_tokens_with_footprint};
 use crate::results::{MiningResult, Template};
 use rayon::prelude::*;
 
-/// Create an empty MiningResult (no templates found)
+/// Create an empty `MiningResult` (no templates found)
 /// This is shared across all parsers for empty content cases
+#[must_use]
 pub fn empty_mining_result(stats: &ParseResult) -> MiningResult {
     MiningResult {
         templates: vec![],
@@ -17,8 +18,9 @@ pub fn empty_mining_result(stats: &ParseResult) -> MiningResult {
     }
 }
 
-/// Build MiningResult from templates (sorts and calculates compression)
+/// Build `MiningResult` from templates (sorts and calculates compression)
 /// This is shared across all parsers
+#[must_use]
 pub fn build_mining_result(
     templates: Vec<Template>,
     total_items: usize,
@@ -28,7 +30,8 @@ pub fn build_mining_result(
     build_mining_result_with_footprint(templates, total_items, stats, config, None)
 }
 
-/// Build MiningResult from templates including writing footprint in compression calculation
+/// Build `MiningResult` from templates including writing footprint in compression calculation
+#[must_use]
 pub fn build_mining_result_with_footprint(
     templates: Vec<Template>,
     total_items: usize,
@@ -60,7 +63,8 @@ pub fn build_mining_result_with_footprint(
 }
 
 /// Calculate compression metrics from templates
-/// Returns (original_tokens, compressed_tokens, token_reduction_percent)
+/// Returns (`original_tokens`, `compressed_tokens`, `token_reduction_percent`)
+#[must_use]
 pub fn calculate_compression(
     templates: &[Template],
     total_items: usize,
@@ -71,7 +75,8 @@ pub fn calculate_compression(
 }
 
 /// Calculate compression metrics from templates including writing footprint
-/// Returns (original_tokens, compressed_tokens, token_reduction_percent)
+/// Returns (`original_tokens`, `compressed_tokens`, `token_reduction_percent`)
+#[must_use]
 pub fn calculate_compression_with_footprint(
     templates: &[Template],
     total_items: usize,
@@ -80,7 +85,6 @@ pub fn calculate_compression_with_footprint(
     writing_footprint: Option<&crate::results::WritingFootprint>,
 ) -> (usize, usize, f64) {
     let original_tokens = stats.token_count;
-    use crate::parsers::estimate_compressed_tokens_with_footprint;
     let compressed_tokens = estimate_compressed_tokens_with_footprint(
         templates,
         total_items,

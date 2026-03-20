@@ -97,6 +97,10 @@ fn merge_child(children: &mut BTreeMap<String, XmlTypeInfo>, key: String, value:
 }
 
 /// Extract XML metadata by streaming over events and building a structural schema.
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when the document is not well-formed XML.
 pub fn extract_xml_metadata(
     content: &[u8],
     stats: &ParseResult,
@@ -158,7 +162,7 @@ pub fn extract_xml_metadata(
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(anyhow::anyhow!("XML parse error: {}", e)),
+            Err(e) => return Err(anyhow::anyhow!("XML parse error: {e}")),
             _ => {}
         }
     }

@@ -15,6 +15,10 @@ pub use image::{extract_image_metadata, extract_image_templates};
 pub use video::{extract_video_metadata, extract_video_templates};
 
 /// Dispatch by file type; fills the appropriate metadata field and returns templates.
+///
+/// # Errors
+///
+/// Propagates errors from the image, video, or audio metadata/template extractors for the active [`crate::parsers::FileType`].
 pub fn process(
     stats: &mut ParseResult,
     mmap: &Mmap,

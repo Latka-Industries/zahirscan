@@ -29,6 +29,10 @@ fn extract_document_info(info: &pdf::object::InfoDict, metadata: &mut PdfMetadat
 }
 
 /// Extract PDF metadata
+///
+/// # Errors
+///
+/// Currently always returns [`Ok`]; parse failures yield minimal metadata with a warning.
 pub fn extract_pdf_metadata(
     content: &[u8],
     stats: &ParseResult,

@@ -1,4 +1,4 @@
-//! PPTX (PowerPoint) metadata extraction
+//! PPTX (`PowerPoint`) metadata extraction
 
 use std::io::Read;
 
@@ -7,7 +7,6 @@ use super::utils::{has_namespace, open_office_archive};
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::PptxMetadata;
-use anyhow::Result;
 use log::warn;
 use quick_xml::Reader;
 use quick_xml::events::Event;
@@ -19,15 +18,14 @@ pub fn extract_pptx_metadata(
     content: &[u8],
     stats: &ParseResult,
     _config: &RuntimeConfig,
-) -> Result<PptxMetadata> {
+) -> PptxMetadata {
     let mut metadata = PptxMetadata {
         file_size: Some(stats.byte_count),
         ..Default::default()
     };
 
-    let mut archive = match open_office_archive(content, &stats.file_path) {
-        Ok(arch) => arch,
-        Err(_) => return Ok(metadata),
+    let Ok(mut archive) = open_office_archive(content, &stats.file_path) else {
+        return metadata;
     };
 
     if let Ok(mut f) = archive.by_name(OFFICE_CORE_XML) {
@@ -44,7 +42,7 @@ pub fn extract_pptx_metadata(
         }
     }
 
-    Ok(metadata)
+    metadata
 }
 
 /// Extract core properties from PPTX core.xml
@@ -84,7 +82,7 @@ fn extract_core_properties(xml: &str, m: &mut PptxMetadata) {
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                warn!("PPTX core.xml parse error: {}", e);
+                warn!("PPTX core.xml parse error: {e}");
                 break;
             }
             _ => {}
@@ -104,13 +102,12 @@ fn count_sld_id_elements(xml: &str) -> usize {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+            Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
                 if e.name().as_ref().ends_with(b"sldId") {
                     count += 1;
                 }
             }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
+            Ok(Event::Eof) | Err(_) => break,
             _ => {}
         }
         buf.clear();

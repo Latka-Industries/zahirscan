@@ -18,7 +18,11 @@ use std::collections::BTreeMap;
 /// Maximum number of lines to sample when detecting timestamps in log files.
 const TIMESTAMP_SAMPLE_LINES: usize = 50;
 
-/// Extract log metadata: line stats (line_ending, max_line_length, blank_line_count) and has_timestamps.
+/// Maximum number of tokens to consider when detecting timestamps in log files.
+const MAX_TIMESTAMP_TOKENS: usize = 6;
+
+/// Extract log metadata: line stats (`line_ending`, `max_line_length`, `blank_line_count`) and `has_timestamps`.
+#[must_use]
 pub fn extract_log_metadata(content: &str, stats: &ParseResult) -> LogMetadata {
     let line_count = stats.line_count;
     let byte_count = stats.byte_count;
@@ -61,12 +65,11 @@ pub fn extract_log_metadata(content: &str, stats: &ParseResult) -> LogMetadata {
         })
     };
 
-    let max_line_length = content.lines().map(|l| l.len()).max();
+    let max_line_length = content.lines().map(str::len).max();
     let blank_line_count = content.lines().filter(|l| l.trim().is_empty()).count();
 
     // Sample first N lines: if any line has a token (or run of tokens) that parses as timestamp/date, set has_timestamps.
     // Try first token only, then sliding windows of 2..=6 consecutive tokens (catches e.g. "Mon Dec 1 19:26:16 2025" mid-line).
-    const MAX_TIMESTAMP_TOKENS: usize = 6;
     let has_timestamps = content.lines().take(TIMESTAMP_SAMPLE_LINES).any(|line| {
         let tokens: Vec<&str> = line.split_whitespace().collect();
         if tokens.is_empty() {
@@ -106,6 +109,10 @@ pub fn extract_log_metadata(content: &str, stats: &ParseResult) -> LogMetadata {
 }
 
 /// Extract templates from log files (position-based analysis)
+///
+/// # Errors
+///
+/// Currently always returns [`Ok`].
 pub fn extract_log_templates(
     content: &str,
     stats: &ParseResult,
@@ -148,8 +155,7 @@ pub fn extract_log_templates(
             let (most_common, count) = token_map
                 .iter()
                 .max_by_key(|e| *e.value())
-                .map(|e| (e.key().clone(), *e.value()))
-                .unwrap_or_else(|| ("".to_string(), 0));
+                .map_or_else(|| (String::new(), 0), |e| (e.key().clone(), *e.value()));
 
             let is_static = count >= threshold && token_map.len() == 1;
             classifications.push((

@@ -1,5 +1,5 @@
 //! Shared column statistics computation utilities
-//! Used by both CSV and SQLite parsers for consistent statistics calculation
+//! Used by both CSV and `SQLite` parsers for consistent statistics calculation
 
 use crate::config::RuntimeConfig;
 use crate::parsers::traits::AdaptiveParallel;
@@ -114,14 +114,14 @@ pub fn extract_column_values(sample_data: &[Vec<String>], col_idx: usize) -> Vec
 }
 
 /// Compute numeric statistics (min, max, mean, median, range, IQR, stdev) from a vector of values
-/// Works with any iterable of f64 values (from CSV strings or SQLite query results)
-pub fn compute_numeric_stats_from_values(values: Vec<f64>) -> Option<NumericStats> {
+/// Works with any iterable of f64 values (from CSV strings or `SQLite` query results)
+pub fn compute_numeric_stats_from_values(values: &[f64]) -> Option<NumericStats> {
     if values.is_empty() {
         return None;
     }
 
     // Sort for min/max/median/IQR calculations
-    let mut sorted_values = values.clone();
+    let mut sorted_values = values.to_owned();
     sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
     let min = sorted_values.first().copied();
@@ -129,7 +129,7 @@ pub fn compute_numeric_stats_from_values(values: Vec<f64>) -> Option<NumericStat
     let range = min.zip(max).map(|(min_val, max_val)| max_val - min_val);
 
     // Use optimized calculator to compute all statistics (mean is cached and reused by stdev)
-    let calculator = StatsCalculator::new(&values, &sorted_values);
+    let calculator = StatsCalculator::new(values, &sorted_values);
     let mean = calculator.mean();
     let median = calculator.median();
     let iqr = calculator.iqr();
@@ -165,7 +165,7 @@ pub fn compute_numeric_stats_from_strings(
         })
         .collect();
 
-    compute_numeric_stats_from_values(parsed_values)
+    compute_numeric_stats_from_values(&parsed_values)
 }
 
 /// Compute date statistics (span in days/minutes, min/max) from timestamp values
@@ -236,12 +236,12 @@ pub fn compute_boolean_stats_from_strings(
         }
     });
 
-    let total = total_count.into_iter().next().map(|(_, c)| c).unwrap_or(0);
+    let total = total_count.into_iter().next().map_or(0, |(_, c)| c);
     if total == 0 {
         return None;
     }
 
-    let true_val = true_count.into_iter().next().map(|(_, c)| c).unwrap_or(0);
+    let true_val = true_count.into_iter().next().map_or(0, |(_, c)| c);
     let true_percentage = (true_val as f64 / total as f64) * 100.0;
 
     Some(BooleanStats {
@@ -250,7 +250,7 @@ pub fn compute_boolean_stats_from_strings(
 }
 
 /// Compute null percentage and unique count from string values
-/// Returns (null_percentage, unique_count)
+/// Returns (`null_percentage`, `unique_count`)
 pub fn compute_null_and_unique_stats(values: &[String], config: &RuntimeConfig) -> (f64, usize) {
     let total = values.len();
     if total == 0 {
@@ -268,11 +268,11 @@ pub fn compute_null_and_unique_stats(values: &[String], config: &RuntimeConfig) 
             *null_count.entry(()).or_insert(0) += 1;
         } else {
             // Track unique values (DashSet handles deduplication)
-            unique_set.insert(val.to_string());
+            unique_set.insert(val.clone());
         }
     });
 
-    let null_count_val = null_count.into_iter().next().map(|(_, c)| c).unwrap_or(0);
+    let null_count_val = null_count.into_iter().next().map_or(0, |(_, c)| c);
     let null_percentage = (null_count_val as f64 / total as f64) * 100.0;
     let unique_count = unique_set.len();
 
@@ -299,7 +299,7 @@ pub fn compute_text_stats_from_strings(
     // Count unique values
     let unique_set: DashSet<String> = DashSet::new();
     non_null_values.par_iter_adaptive(config).for_each(|val| {
-        unique_set.insert(val.to_string());
+        unique_set.insert(val.clone());
     });
     let unique_count = unique_set.len();
 

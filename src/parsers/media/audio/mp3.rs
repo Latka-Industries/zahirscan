@@ -1,11 +1,14 @@
 //! MP3-specific parsing utilities, including LAME tag reading
 
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
+
 use crate::parsers::FileType;
 use crate::parsers::media_helpers::BitrateMode;
 use crate::utils::filetypes::is_codec_for_file_type;
 
 /// Check if a codec string represents MP3
-/// Verifies against FILE_EXTENSION_MAP so we only treat known audio codecs as MP3.
+/// Verifies against `FILE_EXTENSION_MAP` so we only treat known audio codecs as MP3.
 pub fn is_mp3_codec(codec: &str) -> bool {
     is_codec_for_file_type(codec, FileType::Audio) && codec.to_lowercase().contains("mp3")
 }
@@ -72,6 +75,106 @@ mod mp3_constants {
     }
 }
 
+/// Skip ID3v2 if present, otherwise rewind to file start. Returns `None` on I/O failure.
+fn skip_id3v2_prefix(file: &mut File) -> Option<()> {
+    let mut header = [0u8; 10];
+    file.read_exact(&mut header).ok()?;
+    if &header[0..3] == b"ID3" {
+        let size = ((header[6] as u32) << 21)
+            | ((header[7] as u32) << 14)
+            | ((header[8] as u32) << 7)
+            | (header[9] as u32);
+        let id3_size = 10 + u64::from(size);
+        file.seek(SeekFrom::Start(id3_size)).ok()?;
+    } else {
+        file.seek(SeekFrom::Start(0)).ok()?;
+    }
+    Some(())
+}
+
+fn mp3_frame_sync_valid(frame_header: &[u8; 4]) -> bool {
+    frame_header[0] == mp3_constants::FRAME_SYNC_BYTE
+        && (frame_header[1] & mp3_constants::FRAME_SYNC_MASK) == mp3_constants::FRAME_SYNC_MASK
+}
+
+fn side_info_byte_count(mpeg_version: u8, channel_mode: u8) -> usize {
+    match mpeg_version {
+        mp3_constants::MPEG_VERSION_1 => {
+            if channel_mode == mp3_constants::CHANNEL_MODE_MONO {
+                mp3_constants::side_info_size::MPEG1_MONO
+            } else {
+                mp3_constants::side_info_size::MPEG1_STEREO
+            }
+        }
+        _ => {
+            if channel_mode == mp3_constants::CHANNEL_MODE_MONO {
+                mp3_constants::side_info_size::MPEG2_MONO
+            } else {
+                mp3_constants::side_info_size::MPEG2_STEREO
+            }
+        }
+    }
+}
+
+/// After the first frame header: skip CRC (if any), side info, then read Xing/LAME VBR byte.
+fn bitrate_mode_after_first_frame(file: &mut File, frame_header: &[u8; 4]) -> Option<BitrateMode> {
+    let has_crc = (frame_header[1] & mp3_constants::PROTECTION_BIT_MASK) == 0;
+    if has_crc {
+        file.seek(SeekFrom::Current(2)).ok()?;
+    }
+    let mpeg_version = (frame_header[1] >> 3) & mp3_constants::MPEG_VERSION_MASK;
+    let channel_mode = (frame_header[3] >> 6) & mp3_constants::CHANNEL_MODE_MASK;
+    let side_n = side_info_byte_count(mpeg_version, channel_mode);
+    let side_off = i64::try_from(side_n).unwrap_or(i64::MAX);
+    file.seek(SeekFrom::Current(side_off)).ok()?;
+
+    let mut xing_header = [0u8; 4];
+    file.read_exact(&mut xing_header).ok()?;
+    if &xing_header != b"Xing" && &xing_header != b"Info" {
+        return None;
+    }
+
+    let mut flags = [0u8; 4];
+    file.read_exact(&mut flags).ok()?;
+
+    let mut skip_bytes = 0u64;
+    if (flags[3] & mp3_constants::xing_flags::FRAME_COUNT) != 0 {
+        skip_bytes += 4;
+    }
+    if (flags[3] & mp3_constants::xing_flags::BYTE_COUNT) != 0 {
+        skip_bytes += 4;
+    }
+    if (flags[3] & mp3_constants::xing_flags::TOC) != 0 {
+        skip_bytes += 100;
+    }
+    if (flags[3] & mp3_constants::xing_flags::QUALITY) != 0 {
+        skip_bytes += 4;
+    }
+    file.seek(SeekFrom::Current(skip_bytes.cast_signed()))
+        .ok()?;
+
+    let mut lame_version = [0u8; 9];
+    file.read_exact(&mut lame_version).ok()?;
+    if &lame_version[0..4] != b"LAME" {
+        return None;
+    }
+
+    let mut revision_vbr_byte = [0u8; 1];
+    file.read_exact(&mut revision_vbr_byte).ok()?;
+    let vbr_method = revision_vbr_byte[0] & mp3_constants::VBR_METHOD_MASK;
+
+    match vbr_method {
+        mp3_constants::vbr_method::CBR => Some(BitrateMode::Cbr),
+        mp3_constants::vbr_method::ABR => Some(BitrateMode::Abr),
+        mp3_constants::vbr_method::VBR_OLD
+        | mp3_constants::vbr_method::VBR_NEW
+        | mp3_constants::vbr_method::VBR_MT
+        | mp3_constants::vbr_method::VBR_MTRH
+        | mp3_constants::vbr_method::VBR_ABR_ALT => Some(BitrateMode::Vbr),
+        _ => None,
+    }
+}
+
 /// Read LAME tag from MP3 file to determine bitrate mode (CBR/VBR/ABR)
 ///
 /// The LAME tag is embedded in the first MP3 frame's Xing/Info header.
@@ -80,166 +183,13 @@ mod mp3_constants {
 /// Note: Many MP3 files (especially CBR) don't have a Xing/Info header,
 /// so this will return None for those files.
 pub fn read_lame_tag_bitrate_mode(file_path: &str) -> Option<BitrateMode> {
-    use std::fs::File;
-    use std::io::{Read, Seek, SeekFrom};
+    let mut file = File::open(file_path).ok()?;
+    skip_id3v2_prefix(&mut file)?;
 
-    let mut file = match File::open(file_path) {
-        Ok(f) => f,
-        Err(_) => return None,
-    };
-
-    // Skip ID3v2 tag if present (starts with "ID3")
-    let mut header = [0u8; 10];
-    if file.read_exact(&mut header).is_ok() {
-        if &header[0..3] == b"ID3" {
-            // ID3v2 tag present - skip it
-            // Size is stored in bytes 6-9 as synchsafe integers
-            let size = ((header[6] as u32) << 21)
-                | ((header[7] as u32) << 14)
-                | ((header[8] as u32) << 7)
-                | (header[9] as u32);
-            let id3_size = 10 + size as u64;
-            if file.seek(SeekFrom::Start(id3_size)).is_err() {
-                return None;
-            }
-        } else {
-            // Not ID3v2, rewind to start
-            if file.seek(SeekFrom::Start(0)).is_err() {
-                return None;
-            }
-        }
-    } else {
-        // File too small or read error
-        return None;
-    }
-
-    // Read first MP3 frame header (4 bytes)
     let mut frame_header = [0u8; 4];
-    if file.read_exact(&mut frame_header).is_err() {
+    file.read_exact(&mut frame_header).ok()?;
+    if !mp3_frame_sync_valid(&frame_header) {
         return None;
     }
-
-    // Check MP3 frame sync (first 11 bits should be all 1s)
-    if frame_header[0] != mp3_constants::FRAME_SYNC_BYTE
-        || (frame_header[1] & mp3_constants::FRAME_SYNC_MASK) != mp3_constants::FRAME_SYNC_MASK
-    {
-        return None; // Not a valid MP3 frame
-    }
-
-    // Check protection bit (bit 1 of byte 1)
-    // If protection bit is 0, there's a 2-byte CRC field we need to skip
-    let has_crc = (frame_header[1] & mp3_constants::PROTECTION_BIT_MASK) == 0;
-
-    // Parse MPEG version and channel mode to determine side info size
-    let mpeg_version = (frame_header[1] >> 3) & mp3_constants::MPEG_VERSION_MASK;
-    let channel_mode = (frame_header[3] >> 6) & mp3_constants::CHANNEL_MODE_MASK;
-
-    // Skip CRC if present (2 bytes)
-    if has_crc && file.seek(SeekFrom::Current(2)).is_err() {
-        return None;
-    }
-
-    // Calculate side info offset
-    // MPEG-1 Layer III: 17 bytes (mono) or 32 bytes (stereo/dual/joint)
-    // MPEG-2/2.5 Layer III: 9 bytes (mono) or 17 bytes (stereo/dual/joint)
-    let side_info_size = match mpeg_version {
-        mp3_constants::MPEG_VERSION_1 => {
-            // MPEG-1 Layer III
-            if channel_mode == mp3_constants::CHANNEL_MODE_MONO {
-                mp3_constants::side_info_size::MPEG1_MONO
-            } else {
-                mp3_constants::side_info_size::MPEG1_STEREO
-            }
-        }
-        _ => {
-            // MPEG-2 or MPEG-2.5 Layer III
-            if channel_mode == mp3_constants::CHANNEL_MODE_MONO {
-                mp3_constants::side_info_size::MPEG2_MONO
-            } else {
-                mp3_constants::side_info_size::MPEG2_STEREO
-            }
-        }
-    };
-
-    // Skip side info to get to Xing/Info header
-    if file.seek(SeekFrom::Current(side_info_size as i64)).is_err() {
-        return None;
-    }
-
-    // Read Xing/Info header identifier (4 bytes)
-    let mut xing_header = [0u8; 4];
-    if file.read_exact(&mut xing_header).is_err() {
-        return None;
-    }
-
-    // Check for "Xing" or "Info" header
-    let has_xing = &xing_header == b"Xing" || &xing_header == b"Info";
-    if !has_xing {
-        return None; // No Xing/Info header, can't read LAME tag
-    }
-
-    // Read flags (4 bytes) to see what fields are present
-    let mut flags = [0u8; 4];
-    if file.read_exact(&mut flags).is_err() {
-        return None;
-    }
-
-    // Skip optional fields based on flags (flags are in big-endian format):
-    // - Frame count (4 bytes) if flag bit 0 is set (flags[3] bit 0)
-    // - Byte count (4 bytes) if flag bit 1 is set (flags[3] bit 1)
-    // - TOC (100 bytes) if flag bit 2 is set (flags[3] bit 2)
-    // - Quality (4 bytes) if flag bit 3 is set (flags[3] bit 3)
-    let mut skip_bytes = 0u64;
-    if (flags[3] & mp3_constants::xing_flags::FRAME_COUNT) != 0 {
-        skip_bytes += 4; // Frame count
-    }
-    if (flags[3] & mp3_constants::xing_flags::BYTE_COUNT) != 0 {
-        skip_bytes += 4; // Byte count
-    }
-    if (flags[3] & mp3_constants::xing_flags::TOC) != 0 {
-        skip_bytes += 100; // TOC
-    }
-    if (flags[3] & mp3_constants::xing_flags::QUALITY) != 0 {
-        skip_bytes += 4; // Quality
-    }
-
-    if file.seek(SeekFrom::Current(skip_bytes as i64)).is_err() {
-        return None;
-    }
-
-    // Now we should be at the LAME tag
-    // LAME tag structure:
-    // - Encoder version string (9 bytes, null-terminated)
-    // - Info tag revision + VBR method (1 byte: high 4 bits = revision, low 4 bits = VBR method)
-    let mut lame_version = [0u8; 9];
-    if file.read_exact(&mut lame_version).is_err() {
-        return None;
-    }
-
-    // Check if this looks like a LAME tag (starts with "LAME")
-    if &lame_version[0..4] != b"LAME" {
-        return None;
-    }
-
-    // Read the revision + VBR method byte (immediately after the 9-byte version string)
-    let mut revision_vbr_byte = [0u8; 1];
-    if file.read_exact(&mut revision_vbr_byte).is_err() {
-        return None;
-    }
-
-    // VBR method is in the low 4 bits of this byte
-    // High 4 bits contain the info tag revision
-    let vbr_method = revision_vbr_byte[0] & mp3_constants::VBR_METHOD_MASK;
-
-    // Map VBR method to BitrateMode enum
-    match vbr_method {
-        mp3_constants::vbr_method::CBR => Some(BitrateMode::Cbr),
-        mp3_constants::vbr_method::ABR => Some(BitrateMode::Abr),
-        mp3_constants::vbr_method::VBR_OLD => Some(BitrateMode::Vbr),
-        mp3_constants::vbr_method::VBR_NEW => Some(BitrateMode::Vbr),
-        mp3_constants::vbr_method::VBR_MT => Some(BitrateMode::Vbr),
-        mp3_constants::vbr_method::VBR_MTRH => Some(BitrateMode::Vbr),
-        mp3_constants::vbr_method::VBR_ABR_ALT => Some(BitrateMode::Vbr),
-        _ => None, // Unknown or reserved
-    }
+    bitrate_mode_after_first_frame(&mut file, &frame_header)
 }

@@ -13,10 +13,10 @@ pub fn extract_subsampling(jpeg_data: &[u8]) -> Option<String> {
 }
 
 /// Extract compression info from JPEG data
-pub fn extract_compression(_jpeg_data: &[u8]) -> Option<String> {
+pub fn extract_compression(_jpeg_data: &[u8]) -> String {
     // JPEG quality is not stored in the file - it's an encoding parameter
     // We can only note that it's JPEG compression
-    Some("JPEG".to_string())
+    "JPEG".to_string()
 }
 
 /// Extract bit depth from JPEG data
@@ -125,7 +125,7 @@ pub fn extract_color_type(jpeg_data: &[u8]) -> Option<String> {
                 1 => Some(COLOR_TYPE_L8.to_string()),    // Grayscale
                 3 => Some(COLOR_TYPE_RGB8.to_string()),  // RGB
                 4 => Some(COLOR_TYPE_CMYK8.to_string()), // CMYK (less common)
-                _ => Some(format!("Unknown({})", num_components)),
+                _ => Some(format!("Unknown({num_components})")),
             };
         }
 
@@ -242,10 +242,7 @@ fn jpeg_chroma_subsampling(jpeg_data: &[u8]) -> Option<String> {
                 (4, 1, 1, 1) => SUBSAMPLING_411,
                 // Less common / ambiguous
                 _ => {
-                    warn!(
-                        "Unknown JPEG sampling factors: Y={}x{}, C={}x{}",
-                        yh, yv, ch, cv
-                    );
+                    warn!("Unknown JPEG sampling factors: Y={yh}x{yv}, C={ch}x{cv}");
                     return Some(SUBSAMPLING_UNKNOWN.to_string());
                 }
             };

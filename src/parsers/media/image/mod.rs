@@ -19,7 +19,11 @@ use metadata::{FormatMetadata, format_from_string};
 use std::io::Cursor;
 
 /// Extract image metadata
-/// Uses into_dimensions() to read only header metadata without decoding the full image
+/// Uses `into_dimensions()` to read only header metadata without decoding the full image
+///
+/// # Errors
+///
+/// Currently always returns [`Ok`]; malformed images yield partial metadata rather than an error.
 pub fn extract_image_metadata(
     content: &[u8],
     stats: &ParseResult,
@@ -30,7 +34,7 @@ pub fn extract_image_metadata(
 
     match reader.with_guessed_format() {
         Ok(reader) => {
-            let format = reader.format().map(|f| format!("{:?}", f));
+            let format = reader.format().map(|f| format!("{f:?}"));
 
             // Extract format-specific metadata based on detected format
             // This can be done even if into_dimensions() fails, since header-only parsing
@@ -38,15 +42,14 @@ pub fn extract_image_metadata(
             let (chroma_subsampling, compression, bit_depth, color_type) = format
                 .as_deref()
                 .and_then(format_from_string)
-                .map(|image_format| {
+                .map_or((None, None, None, None), |image_format| {
                     (
                         image_format.extract_chroma_subsampling(content),
                         image_format.extract_compression(content),
                         image_format.extract_bit_depth(content),
                         image_format.extract_color_type(content),
                     )
-                })
-                .unwrap_or((None, None, None, None));
+                });
 
             // Use into_dimensions() instead of decode() - reads only header metadata
             // This is much faster as it doesn't decompress/decode the entire image
