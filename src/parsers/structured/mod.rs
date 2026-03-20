@@ -12,7 +12,10 @@ mod html;
 mod json;
 mod pdf;
 
-pub use csv::{extract_csv_metadata, extract_csv_templates, infer_value_type};
+pub use csv::{
+    delimiter_byte_for_reader, detect_delimiter_byte, extract_csv_metadata, extract_csv_templates,
+    infer_value_type,
+};
 pub use epub::{extract_epub_metadata, extract_epub_templates};
 pub use html::{extract_html_metadata, extract_html_templates};
 pub use json::{extract_json_metadata, extract_json_templates};
