@@ -15,7 +15,7 @@ fn code_file_type_detection_py() {
         OutputMode::Full,
         None,
         None,
-        OutputSink::Collect,
+        &OutputSink::Collect,
     )
     .expect("extract_zahir");
     assert_eq!(result.outputs.len(), 1);
@@ -41,7 +41,7 @@ fn code_e2e_full_mode() {
         OutputMode::Full,
         None,
         None,
-        OutputSink::Collect,
+        &OutputSink::Collect,
     )
     .expect("extract_zahir");
     assert_eq!(result.outputs.len(), 1);
@@ -66,7 +66,7 @@ fn code_e2e_templates_mode() {
         OutputMode::Templates,
         None,
         None,
-        OutputSink::Collect,
+        &OutputSink::Collect,
     )
     .expect("extract_zahir");
     assert_eq!(result.outputs.len(), 1);
@@ -86,7 +86,7 @@ fn code_e2e_json_contains_code_metadata() {
         OutputMode::Full,
         None,
         None,
-        OutputSink::Collect,
+        &OutputSink::Collect,
     )
     .expect("extract_zahir");
     let json = serde_json::to_value(&result.outputs[0]).expect("serialize");

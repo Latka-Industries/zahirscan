@@ -6,7 +6,7 @@ use zahirscan::{RuntimeConfig, utils::path_string_helper::should_ignore_path};
 fn config_with(ignore_patterns: Vec<&str>, ignore_hidden_files: bool) -> RuntimeConfig {
     let mut c = get_test_config();
     c.ignore_patterns = ignore_patterns.into_iter().map(String::from).collect();
-    c.ignore_hidden_files = ignore_hidden_files;
+    c.flags.ignore_hidden_files = ignore_hidden_files;
     c
 }
 
