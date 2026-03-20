@@ -17,7 +17,7 @@ pub use docx::{extract_docx_metadata, extract_docx_templates};
 pub use pptx::{extract_pptx_metadata, extract_pptx_templates};
 pub use xlsx::{extract_xlsx_metadata, extract_xlsx_templates};
 
-/// Dispatch by file type; fills docx_metadata or pptx_metadata and returns templates.
+/// Dispatch by file type; fills `docx_metadata` or `pptx_metadata` and returns templates.
 pub fn process(
     stats: &mut ParseResult,
     mmap: &Mmap,
@@ -29,7 +29,7 @@ pub fn process(
             mmap,
             config,
             docx_metadata,
-            extract_docx_metadata(mmap, stats, config),
+            crate::ok_anyhow!(extract_docx_metadata(mmap, stats, config)),
             crate::results::DocumentMetadata,
             FileType::Docx,
             extract_docx_templates(mmap, stats, config)
@@ -39,7 +39,7 @@ pub fn process(
             mmap,
             config,
             docx_metadata,
-            extract_xlsx_metadata(mmap, stats, config),
+            crate::ok_anyhow!(extract_xlsx_metadata(mmap, stats, config)),
             crate::results::DocumentMetadata,
             FileType::Xlsx,
             extract_xlsx_templates(mmap, stats, config)
@@ -49,7 +49,7 @@ pub fn process(
             mmap,
             config,
             pptx_metadata,
-            extract_pptx_metadata(mmap, stats, config),
+            crate::ok_anyhow!(extract_pptx_metadata(mmap, stats, config)),
             crate::results::PptxMetadata,
             FileType::Pptx,
             extract_pptx_templates(mmap, stats, config)

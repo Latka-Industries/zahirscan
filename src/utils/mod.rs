@@ -1,4 +1,4 @@
-/// Macro to create a lazily-initialized static value using OnceLock
+/// Macro to create a lazily-initialized static value using `OnceLock`
 ///
 /// Usage:
 /// ```
@@ -39,6 +39,7 @@ pub const BATCHED_NO_VALID_FILES_DETAIL_CAP: usize = 5;
 
 /// Builds an error when no valid files were found. `detail_cap` limits how many failed paths
 /// are listed (e.g. 5); excess is summarized as "(and N more)". Use `None` to list all.
+#[must_use]
 pub fn no_valid_files_error(
     failed: &[(String, String)],
     detail_cap: Option<usize>,
@@ -49,13 +50,11 @@ pub fn no_valid_files_error(
         let details: Vec<String> = failed
             .iter()
             .take(detail_cap.unwrap_or(failed.len()))
-            .map(|(p, e)| format!("{}: {}", p, e))
+            .map(|(p, e)| format!("{p}: {e}"))
             .collect();
-        let more = detail_cap
-            .map(|cap| failed.len().saturating_sub(cap))
-            .unwrap_or(0);
+        let more = detail_cap.map_or(0, |cap| failed.len().saturating_sub(cap));
         let suffix = if more > 0 {
-            format!(" (and {} more)", more)
+            format!(" (and {more} more)")
         } else {
             String::new()
         };
@@ -66,5 +65,5 @@ pub fn no_valid_files_error(
             suffix
         )
     };
-    anyhow!("{}", msg)
+    anyhow!("{msg}")
 }

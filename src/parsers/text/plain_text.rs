@@ -14,7 +14,7 @@ use rayon::prelude::*;
 use std::collections::BTreeMap;
 
 /// Filter segments before n-gram extraction and template grouping: keep only those that
-/// look like sentences (min words, alphanumeric, min length or min_words_alt). Drops
+/// look like sentences (min words, alphanumeric, min length or `min_words_alt`). Drops
 /// fragments so n-grams and templates are built from sentence-like text only. Mutates in place.
 fn filter_sentences_before_ngrams(sentences: &mut Vec<String>, config: &RuntimeConfig) {
     let before_filter = sentences.len();
@@ -22,7 +22,7 @@ fn filter_sentences_before_ngrams(sentences: &mut Vec<String>, config: &RuntimeC
         let trimmed = s.trim();
         let word_count = trimmed.split_whitespace().count();
         word_count >= config.min_sentence_words
-            && trimmed.chars().any(|c| c.is_alphanumeric())
+            && trimmed.chars().any(char::is_alphanumeric)
             && (trimmed.len() >= config.min_sentence_length
                 || word_count >= config.min_sentence_words_alt)
     });
@@ -45,7 +45,7 @@ fn precompute_sentence_tokens(sentences: &[String], config: &RuntimeConfig) -> V
         .par_iter_adaptive(config)
         .map(|s| {
             s.split_whitespace()
-                .map(|t| t.to_string())
+                .map(std::string::ToString::to_string)
                 .collect::<Vec<String>>()
         })
         .collect();
@@ -56,7 +56,7 @@ fn precompute_sentence_tokens(sentences: &[String], config: &RuntimeConfig) -> V
     sentence_tokens
 }
 
-/// Group sentences by exact pattern (parallel). Fills template_groups: pattern → list of sentences.
+/// Group sentences by exact pattern (parallel). Fills `template_groups`: pattern → list of sentences.
 /// Uses n-gram/text pattern only; pivot is kept for SVO/writing footprint, not for grouping.
 fn group_sentences_by_pattern(
     sentences: &[String],
@@ -70,14 +70,14 @@ fn group_sentences_by_pattern(
         .par_iter_adaptive(config)
         .zip(sentence_tokens.par_iter_adaptive(config))
         .for_each(|(sentence, tokens)| {
-            let token_refs: Vec<&str> = tokens.iter().map(|s| s.as_str()).collect();
+            let token_refs: Vec<&str> = tokens.iter().map(std::string::String::as_str).collect();
             let pattern =
                 ngrams::build_text_pattern(&token_refs, frequent_ngrams, frequent_phrases, config);
 
             template_groups
                 .entry(pattern)
                 .or_default()
-                .push(sentence.to_string());
+                .push(sentence.clone());
         });
     debug!(
         "Template grouping (exact pattern grouping): {} sentences in {} pattern groups (each pattern → list of sentences)",
@@ -86,9 +86,9 @@ fn group_sentences_by_pattern(
     );
 }
 
-/// Convert template_groups (pattern → sentences) into Vec<Template>. Keeps only groups with
-/// count >= min_template_count and count >= 2 (never show templates with only one sentence).
-/// Skips patterns longer than avg_sentence_length * 2; adds examples and entropy.
+/// Convert `template_groups` (pattern → sentences) into Vec<Template>. Keeps only groups with
+/// count >= `min_template_count` and count >= 2 (never show templates with only one sentence).
+/// Skips patterns longer than `avg_sentence_length` * 2; adds examples and entropy.
 fn build_templates_from_groups(
     template_groups: &DashMap<String, Vec<String>>,
     min_template_count: usize,
@@ -149,7 +149,7 @@ fn build_templates_from_groups(
 
             let enriched_pattern =
                 if entropy > config.min_entropy_display && entropy < config.max_entropy_display {
-                    format!("{} [entropy={:.2}]", pattern, entropy)
+                    format!("{pattern} [entropy={entropy:.2}]")
                 } else {
                     pattern
                 };
@@ -173,6 +173,10 @@ fn build_templates_from_groups(
 
 /// Extract templates from text files using sentence-level analysis
 /// For long-form text, works at sentence level rather than line-by-line
+///
+/// # Errors
+///
+/// Currently always returns [`Ok`].
 pub fn extract_text_templates(
     content: &str,
     stats: &ParseResult,
@@ -242,22 +246,22 @@ pub fn extract_text_templates(
     let min_template_count =
         (total_sentences_after_filter as f64 * config.text_threshold).max(2.0) as usize;
 
-    debug!("Min template count: {}", min_template_count);
+    debug!("Min template count: {min_template_count}");
 
     // Calculate average sentence length for compression check
     // Process in parallel with adaptive chunking
-    let avg_sentence_length: usize = if !sentences.is_empty() {
+    let avg_sentence_length: usize = if sentences.is_empty() {
+        0
+    } else {
         sentences
             .as_slice()
             .par_iter_adaptive(config)
             .map(|s| s.split_whitespace().count())
             .sum::<usize>()
             / sentences.len()
-    } else {
-        0
     };
 
-    debug!("Average sentence length: {}", avg_sentence_length);
+    debug!("Average sentence length: {avg_sentence_length}");
 
     let mut templates = build_templates_from_groups(
         &template_groups,

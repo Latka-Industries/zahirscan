@@ -1,4 +1,4 @@
-//! SQLite metadata structures
+//! `SQLite` metadata structures
 
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
@@ -7,12 +7,12 @@ use crate::results::MinimalFallback;
 
 use super::{BlobStats, BooleanStats, DateStats, NumericStats, TextStats};
 
-/// Column information for SQLite tables
+/// Column information for `SQLite` tables
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ColumnInfo {
     /// Column name
     pub name: String,
-    /// SQLite type (INTEGER, TEXT, REAL, BLOB, NULL)
+    /// `SQLite` type (INTEGER, TEXT, REAL, BLOB, NULL)
     pub type_name: Option<String>,
     /// NOT NULL constraint
     pub not_null: Option<bool>,
@@ -85,7 +85,7 @@ pub struct IndexInfo {
     pub unique: Option<bool>,
 }
 
-/// Table information for SQLite databases
+/// Table information for `SQLite` databases
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct TableInfo {
     /// Table name
@@ -124,14 +124,14 @@ impl Serialize for TableInfo {
     }
 }
 
-/// SQLite database metadata (Mode 2 only, for SQLite files)
+/// `SQLite` database metadata (Mode 2 only, for `SQLite` files)
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct SqliteMetadata {
     /// Database file size in bytes
     pub file_size: Option<usize>,
-    /// SQLite page size
+    /// `SQLite` page size
     pub page_size: Option<usize>,
-    /// SQLite version string
+    /// `SQLite` version string
     pub sqlite_version: Option<String>,
     /// Database encoding (UTF-8, UTF-16, etc.)
     pub encoding: Option<String>,

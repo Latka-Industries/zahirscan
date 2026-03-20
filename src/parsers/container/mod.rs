@@ -7,7 +7,11 @@ use memmap2::Mmap;
 pub mod archive;
 pub mod zip;
 
-/// Dispatch by file type; fills zip_metadata or archive_metadata and returns templates.
+/// Dispatch by file type; fills `zip_metadata` or `archive_metadata` and returns templates.
+///
+/// # Errors
+///
+/// Propagates errors from [`zip::extract_zip_metadata`] or [`archive::extract_archive_metadata`], or their template helpers.
 pub fn process(
     stats: &mut ParseResult,
     mmap: &Mmap,

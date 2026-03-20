@@ -26,15 +26,19 @@ impl ZipOmit {
 }
 
 /// Extract ZIP metadata from archive bytes.
-/// Excludes entries via ZipOmit path prefixes (e.g. __MACOSX/) and `[filter]` (should_ignore_path:
-/// .DS_Store, Thumbs.db, desktop.ini, ehthumbs.db, *.swp, *~, ~$*, hidden files, etc.).
+/// Excludes entries via `ZipOmit` path prefixes (e.g. __MACOSX/) and `[filter]` (`should_ignore_path`:
+/// .`DS_Store`, Thumbs.db, desktop.ini, ehthumbs.db, *.swp, *~, ~$*, hidden files, etc.).
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when the bytes are not a valid ZIP archive or an entry cannot be read.
 pub fn extract_zip_metadata(
     content: &[u8],
     stats: &ParseResult,
     config: &RuntimeConfig,
 ) -> Result<ZipMetadata> {
     let mut archive = ZipArchive::new(Cursor::new(content))
-        .map_err(|e| anyhow::anyhow!("ZIP parse error: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("ZIP parse error: {e}"))?;
 
     let mut entries = Vec::new();
     let mut total_uncompressed: u64 = 0;
@@ -44,7 +48,7 @@ pub fn extract_zip_metadata(
     for i in 0..archive.len() {
         let entry = archive
             .by_index(i)
-            .map_err(|e| anyhow::anyhow!("ZIP entry {}: {}", i, e))?;
+            .map_err(|e| anyhow::anyhow!("ZIP entry {i}: {e}"))?;
         let path = entry.name().to_string();
         if ZipOmit::should_ignore_path_prefix(&path) || should_ignore_path(&path, config) {
             continue;
@@ -62,7 +66,7 @@ pub fn extract_zip_metadata(
             .to_string();
         *entry_type_counts.entry(detected_type.clone()).or_insert(0) += 1;
 
-        let modified = entry.last_modified().map(|dt| format!("{}", dt));
+        let modified = entry.last_modified().map(|dt| format!("{dt}"));
         let compression_method = format!("{:?}", entry.compression());
 
         entries.push(ZipEntry {

@@ -3,6 +3,7 @@
 mod adaptive_chunking;
 mod code_metadata;
 mod csv_metadata;
+mod file_type_metadata;
 mod filename_sanitization;
 mod image_metadata;
 mod jpeg_subsampling;

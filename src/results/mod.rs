@@ -15,12 +15,13 @@ pub use writing::*;
 /// Trait for metadata types that can create a minimal fallback
 pub trait MinimalFallback {
     /// Create minimal fallback metadata when extraction fails
-    /// Only sets the file size (stream_size), all other fields are None/0
+    /// Only sets the file size (`stream_size`), all other fields are None/0
     fn minimal_fallback(file_size_bytes: usize) -> Self;
 }
 
 /// Helper function to create minimal fallback metadata
 /// This simplifies calls from outside the results module
+#[must_use]
 pub fn create_minimal_fallback<T: MinimalFallback>(file_size_bytes: usize) -> T {
     T::minimal_fallback(file_size_bytes)
 }
@@ -40,7 +41,7 @@ macro_rules! serialize_optional {
     };
 }
 
-/// Macro to implement MinimalFallback trait for metadata types
+/// Macro to implement `MinimalFallback` trait for metadata types
 ///
 /// Usage:
 /// - `impl_minimal_fallback!(TypeName)` - for types with `stream_size: Option<usize>`

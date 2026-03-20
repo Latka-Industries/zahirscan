@@ -86,7 +86,7 @@ pub struct VideoMetadata {
     pub audio_stream_size: Option<u64>,
     /// File size in bytes (total)
     pub stream_size: Option<usize>,
-    /// Encoded library/software (e.g., "x264", "HandBrake")
+    /// Encoded library/software (e.g., "x264", "`HandBrake`")
     pub encoded_library: Option<String>,
 }
 

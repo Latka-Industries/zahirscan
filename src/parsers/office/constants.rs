@@ -11,7 +11,7 @@ pub struct CoreProperty<M> {
     pub setter: fn(&mut M, String),
 }
 
-/// Core properties for DOCX (DocumentMetadata). Used by docx::extract_core_properties.
+/// Core properties for DOCX (`DocumentMetadata`). Used by `docx::extract_core_properties`.
 pub const DOCX_CORE_PROPERTIES: &[CoreProperty<DocumentMetadata>] = &[
     CoreProperty {
         element: b"title",
@@ -50,7 +50,7 @@ pub const DOCX_CORE_PROPERTIES: &[CoreProperty<DocumentMetadata>] = &[
     },
 ];
 
-/// Core properties for PPTX (PptxMetadata). Subset of DOCX: title, author, created, modified.
+/// Core properties for PPTX (`PptxMetadata`). Subset of DOCX: title, author, created, modified.
 pub const PPTX_CORE_PROPERTIES: &[CoreProperty<PptxMetadata>] = &[
     CoreProperty {
         element: b"title",

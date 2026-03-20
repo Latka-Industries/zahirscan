@@ -21,10 +21,7 @@ pub(crate) fn open_office_archive<'a>(
 ) -> Result<ZipArchive<Cursor<&'a [u8]>>, zip::result::ZipError> {
     let cursor = Cursor::new(content);
     ZipArchive::new(cursor).map_err(|e| {
-        warn!(
-            "Failed to open Office file as ZIP archive {}: {:?}",
-            file_path, e
-        );
+        warn!("Failed to open Office file as ZIP archive {file_path}: {e:?}");
         e
     })
 }
@@ -71,17 +68,11 @@ pub(crate) fn read_xml_from_archive<F>(
             if file.read_to_string(&mut xml_content).is_ok() {
                 extractor(&xml_content);
             } else {
-                warn!(
-                    "Failed to read {} from {} {}",
-                    file_path, file_type, stats_file_path
-                );
+                warn!("Failed to read {file_path} from {file_type} {stats_file_path}");
             }
         }
         Err(e) => {
-            warn!(
-                "{} not found in {} {}: {:?}",
-                file_path, file_type, stats_file_path, e
-            );
+            warn!("{file_path} not found in {file_type} {stats_file_path}: {e:?}");
         }
     }
 }

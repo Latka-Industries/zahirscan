@@ -4,34 +4,34 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 
+use calamine::{Reader, Xlsx, open_workbook};
+use log::warn;
+use quick_xml::Reader as XmlReader;
+use quick_xml::events::Event;
+
 use super::constants::{
     CP_NAMESPACE, DOCX_CORE_PROPERTIES, OFFICE_CORE_XML, REVISION_ELEMENT, XLSX_APP_XML,
     XLSX_ATTR_NAME, XLSX_LPSTR, XLSX_SHEET, XLSX_WORKBOOK_XML,
 };
 use super::utils::{has_namespace, open_office_archive, read_xml_from_archive};
+
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::DocumentMetadata;
-use anyhow::Result;
-use calamine::{Reader, Xlsx, open_workbook};
-use log::warn;
-use quick_xml::Reader as XmlReader;
-use quick_xml::events::Event;
 
 /// Extract XLSX metadata
 pub fn extract_xlsx_metadata(
     content: &[u8],
     stats: &ParseResult,
     _config: &RuntimeConfig,
-) -> Result<DocumentMetadata> {
+) -> DocumentMetadata {
     let mut metadata = DocumentMetadata {
         file_size: Some(stats.byte_count),
         ..Default::default()
     };
 
-    let mut archive = match open_office_archive(content, &stats.file_path) {
-        Ok(arch) => arch,
-        Err(_) => return Ok(metadata),
+    let Ok(mut archive) = open_office_archive(content, &stats.file_path) else {
+        return metadata;
     };
 
     read_xml_from_archive(
@@ -58,19 +58,19 @@ pub fn extract_xlsx_metadata(
         |xml| extract_sheet_info(xml, &mut metadata),
     );
 
-    extract_row_column_counts(&stats.file_path, &mut metadata)?;
+    extract_row_column_counts(&stats.file_path, &mut metadata);
 
-    Ok(metadata)
+    metadata
 }
 
 /// Extract row and column counts from XLSX workbook.xml
 /// Returns sheet names and row/column counts for each sheet
-fn extract_row_column_counts(file_path: &str, metadata: &mut DocumentMetadata) -> Result<()> {
+fn extract_row_column_counts(file_path: &str, metadata: &mut DocumentMetadata) {
     let mut workbook: Xlsx<BufReader<File>> = match open_workbook(file_path) {
         Ok(wb) => wb,
         Err(e) => {
-            warn!("Failed to open XLSX with calamine: {:?}", e);
-            return Ok(());
+            warn!("Failed to open XLSX with calamine: {e:?}");
+            return;
         }
     };
 
@@ -90,8 +90,6 @@ fn extract_row_column_counts(file_path: &str, metadata: &mut DocumentMetadata) -
     if !sheet_stats.is_empty() {
         metadata.sheet_stats = Some(serde_json::to_value(&sheet_stats).unwrap_or_default());
     }
-
-    Ok(())
 }
 
 /// Process a core property from XLSX core properties XML
@@ -143,7 +141,7 @@ fn extract_core_properties(xml: &str, metadata: &mut DocumentMetadata) {
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                warn!("Error parsing XLSX core properties XML: {:?}", e);
+                warn!("Error parsing XLSX core properties XML: {e:?}");
                 break;
             }
             _ => {}
@@ -189,7 +187,7 @@ fn extract_app_properties(xml: &str, metadata: &mut DocumentMetadata) {
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                warn!("Error parsing XLSX app properties XML: {:?}", e);
+                warn!("Error parsing XLSX app properties XML: {e:?}");
                 break;
             }
             _ => {}
@@ -213,7 +211,7 @@ fn extract_sheet_info(xml: &str, metadata: &mut DocumentMetadata) {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+            Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
                 let name = e.name().as_ref().to_vec();
                 if name.ends_with(XLSX_SHEET) {
                     for attr in e.attributes().flatten() {
@@ -227,7 +225,7 @@ fn extract_sheet_info(xml: &str, metadata: &mut DocumentMetadata) {
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                warn!("Error parsing XLSX workbook XML: {:?}", e);
+                warn!("Error parsing XLSX workbook XML: {e:?}");
                 break;
             }
             _ => {}

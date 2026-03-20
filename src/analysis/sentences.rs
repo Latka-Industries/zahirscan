@@ -19,15 +19,42 @@ pub trait SentenceAnalyzer {
     fn extract_sentence_patterns(sentences: &[String], config: &RuntimeConfig) -> Vec<String>;
 }
 
+/// Dominant `?` vs `!` emphasis when both may appear in the string (last occurrence wins).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SentenceEmphasis {
+    /// No `?` or `!` in the sentence
+    None,
+    /// Last among `?` / `!` is `?` (or only `?` present)
+    Question,
+    /// Last among `?` / `!` is `!` (or only `!` present)
+    Exclamation,
+}
+
 /// Statistics about a sentence's structure
 #[derive(Debug, Clone)]
 pub struct SentenceStats {
     pub word_count: usize,
     pub char_count: usize,
     pub has_quotes: bool,
-    pub has_question: bool,
-    pub has_exclamation: bool,
+    pub emphasis: SentenceEmphasis,
     pub ends_with_period: bool,
+}
+
+fn sentence_emphasis(sentence: &str) -> SentenceEmphasis {
+    let last_q = sentence.rfind(Punctuation::QUESTION);
+    let last_e = sentence.rfind(Punctuation::EXCLAMATION);
+    match (last_q, last_e) {
+        (Some(q), Some(e)) => {
+            if q > e {
+                SentenceEmphasis::Question
+            } else {
+                SentenceEmphasis::Exclamation
+            }
+        }
+        (Some(_), None) => SentenceEmphasis::Question,
+        (None, Some(_)) => SentenceEmphasis::Exclamation,
+        (None, None) => SentenceEmphasis::None,
+    }
 }
 
 impl SentenceStats {
@@ -37,14 +64,13 @@ impl SentenceStats {
             word_count: words.len(),
             char_count: sentence.chars().count(),
             has_quotes: sentence.contains(Punctuation::is_quote),
-            has_question: sentence.contains(Punctuation::QUESTION),
-            has_exclamation: sentence.contains(Punctuation::EXCLAMATION),
+            emphasis: sentence_emphasis(sentence),
             ends_with_period: sentence.trim_end().ends_with(Punctuation::PERIOD),
         }
     }
 }
 
-/// Default implementation of SentenceAnalyzer
+/// Default implementation of `SentenceAnalyzer`
 pub struct DefaultSentenceAnalyzer;
 
 impl SentenceAnalyzer for DefaultSentenceAnalyzer {
@@ -56,8 +82,8 @@ impl SentenceAnalyzer for DefaultSentenceAnalyzer {
     fn extract_sentences(text: &str) -> Vec<String> {
         let normalized = text
             .lines()
-            .map(|line| line.trim())
-            .filter(|line| !line.is_empty() && line.chars().any(|c| c.is_alphanumeric()))
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && line.chars().any(char::is_alphanumeric))
             .collect::<Vec<_>>()
             .join(" ");
 
@@ -123,14 +149,10 @@ impl SentenceAnalyzer for DefaultSentenceAnalyzer {
                 }
 
                 let should_split = match next_char {
-                    // End of text - definitely split
-                    None => true,
                     // Lowercase after punctuation - likely abbreviation, don't split
                     Some(c) if c.is_lowercase() => false,
                     // Whitespace - check what comes after whitespace
-                    Some(Punctuation::SPACE)
-                    | Some(Punctuation::NEWLINE)
-                    | Some(Punctuation::TAB) => {
+                    Some(Punctuation::SPACE | Punctuation::NEWLINE | Punctuation::TAB) => {
                         // Look further ahead for the next non-whitespace character
                         let mut j = next_char_idx + 1;
                         while j < chars.len() && chars[j].is_whitespace() {
@@ -182,8 +204,8 @@ impl SentenceAnalyzer for DefaultSentenceAnalyzer {
         for sentence in sentences {
             let stats = Self::analyze_sentence_structure(sentence);
             let pattern = format!(
-                "[SENTENCE:words={},quotes={},question={},exclamation={}]",
-                stats.word_count, stats.has_quotes, stats.has_question, stats.has_exclamation
+                "[SENTENCE:words={},quotes={},emphasis={:?}]",
+                stats.word_count, stats.has_quotes, stats.emphasis
             );
             pattern_freq
                 .entry(pattern)

@@ -27,10 +27,10 @@ fn value_to_yaml_type_info(v: &Value) -> YamlTypeInfo {
         }
         Value::String(_) => YamlTypeInfo::Scalar("string".to_string()),
         Value::Sequence(seq) => {
-            let element = seq
-                .first()
-                .map(value_to_yaml_type_info)
-                .unwrap_or_else(|| YamlTypeInfo::Scalar("unknown".to_string()));
+            let element = seq.first().map_or_else(
+                || YamlTypeInfo::Scalar("unknown".to_string()),
+                value_to_yaml_type_info,
+            );
             YamlTypeInfo::Sequence(Box::new(element))
         }
         Value::Mapping(map) => {
@@ -81,7 +81,7 @@ fn walk(
         Value::Mapping(map) => {
             *map_count += 1;
             *key_count += map.len();
-            for (k, val) in map.iter() {
+            for (k, val) in map {
                 walk(
                     k,
                     depth + 1,
@@ -117,13 +117,17 @@ fn walk(
 }
 
 /// Extract YAML metadata from document content.
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when the content is not valid YAML.
 pub fn extract_yaml_metadata(
     content: &[u8],
     stats: &ParseResult,
     _config: &RuntimeConfig,
 ) -> Result<YamlMetadata> {
-    let value: Value = serde_norway::from_slice(content)
-        .map_err(|e| anyhow::anyhow!("YAML parse error: {}", e))?;
+    let value: Value =
+        serde_norway::from_slice(content).map_err(|e| anyhow::anyhow!("YAML parse error: {e}"))?;
 
     let mut key_count = 0;
     let mut scalar_count = 0;

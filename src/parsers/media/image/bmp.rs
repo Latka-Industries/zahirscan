@@ -28,7 +28,7 @@ pub fn extract_compression(bmp_data: &[u8]) -> Option<String> {
         c if c == BMP_COMPRESSION_BITFIELDS => Some("Bitfields".to_string()),
         c if c == BMP_COMPRESSION_JPEG => Some("JPEG".to_string()),
         c if c == BMP_COMPRESSION_PNG => Some("PNG".to_string()),
-        _ => Some(format!("Unknown ({})", compression)),
+        _ => Some(format!("Unknown ({compression})")),
     }
 }
 
@@ -69,6 +69,6 @@ pub fn extract_color_type(bmp_data: &[u8]) -> Option<String> {
         16 => Some(COLOR_TYPE_RGB16.to_string()), // Usually 5-6-5 format
         24 => Some(COLOR_TYPE_RGB8.to_string()),  // 24-bit RGB
         32 => Some(COLOR_TYPE_RGBA8.to_string()), // 32-bit RGBA
-        _ => Some(format!("Unknown({})", bit_depth)),
+        _ => Some(format!("Unknown({bit_depth})")),
     }
 }

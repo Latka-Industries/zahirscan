@@ -40,7 +40,7 @@ pub trait FormatMetadata {
 impl FormatMetadata for ImageFormat {
     fn extract_compression(&self, data: &[u8]) -> Option<String> {
         match self {
-            ImageFormat::Jpeg => jpeg::extract_compression(data),
+            ImageFormat::Jpeg => Some(jpeg::extract_compression(data)),
             ImageFormat::Png => png::extract_compression(data),
             ImageFormat::Gif => gif::extract_compression(data),
             ImageFormat::WebP => webp::extract_compression(data),
@@ -62,8 +62,8 @@ impl FormatMetadata for ImageFormat {
             ImageFormat::Png => png::extract_bit_depth(data),
             ImageFormat::Bmp => bmp::extract_bit_depth(data),
             ImageFormat::Tiff => tiff::extract_bit_depth(data),
-            ImageFormat::Gif => Some(8),  // GIF is always 8-bit
-            ImageFormat::WebP => Some(8), // WebP is typically 8-bit
+            // GIF and WebP are 8-bit (WebP is typically 8-bit)
+            ImageFormat::Gif | ImageFormat::WebP => Some(8),
         }
     }
 
@@ -74,13 +74,13 @@ impl FormatMetadata for ImageFormat {
             ImageFormat::Gif => gif::extract_color_type(data),
             ImageFormat::Bmp => bmp::extract_color_type(data),
             ImageFormat::WebP => webp::extract_color_type(data),
-            ImageFormat::Tiff => tiff::extract_color_type(data),
+            ImageFormat::Tiff => Some(tiff::extract_color_type(data)),
         }
     }
 }
 
-/// Extension to ImageFormat mapping
-/// Only includes formats that have ImageFormat enum variants
+/// Extension to `ImageFormat` mapping
+/// Only includes formats that have `ImageFormat` enum variants
 const IMAGE_FORMAT_MAP: &[(&str, ImageFormat)] = &[
     ("jpeg", ImageFormat::Jpeg),
     ("jpg", ImageFormat::Jpeg),
@@ -92,8 +92,9 @@ const IMAGE_FORMAT_MAP: &[(&str, ImageFormat)] = &[
     ("tif", ImageFormat::Tiff),
 ];
 
-/// Convert format string to ImageFormat enum
+/// Convert format string to `ImageFormat` enum
 /// Verifies format against extension map from tools.rs for consistency
+#[must_use]
 pub fn format_from_string(format_str: &str) -> Option<ImageFormat> {
     let format_lower = format_str.to_lowercase();
     let image_extensions = get_extensions_for_file_type(FileType::Image);

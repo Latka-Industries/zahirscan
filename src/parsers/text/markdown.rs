@@ -93,6 +93,10 @@ enum MarkdownElement {
 }
 
 /// Extract templates from markdown files with structure awareness
+///
+/// # Errors
+///
+/// Currently always returns [`Ok`].
 pub fn extract_markdown_templates(
     content: &str,
     stats: &ParseResult,
@@ -124,8 +128,9 @@ pub fn extract_markdown_templates(
         .as_slice()
         .par_iter_adaptive(config)
         .filter_map(|elem| match elem {
-            MarkdownElement::Paragraph { text } => Some(text.clone()),
-            MarkdownElement::BlockQuote { text } => Some(text.clone()),
+            MarkdownElement::Paragraph { text } | MarkdownElement::BlockQuote { text } => {
+                Some(text.clone())
+            }
             _ => None,
         })
         .flat_map(|text| DefaultSentenceAnalyzer::extract_sentences(&text))
@@ -185,9 +190,9 @@ fn parse_markdown_structure(content: &str) -> Vec<MarkdownElement> {
 
 /// Result of attempting to parse a markdown element
 enum ElementParseResult {
-    /// Single element parsed, advance to next_idx
+    /// Single element parsed, advance to `next_idx`
     Single(MarkdownElement, usize),
-    /// Multiple elements parsed (e.g., list items), advance to next_idx
+    /// Multiple elements parsed (e.g., list items), advance to `next_idx`
     Multiple(Vec<MarkdownElement>, usize),
     /// No element matched, advance by 1
     None,
@@ -399,7 +404,7 @@ fn parse_paragraph(
     }
 }
 
-/// Increment frequency counter for a pattern in DashMap
+/// Increment frequency counter for a pattern in `DashMap`
 #[inline]
 fn increment_pattern_freq(pattern_freq: &DashMap<String, usize>, pattern: String) {
     pattern_freq
@@ -420,12 +425,12 @@ fn element_to_pattern(elem: &MarkdownElement) -> Option<String> {
             let list_type = if *ordered { "ordered" } else { "unordered" };
             let base_pattern =
                 format_placeholder_bracketed_typed(PlaceholderType::List, word_count);
-            Some(format!("{}:type={}", base_pattern, list_type))
+            Some(format!("{base_pattern}:type={list_type}"))
         }
         MarkdownElement::CodeBlock { language, .. } => {
             let lang_str = language.as_deref().unwrap_or("unknown");
             let base_pattern = format_placeholder_bracketed_typed(PlaceholderType::CodeBlock, 0);
-            Some(format!("{}:lang={}", base_pattern, lang_str))
+            Some(format!("{base_pattern}:lang={lang_str}"))
         }
         _ => None,
     }
@@ -481,7 +486,7 @@ fn build_markdown_templates(
                 // Use type-safe placeholder for list, with metadata suffix
                 let base_pattern =
                     format_placeholder_bracketed_typed(PlaceholderType::List, word_count);
-                Some(format!("{}:type={}", base_pattern, list_type))
+                Some(format!("{base_pattern}:type={list_type}"))
             }
             MarkdownElement::Paragraph { text } => {
                 // Use sentence patterns for paragraphs
@@ -501,7 +506,7 @@ fn build_markdown_templates(
     });
 
     // Convert groups to templates
-    for entry in element_groups.iter() {
+    for entry in &element_groups {
         let pattern = entry.key().clone();
         let matching_elements = entry.value();
 

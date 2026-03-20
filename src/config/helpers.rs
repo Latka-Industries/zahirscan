@@ -22,14 +22,16 @@ pub(crate) fn deep_merge_toml(base: TomlValue, overlay: TomlValue) -> TomlValue 
 // Helpers (used by core.rs)
 // -----------------------------------------------------------------------------
 
+/// Converts `u64` from TOML to `usize`, saturating on 32-bit targets if the value does not fit.
 #[inline]
 pub(crate) fn u64_to_usize_min(value: u64, min: u64) -> usize {
-    value.max(min) as usize
+    usize::try_from(value.max(min)).unwrap_or(usize::MAX)
 }
 
+/// Converts `u64` from TOML to `usize`, saturating on 32-bit targets if the value does not fit.
 #[inline]
 pub(crate) fn u64_to_usize(value: u64) -> usize {
-    value as usize
+    usize::try_from(value).unwrap_or(usize::MAX)
 }
 
 #[inline]

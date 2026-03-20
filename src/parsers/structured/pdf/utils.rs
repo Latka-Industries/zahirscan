@@ -19,16 +19,16 @@ fn extract_date_string_from_debug(debug_str: &str) -> &str {
 }
 
 /// Extract and format a PDF date to ISO 8601 format
-/// Takes a pdf::primitive::Date reference and returns Option<String> with ISO 8601 date
+/// Takes a `pdf::primitive::Date` reference and returns Option<String> with ISO 8601 date
 pub(crate) fn extract_pdf_date_to_iso8601(date: &pdf::primitive::Date) -> Option<String> {
-    let debug_str = format!("{:?}", date);
+    let debug_str = format!("{date:?}");
     let date_str = extract_date_string_from_debug(&debug_str);
     format_pdf_date(date_str)
 }
 
-/// Extract PdfString to String, converting None to None
+/// Extract `PdfString` to String, converting None to None
 pub(crate) fn extract_text_str(text_str: Option<&pdf::primitive::PdfString>) -> Option<String> {
-    text_str.map(|t| t.to_string_lossy())
+    text_str.map(pdf::primitive::PdfString::to_string_lossy)
 }
 
 /// Extract and validate a date component from a PDF date string
@@ -94,7 +94,7 @@ fn parse_pdf_timezone(tz_str: &str) -> String {
         TIMEZONE_HOUR_MIN
     };
 
-    format!("{}{}:{}", tz_char, tz_hour, tz_min)
+    format!("{tz_char}{tz_hour}:{tz_min}")
 }
 
 /// Format PDF date string to ISO 8601 format
@@ -127,12 +127,10 @@ pub(crate) fn format_pdf_date(date_str: &str) -> Option<String> {
     // Example: +05'30 or -08'00
     let timezone = date_str
         .get(14..)
-        .map(parse_pdf_timezone)
-        .unwrap_or_else(|| TIMEZONE_UTC.to_string());
+        .map_or_else(|| TIMEZONE_UTC.to_string(), parse_pdf_timezone);
 
     // Format as ISO 8601: YYYY-MM-DDTHH:MM:SS+HH:MM
     Some(format!(
-        "{}-{}-{}T{}:{}:{}{}",
-        year, month, day, hour, minute, second, timezone
+        "{year}-{month}-{day}T{hour}:{minute}:{second}{timezone}"
     ))
 }

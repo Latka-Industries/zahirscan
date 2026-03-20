@@ -41,10 +41,10 @@ pub struct ZipMetadata {
     /// Total uncompressed size in bytes (sum of all entry sizes)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_uncompressed: Option<u64>,
-    /// Total compressed size in bytes (sum of compressed_size of entries)
+    /// Total compressed size in bytes (sum of `compressed_size` of entries)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_compressed: Option<u64>,
-    /// Count of entries by detected_type (e.g. {"Pdf": 42, "Image": 1})
+    /// Count of entries by `detected_type` (e.g. {"Pdf": 42, "Image": 1})
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry_type_counts: Option<BTreeMap<String, usize>>,
     /// Archive comment if present

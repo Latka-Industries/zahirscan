@@ -23,7 +23,7 @@ pub enum BitrateMode {
 pub enum CompressionMode {
     /// Lossy compression (e.g., MP3, AAC, Opus)
     Lossy,
-    /// Lossless compression (e.g., FLAC, ALAC, WavPack)
+    /// Lossless compression (e.g., FLAC, ALAC, `WavPack`)
     Lossless,
 }
 
@@ -56,10 +56,12 @@ pub fn find_stream_by_type<'a>(probe_result: &'a FfProbe, codec_type: &str) -> O
         .find(|s| s.codec_type.as_deref() == Some(codec_type))
 }
 
-/// Extract audio stream metadata (codec, channels, sample_rate, bitrate)
+/// Extract audio stream metadata (codec, channels, `sample_rate`, bitrate)
 pub fn extract_audio_stream_metadata(audio_stream: Option<&Stream>) -> AudioStreamMetadata {
     let codec = audio_stream.and_then(|s| s.codec_name.clone());
-    let channels = audio_stream.and_then(|s| s.channels).map(|c| c as u32);
+    let channels = audio_stream
+        .and_then(|s| s.channels)
+        .and_then(|c| u32::try_from(c).ok());
     let channel_layout = audio_stream.and_then(|s| s.channel_layout.clone());
     let sample_rate = audio_stream
         .and_then(|s| s.sample_rate.as_ref())
@@ -76,14 +78,28 @@ pub fn extract_audio_stream_metadata(audio_stream: Option<&Stream>) -> AudioStre
     }
 }
 
-/// Calculate stream size from bitrate and duration
+/// Calculate stream size from bitrate and duration (bits × seconds → bytes; saturates to [`u64::MAX`]).
 pub fn calculate_stream_size(bitrate: Option<u64>, duration_seconds: Option<f64>) -> Option<u64> {
-    bitrate
-        .zip(duration_seconds)
-        .map(|(br, dur)| (br as f64 * dur / 8.0) as u64) // Convert bits to bytes
+    bitrate.zip(duration_seconds).map(|(br, dur)| {
+        let bytes = br as f64 * dur / 8.0;
+        if !bytes.is_finite() || bytes <= 0.0 {
+            0u64
+        } else {
+            let cap = u64::MAX as f64;
+            if bytes >= cap {
+                u64::MAX
+            } else {
+                // Fractional bytes truncated; value already clamped to `u64` range.
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    bytes as u64
+                }
+            }
+        }
+    })
 }
 
-/// Extract encoded_library from stream tags, with fallback to format-level tags
+/// Extract `encoded_library` from stream tags, with fallback to format-level tags
 pub fn extract_encoded_library(stream: Option<&Stream>, probe_result: &FfProbe) -> Option<String> {
     stream
         .and_then(|s| s.tags.as_ref())
@@ -105,7 +121,7 @@ pub fn extract_language(stream: Option<&Stream>) -> Option<String> {
         .and_then(|tags| tags.language.clone())
 }
 
-/// Extract creation_time from stream tags, with fallback to format-level tags
+/// Extract `creation_time` from stream tags, with fallback to format-level tags
 pub fn extract_creation_time(stream: Option<&Stream>, probe_result: &FfProbe) -> Option<String> {
     stream
         .and_then(|s| s.tags.as_ref())
@@ -134,7 +150,9 @@ pub fn extract_stream_bitrate(stream: Option<&Stream>) -> Option<u64> {
 
 /// Extract bit depth (bits per sample) from stream
 pub fn extract_stream_bit_depth(stream: Option<&Stream>) -> Option<u32> {
-    stream.and_then(|s| s.bits_per_sample).map(|b| b as u32)
+    stream
+        .and_then(|s| s.bits_per_sample)
+        .and_then(|b| u32::try_from(b).ok())
 }
 
 /// Extract bitrate mode (CBR/VBR/ABR) from encoder string or codec heuristics
@@ -181,9 +199,7 @@ pub(crate) fn extract_bitrate_mode_from_metadata(
                 } else {
                     use crate::parsers::media::audio;
                     // Opus is typically VBR
-                    if audio::is_opus_codec(enc)
-                        || codec.map(|c| audio::is_opus_codec(c)).unwrap_or(false)
-                    {
+                    if audio::is_opus_codec(enc) || codec.is_some_and(|c| audio::is_opus_codec(c)) {
                         Some(BitrateMode::Vbr)
                     } else {
                         None

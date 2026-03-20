@@ -53,13 +53,63 @@ struct ZeroCopyScan {
     indentation: Option<String>,
 }
 
+/// Detect UTF-8 / UTF-16 BOM from the first 2–3 bytes.
+fn detect_bom(bytes: &[u8]) -> Option<String> {
+    if bytes.len() >= 3
+        && bytes[0] == bytes::BOM_UTF8_0
+        && bytes[1] == bytes::BOM_UTF8_1
+        && bytes[2] == bytes::BOM_UTF8_2
+    {
+        Some(utf_bom::UTF_8.to_string())
+    } else if bytes.len() >= 2
+        && bytes[0] == bytes::BOM_UTF16LE_0
+        && bytes[1] == bytes::BOM_UTF16LE_1
+    {
+        Some(utf_bom::UTF_16LE.to_string())
+    } else if bytes.len() >= 2
+        && bytes[0] == bytes::BOM_UTF16BE_0
+        && bytes[1] == bytes::BOM_UTF16BE_1
+    {
+        Some(utf_bom::UTF_16BE.to_string())
+    } else {
+        None
+    }
+}
+
+/// Dominant line-ending style label from observed newline counts.
+fn line_ending_label(lf: usize, crlf: usize, cr: usize) -> Option<String> {
+    if lf + crlf + cr == 0 {
+        return None;
+    }
+    let total = lf + crlf + cr;
+    Some(if crlf == total {
+        other_constants::CRLF.to_string()
+    } else if lf == total {
+        other_constants::LF.to_string()
+    } else if cr == total {
+        other_constants::CR.to_string()
+    } else {
+        other_constants::MIXED.to_string()
+    })
+}
+
+/// Whether the file ends with a newline (LF or CR).
+fn trailing_newline_flag(bytes: &[u8]) -> Option<bool> {
+    if bytes.is_empty() {
+        None
+    } else {
+        let last = *bytes.last().expect("non-empty");
+        Some(last == bytes::LF || last == bytes::CR)
+    }
+}
+
 /// Update max line length, blank count, and indentation when a line ends.
 fn apply_line_ending(
     line_slice: &[u8],
     current_line_len: usize,
     max_line_len: usize,
     blank_count: usize,
-    indentation: &Option<String>,
+    indentation: Option<&String>,
 ) -> (usize, usize, Option<String>) {
     let max_line_len = max_line_len.max(current_line_len);
     let (blank_count, indentation) = if current_line_len == 0
@@ -67,23 +117,22 @@ fn apply_line_ending(
             .iter()
             .all(|&b| b == bytes::SPACE || b == bytes::TAB)
     {
-        (blank_count + 1, indentation.clone())
+        (blank_count + 1, indentation.cloned())
     } else if let Some(lead) = leading_whitespace(line_slice) {
-        let indentation = match indentation.as_ref() {
+        let indentation = match indentation {
             Some(inhint) if *inhint != lead => Some(other_constants::MIXED.to_string()),
             Some(inhint) => Some(inhint.clone()),
             None => Some(lead),
         };
         (blank_count, indentation)
     } else {
-        (blank_count, indentation.clone())
+        (blank_count, indentation.cloned())
     };
     (max_line_len, blank_count, indentation)
 }
 
-/// Single pass over bytes: BOM, line endings, trailing newline, max line length, blank lines, indentation.
-fn zero_copy_scan(bytes: &[u8]) -> ZeroCopyScan {
-    let mut bom = None;
+/// Walk `bytes` and count newlines, max line length, blanks, and leading-indent style.
+fn scan_lines_and_indent(bytes: &[u8]) -> (usize, usize, usize, usize, usize, Option<String>) {
     let mut lf = 0usize;
     let mut crlf = 0usize;
     let mut cr = 0usize;
@@ -92,25 +141,6 @@ fn zero_copy_scan(bytes: &[u8]) -> ZeroCopyScan {
     let mut blank_count = 0usize;
     let mut indentation: Option<String> = None;
     let mut line_start = 0usize;
-
-    // BOM from first bytes
-    if bytes.len() >= 3
-        && bytes[0] == bytes::BOM_UTF8_0
-        && bytes[1] == bytes::BOM_UTF8_1
-        && bytes[2] == bytes::BOM_UTF8_2
-    {
-        bom = Some(utf_bom::UTF_8.to_string());
-    } else if bytes.len() >= 2
-        && bytes[0] == bytes::BOM_UTF16LE_0
-        && bytes[1] == bytes::BOM_UTF16LE_1
-    {
-        bom = Some(utf_bom::UTF_16LE.to_string());
-    } else if bytes.len() >= 2
-        && bytes[0] == bytes::BOM_UTF16BE_0
-        && bytes[1] == bytes::BOM_UTF16BE_1
-    {
-        bom = Some(utf_bom::UTF_16BE.to_string());
-    }
 
     let mut i = 0;
     while i < bytes.len() {
@@ -127,7 +157,7 @@ fn zero_copy_scan(bytes: &[u8]) -> ZeroCopyScan {
                 current_line_len,
                 max_line_len,
                 blank_count,
-                &indentation,
+                indentation.as_ref(),
             );
             max_line_len = new_max;
             blank_count = new_blank;
@@ -144,7 +174,7 @@ fn zero_copy_scan(bytes: &[u8]) -> ZeroCopyScan {
                 current_line_len,
                 max_line_len,
                 blank_count,
-                &indentation,
+                indentation.as_ref(),
             );
             max_line_len = new_max;
             blank_count = new_blank;
@@ -178,32 +208,17 @@ fn zero_copy_scan(bytes: &[u8]) -> ZeroCopyScan {
         }
     }
 
-    let line_ending = if lf + crlf + cr == 0 {
-        None
-    } else {
-        let total = lf + crlf + cr;
-        Some(if crlf == total {
-            other_constants::CRLF.to_string()
-        } else if lf == total {
-            other_constants::LF.to_string()
-        } else if cr == total {
-            other_constants::CR.to_string()
-        } else {
-            other_constants::MIXED.to_string()
-        })
-    };
+    (lf, crlf, cr, max_line_len, blank_count, indentation)
+}
 
-    let trailing_newline = if bytes.is_empty() {
-        None
-    } else {
-        let last = *bytes.last().unwrap();
-        Some(last == bytes::LF || last == bytes::CR)
-    };
-
+/// Single pass over bytes: BOM, line endings, trailing newline, max line length, blank lines, indentation.
+fn zero_copy_scan(bytes: &[u8]) -> ZeroCopyScan {
+    let bom = detect_bom(bytes);
+    let (lf, crlf, cr, max_line_len, blank_count, indentation) = scan_lines_and_indent(bytes);
     ZeroCopyScan {
         bom,
-        line_ending,
-        trailing_newline,
+        line_ending: line_ending_label(lf, crlf, cr),
+        trailing_newline: trailing_newline_flag(bytes),
         max_line_length: if max_line_len > 0 {
             Some(max_line_len)
         } else {
@@ -238,7 +253,11 @@ fn leading_whitespace(line: &[u8]) -> Option<String> {
     }
 }
 
-/// Extract code metadata: script_type (from linguist + optional shebang), byte_count, line_count, and zero-copy extras.
+/// Extract code metadata: `script_type` (from linguist + optional shebang), `byte_count`, `line_count`, and zero-copy extras.
+///
+/// # Errors
+///
+/// Currently always returns [`Ok`]; the [`Result`] type is for API consistency with other extractors.
 pub fn extract_code_metadata(
     mmap: &Mmap,
     stats: &ParseResult,
@@ -291,11 +310,10 @@ fn script_type_from_path_and_content(path: &str, mmap: &Mmap) -> String {
     linguist::disambiguate(path, content)
         .ok()
         .and_then(|v| v.into_iter().next())
-        .map(|d| d.name.to_lowercase())
-        .unwrap_or_else(|| langs[0].name.to_lowercase())
+        .map_or_else(|| langs[0].name.to_lowercase(), |d| d.name.to_lowercase())
 }
 
-/// Map shebang line to script_type (e.g. "#!/usr/bin/env python3" -> "python").
+/// Map shebang line to `script_type` (e.g. "#!/usr/bin/env python3" -> "python").
 fn script_type_from_shebang(shebang: &str) -> Option<String> {
     let rest = shebang.strip_prefix(other_constants::SHEBANG)?.trim();
     let interpreter = rest
@@ -324,6 +342,10 @@ fn script_type_from_shebang(shebang: &str) -> Option<String> {
 }
 
 /// Code files: metadata only, no template mining.
+///
+/// # Errors
+///
+/// Currently always returns [`Ok`].
 pub fn extract_code_templates(
     _content: &[u8],
     stats: &ParseResult,
@@ -333,6 +355,10 @@ pub fn extract_code_templates(
 }
 
 /// Extract metadata and templates for code/script; single file type in this module.
+///
+/// # Errors
+///
+/// Propagates errors from [`extract_code_metadata`] or [`extract_code_templates`].
 pub fn process(
     stats: &mut ParseResult,
     mmap: &Mmap,

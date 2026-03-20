@@ -7,7 +7,6 @@ use super::utils::{decode_xml_entities, has_namespace, open_office_archive};
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::DocumentMetadata;
-use anyhow::Result;
 use log::warn;
 use quick_xml::Reader;
 use quick_xml::events::Event;
@@ -17,15 +16,14 @@ pub fn extract_docx_metadata(
     content: &[u8],
     stats: &ParseResult,
     _config: &RuntimeConfig,
-) -> Result<DocumentMetadata> {
+) -> DocumentMetadata {
     let mut metadata = DocumentMetadata {
         file_size: Some(stats.byte_count),
         ..Default::default()
     };
 
-    let mut archive = match open_office_archive(content, &stats.file_path) {
-        Ok(arch) => arch,
-        Err(_) => return Ok(metadata),
+    let Ok(mut archive) = open_office_archive(content, &stats.file_path) else {
+        return metadata;
     };
 
     let document_xml = match archive.by_name("word/document.xml") {
@@ -36,7 +34,7 @@ pub fn extract_docx_metadata(
                     "Failed to read word/document.xml from DOCX {}: {:?}",
                     stats.file_path, e
                 );
-                return Ok(metadata);
+                return metadata;
             }
             xml_content
         }
@@ -45,7 +43,7 @@ pub fn extract_docx_metadata(
                 "word/document.xml not found in DOCX {}: {:?}",
                 stats.file_path, e
             );
-            return Ok(metadata);
+            return metadata;
         }
     };
 
@@ -64,7 +62,7 @@ pub fn extract_docx_metadata(
         }
     }
 
-    Ok(metadata)
+    metadata
 }
 
 /// Access core properties XML (docProps/core.xml)
@@ -120,7 +118,7 @@ fn extract_core_properties(xml: &str, metadata: &mut DocumentMetadata) {
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                warn!("Error parsing DOCX core properties XML: {:?}", e);
+                warn!("Error parsing DOCX core properties XML: {e:?}");
                 break;
             }
             _ => {}
@@ -142,7 +140,7 @@ fn extract_text_from_document_xml(xml: &str) -> (String, usize, usize, usize, us
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+            Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
                 if e.name().as_ref() == b"w:t" {
                     in_text_element = true;
                 }
@@ -163,7 +161,7 @@ fn extract_text_from_document_xml(xml: &str) -> (String, usize, usize, usize, us
             }
             Ok(Event::Eof) => break,
             Err(e) => {
-                warn!("Error parsing DOCX XML: {:?}", e);
+                warn!("Error parsing DOCX XML: {e:?}");
                 break;
             }
             _ => {}

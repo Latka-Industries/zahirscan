@@ -8,6 +8,10 @@ use anyhow::Result;
 use ffprobe::Stream;
 
 /// Extract video metadata using ffprobe
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when `ffprobe` is missing, not executable, or fails to probe the file path.
 pub fn extract_video_metadata(
     _content: &[u8],
     stats: &ParseResult,
@@ -38,10 +42,17 @@ pub fn extract_video_metadata(
 
     // Basic video properties
     let (width, height) = video_stream
-        .and_then(|s| Some((s.width? as usize, s.height? as usize)))
+        .map(|s| {
+            (
+                s.width.and_then(|w| usize::try_from(w).ok()).unwrap_or(0),
+                s.height.and_then(|h| usize::try_from(h).ok()).unwrap_or(0),
+            )
+        })
         .unwrap_or((0, 0));
-    let coded_width = video_stream.and_then(|s| s.coded_width.map(|w| w as usize));
-    let coded_height = video_stream.and_then(|s| s.coded_height.map(|h| h as usize));
+    let coded_width =
+        video_stream.and_then(|s| s.coded_width.and_then(|w| usize::try_from(w).ok()));
+    let coded_height =
+        video_stream.and_then(|s| s.coded_height.and_then(|h| usize::try_from(h).ok()));
     // has_b_frames is Option<u32> (number of B-frames), convert to bool
     let has_b_frames = video_stream
         .and_then(|s| s.has_b_frames)
@@ -56,7 +67,7 @@ pub fn extract_video_metadata(
 
     // Pixel format and color information
     let pixel_format = video_stream.and_then(|s| s.pix_fmt.clone());
-    let bit_depth = extract_bit_depth(video_stream, &pixel_format);
+    let bit_depth = extract_bit_depth(video_stream, pixel_format.as_ref());
     let color_space = video_stream.and_then(|s| s.color_space.clone());
     let chroma_subsampling = pixel_format.as_deref().and_then(extract_chroma_subsampling);
 
@@ -154,12 +165,12 @@ pub fn extract_video_metadata(
 }
 
 /// Extract bit depth from stream or derive from pixel format
-fn extract_bit_depth(stream: Option<&Stream>, pixel_format: &Option<String>) -> Option<u32> {
+fn extract_bit_depth(stream: Option<&Stream>, pixel_format: Option<&String>) -> Option<u32> {
     stream
         .and_then(|s| s.bits_per_raw_sample.as_ref())
         .and_then(|b| b.parse::<u32>().ok())
         .or_else(|| {
-            pixel_format.as_ref().and_then(|pix_fmt| {
+            pixel_format.and_then(|pix_fmt| {
                 if pix_fmt.contains("10") {
                     Some(10)
                 } else if pix_fmt.contains("12") {
@@ -168,7 +179,7 @@ fn extract_bit_depth(stream: Option<&Stream>, pixel_format: &Option<String>) -> 
                     Some(14)
                 } else if pix_fmt.contains("16") {
                     Some(16)
-                } else if !pix_fmt.contains("8") {
+                } else if !pix_fmt.contains('8') {
                     Some(8)
                 } else {
                     None
@@ -197,7 +208,7 @@ fn extract_chroma_subsampling(pix_fmt: &str) -> Option<String> {
 
 /// Extract scan type from field order
 ///
-/// Converts ffprobe field_order values to human-readable scan type strings.
+/// Converts ffprobe `field_order` values to human-readable scan type strings.
 /// - "progressive" -> progressive scan
 /// - "tt"/"tb" -> interlaced (top field first)
 /// - "bb"/"bt" -> interlaced (bottom field first)

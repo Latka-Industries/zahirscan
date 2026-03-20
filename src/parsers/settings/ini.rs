@@ -45,82 +45,73 @@ fn is_continuation_line(line: &str) -> bool {
     line.starts_with(' ') || line.starts_with('\t')
 }
 
-/// Extract INI metadata from file content.
-/// Line-based: `[section]`, `key=value` (or `key = value`), `;` or `#` to EOL = comment.
-/// Multi-line values: if `key=` has an empty value, following lines that start with whitespace
-/// are concatenated until an empty line, comment, `[section]`, or a non-indented line.
-/// Builds a section→key→value map, infers value types, and produces `schema` and `max_depth` (same shape as TOML/YAML).
-pub fn extract_ini_metadata(
-    content: &[u8],
-    stats: &ParseResult,
-    _config: &RuntimeConfig,
-) -> Result<IniMetadata> {
-    let s = std::str::from_utf8(content)
-        .map_err(|e| anyhow::anyhow!("INI must be valid UTF-8: {}", e))?;
-    let syntax = IniSyntax::new();
+#[inline]
+fn commit_multiline_kv(
+    sections: &mut BTreeMap<String, BTreeMap<String, String>>,
+    current: &str,
+    key: &str,
+    value: &str,
+) {
+    sections
+        .entry(current.to_string())
+        .or_default()
+        .insert(key.to_string(), value.to_string());
+}
 
+/// Parse INI text into section/key map and counts (sections, keys, comments).
+fn parse_ini_sections_map(
+    s: &str,
+    syntax: &IniSyntax,
+) -> (
+    usize,
+    usize,
+    usize,
+    BTreeMap<String, BTreeMap<String, String>>,
+) {
     let mut section_count = 0usize;
     let mut key_count = 0usize;
     let mut comment_count = 0usize;
-
-    // section -> (key -> raw value). Use "" for keys before any [section].
     let mut sections: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     let mut current = String::new();
-
     let mut in_multiline = false;
     let mut multiline_key = String::new();
     let mut multiline_value = String::new();
 
     let mut lines = s.lines();
     loop {
-        let line = match lines.next() {
-            None => break,
-            Some(l) => l,
+        let Some(line) = lines.next() else {
+            break;
         };
 
         if in_multiline {
             let trimmed = line.trim();
             if trimmed.is_empty() {
-                sections
-                    .entry(current.clone())
-                    .or_default()
-                    .insert(multiline_key.clone(), multiline_value.clone());
+                commit_multiline_kv(&mut sections, &current, &multiline_key, &multiline_value);
                 in_multiline = false;
                 continue;
             }
             if syntax.is_comment(trimmed) {
-                sections
-                    .entry(current.clone())
-                    .or_default()
-                    .insert(multiline_key.clone(), multiline_value.clone());
+                commit_multiline_kv(&mut sections, &current, &multiline_key, &multiline_value);
                 in_multiline = false;
                 comment_count += 1;
                 continue;
             }
             if syntax.is_section(trimmed) {
-                sections
-                    .entry(current.clone())
-                    .or_default()
-                    .insert(multiline_key.clone(), multiline_value.clone());
+                commit_multiline_kv(&mut sections, &current, &multiline_key, &multiline_value);
                 in_multiline = false;
                 section_count += 1;
                 current = trimmed[1..trimmed.len() - 1].trim().to_string();
                 continue;
             }
-            if !is_continuation_line(line) {
-                sections
-                    .entry(current.clone())
-                    .or_default()
-                    .insert(multiline_key.clone(), multiline_value.clone());
-                in_multiline = false;
-                // fall through to normal parsing with this line
-            } else {
+            if is_continuation_line(line) {
                 if !multiline_value.is_empty() {
                     multiline_value.push('\n');
                 }
                 multiline_value.push_str(line);
                 continue;
             }
+            commit_multiline_kv(&mut sections, &current, &multiline_key, &multiline_value);
+            in_multiline = false;
         }
 
         let trimmed = line.trim();
@@ -154,13 +145,15 @@ pub fn extract_ini_metadata(
     }
 
     if in_multiline {
-        sections
-            .entry(current)
-            .or_default()
-            .insert(multiline_key, multiline_value);
+        commit_multiline_kv(&mut sections, &current, &multiline_key, &multiline_value);
     }
 
-    // Build schema: section -> Table(key -> Scalar(inferred type))
+    (section_count, key_count, comment_count, sections)
+}
+
+fn ini_schema_from_sections(
+    sections: BTreeMap<String, BTreeMap<String, String>>,
+) -> (Option<BTreeMap<String, IniTypeInfo>>, Option<usize>) {
     let schema: BTreeMap<String, IniTypeInfo> = sections
         .into_iter()
         .map(|(sec, kvs)| {
@@ -173,6 +166,34 @@ pub fn extract_ini_metadata(
         .collect();
 
     let max_depth = if schema.is_empty() { None } else { Some(2) };
+    let schema_opt = if schema.is_empty() {
+        None
+    } else {
+        Some(schema)
+    };
+    (schema_opt, max_depth)
+}
+
+/// Extract INI metadata from file content.
+/// Line-based: `[section]`, `key=value` (or `key = value`), `;` or `#` to EOL = comment.
+/// Multi-line values: if `key=` has an empty value, following lines that start with whitespace
+/// are concatenated until an empty line, comment, `[section]`, or a non-indented line.
+/// Builds a section→key→value map, infers value types, and produces `schema` and `max_depth` (same shape as TOML/YAML).
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when the content is not valid UTF-8.
+pub fn extract_ini_metadata(
+    content: &[u8],
+    stats: &ParseResult,
+    _config: &RuntimeConfig,
+) -> Result<IniMetadata> {
+    let s = std::str::from_utf8(content)
+        .map_err(|e| anyhow::anyhow!("INI must be valid UTF-8: {e}"))?;
+    let syntax = IniSyntax::new();
+
+    let (section_count, key_count, comment_count, sections) = parse_ini_sections_map(s, &syntax);
+    let (schema, max_depth) = ini_schema_from_sections(sections);
 
     Ok(IniMetadata {
         file_size: Some(stats.byte_count),
@@ -180,11 +201,7 @@ pub fn extract_ini_metadata(
         key_count: Some(key_count),
         comment_count: Some(comment_count),
         max_depth,
-        schema: if schema.is_empty() {
-            None
-        } else {
-            Some(schema)
-        },
+        schema,
     })
 }
 

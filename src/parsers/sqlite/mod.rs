@@ -1,4 +1,4 @@
-//! SQLite database metadata extraction
+//! `SQLite` database metadata extraction
 
 mod type_stats;
 mod utils;
@@ -13,19 +13,23 @@ use crate::results::{ColumnInfo, MiningResult, SqliteMetadata, TableInfo};
 use memmap2::Mmap;
 use type_stats::{compute_stats_for_type, fetch_column_as_strings};
 
-/// Log a SQLite error and set it in metadata, then return the metadata.
+/// Log a `SQLite` error and set it in metadata, then return the metadata.
 /// Helper to reduce repetition of error handling pattern.
 fn handle_sqlite_error(
     metadata: &mut SqliteMetadata,
     file_path: &str,
     error_msg: String,
-) -> Result<SqliteMetadata> {
-    debug!("SQLite error for '{}': {}", file_path, error_msg);
+) -> SqliteMetadata {
+    debug!("SQLite error for '{file_path}': {error_msg}");
     metadata.error = Some(error_msg);
-    Ok(metadata.clone())
+    metadata.clone()
 }
 
-/// Extract SQLite metadata from database file
+/// Extract `SQLite` metadata from database file
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when a temporary file cannot be created or written while opening the database from bytes.
 pub fn extract_sqlite_metadata(
     content: &[u8],
     stats: &ParseResult,
@@ -33,14 +37,13 @@ pub fn extract_sqlite_metadata(
 ) -> Result<SqliteMetadata> {
     let (conn_opt, mut metadata) =
         utils::open_sqlite_connection(content, stats.byte_count, &stats.file_path)?;
-    let (conn, _temp_file) = match conn_opt {
-        Some((c, t)) => (c, t),
-        None => return Ok(metadata),
+    let Some((conn, _temp_file)) = conn_opt else {
+        return Ok(metadata);
     };
 
     // Extract database statistics (best-effort; failures remain None)
     metadata.page_size = utils::try_query_one(&conn, "PRAGMA page_size;", |r| r.get::<_, i64>(0))
-        .map(|v| v as usize);
+        .and_then(|v| usize::try_from(v).ok());
     metadata.encoding = utils::try_query_one(&conn, "PRAGMA encoding;", |r| r.get::<_, String>(0));
     metadata.sqlite_version =
         utils::try_query_one(&conn, "SELECT sqlite_version();", |r| r.get::<_, String>(0));
@@ -52,7 +55,13 @@ pub fn extract_sqlite_metadata(
     // Get all table names (excluding system tables)
     let table_names: Vec<String> = match utils::get_table_names(&conn) {
         Ok(names) => names,
-        Err(error_msg) => return handle_sqlite_error(&mut metadata, &stats.file_path, error_msg),
+        Err(error_msg) => {
+            return Ok(handle_sqlite_error(
+                &mut metadata,
+                &stats.file_path,
+                error_msg,
+            ));
+        }
     };
 
     metadata.table_count = Some(table_names.len());
@@ -62,7 +71,7 @@ pub fn extract_sqlite_metadata(
 
         let (columns, primary_keys) = match utils::get_table_columns(&conn, table_name) {
             Ok(x) => x,
-            Err(msg) => return handle_sqlite_error(&mut metadata, &stats.file_path, msg),
+            Err(msg) => return Ok(handle_sqlite_error(&mut metadata, &stats.file_path, msg)),
         };
 
         let mut table_info = TableInfo {
@@ -90,7 +99,7 @@ pub fn extract_sqlite_metadata(
         let (foreign_keys, fk_columns) =
             match utils::get_foreign_keys_for_table(&conn, &quoted_table) {
                 Ok(x) => x,
-                Err(msg) => return handle_sqlite_error(&mut metadata, &stats.file_path, msg),
+                Err(msg) => return Ok(handle_sqlite_error(&mut metadata, &stats.file_path, msg)),
             };
         if !foreign_keys.is_empty() {
             table_info.foreign_keys = Some(foreign_keys);
@@ -113,7 +122,7 @@ pub fn extract_sqlite_metadata(
 
         let indexes = match utils::get_indexes_for_table(&conn, table_name, &quoted_table) {
             Ok(ix) => ix,
-            Err(msg) => return handle_sqlite_error(&mut metadata, &stats.file_path, msg),
+            Err(msg) => return Ok(handle_sqlite_error(&mut metadata, &stats.file_path, msg)),
         };
         if !indexes.is_empty() {
             table_info.indexes = Some(indexes);
@@ -130,7 +139,7 @@ pub fn extract_sqlite_metadata(
     Ok(metadata)
 }
 
-/// Fills null_percentage/unique_count and type-specific stats. No-op if `columns` is None.
+/// Fills `null_percentage/unique_count` and type-specific stats. No-op if `columns` is None.
 /// Empty tables get no-data defaults; otherwise delegates to `compute_column_statistics`.
 fn ensure_column_stats(
     conn: &Connection,
@@ -177,10 +186,14 @@ fn compute_column_statistics(
 
 crate::no_template_mining!(
     extract_sqlite_templates,
-    "SQLite files don't need template mining - return empty result. Only metadata is extracted (schema, tables, columns, etc.)."
+    "`SQLite` files don't need template mining - return empty result. Only metadata is extracted (schema, tables, columns, etc.)."
 );
 
-/// Extract metadata and templates for SQLite; single file type in this module.
+/// Extract metadata and templates for `SQLite`; single file type in this module.
+///
+/// # Errors
+///
+/// Propagates errors from [`extract_sqlite_metadata`] or [`extract_sqlite_templates`].
 pub fn process(
     stats: &mut ParseResult,
     mmap: &Mmap,

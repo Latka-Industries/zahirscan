@@ -1,4 +1,4 @@
-//! Shared statistics types used by CSV and SQLite metadata
+//! Shared statistics types used by CSV and `SQLite` metadata
 
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};

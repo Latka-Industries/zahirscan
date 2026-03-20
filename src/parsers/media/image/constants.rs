@@ -13,10 +13,10 @@ pub const JPEG_SOI: &[u8] = &[0xFF, 0xD8];
 /// PNG signature (first 8 bytes)
 pub const PNG_SIGNATURE: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
-/// GIF87a signature
+/// `GIF87a` signature
 pub const GIF87A_SIGNATURE: &[u8] = b"GIF87a";
 
-/// GIF89a signature
+/// `GIF89a` signature
 pub const GIF89A_SIGNATURE: &[u8] = b"GIF89a";
 
 /// WebP RIFF signature (bytes 0-3)
@@ -96,7 +96,7 @@ pub const WEBP_ALPHA_FLAG: u8 = 0x10;
 // TIFF Tags
 // ============================================================================
 
-/// TIFF tag: BitsPerSample (258 / 0x0102)
+/// TIFF tag: `BitsPerSample` (258 / 0x0102)
 pub const TIFF_TAG_BITS_PER_SAMPLE: u16 = 258;
 
 /// TIFF tag: Compression (259 / 0x0103)
@@ -104,7 +104,7 @@ pub const TIFF_TAG_BITS_PER_SAMPLE: u16 = 258;
 #[allow(dead_code)]
 pub const TIFF_TAG_COMPRESSION: u16 = 259;
 
-/// TIFF tag: PhotometricInterpretation (262 / 0x0106)
+/// TIFF tag: `PhotometricInterpretation` (262 / 0x0106)
 pub const TIFF_TAG_PHOTOMETRIC_INTERPRETATION: u16 = 262;
 
 /// TIFF IFD entry type: SHORT (16-bit)
@@ -117,50 +117,50 @@ pub const TIFF_TYPE_LONG: u16 = 4;
 // TIFF PhotometricInterpretation Values
 // ============================================================================
 
-/// TIFF PhotometricInterpretation: WhiteIsZero (grayscale, inverted)
+/// TIFF `PhotometricInterpretation`: `WhiteIsZero` (grayscale, inverted)
 pub const TIFF_PHOTOMETRIC_WHITE_IS_ZERO: u32 = 0;
 
-/// TIFF PhotometricInterpretation: BlackIsZero (grayscale)
+/// TIFF `PhotometricInterpretation`: `BlackIsZero` (grayscale)
 pub const TIFF_PHOTOMETRIC_BLACK_IS_ZERO: u32 = 1;
 
-/// TIFF PhotometricInterpretation: RGB
+/// TIFF `PhotometricInterpretation`: RGB
 pub const TIFF_PHOTOMETRIC_RGB: u32 = 2;
 
-/// TIFF PhotometricInterpretation: Palette color (indexed)
+/// TIFF `PhotometricInterpretation`: Palette color (indexed)
 pub const TIFF_PHOTOMETRIC_PALETTE: u32 = 3;
 
-/// TIFF PhotometricInterpretation: Transparency mask
+/// TIFF `PhotometricInterpretation`: Transparency mask
 pub const TIFF_PHOTOMETRIC_MASK: u32 = 4;
 
-/// TIFF PhotometricInterpretation: CMYK
+/// TIFF `PhotometricInterpretation`: CMYK
 pub const TIFF_PHOTOMETRIC_CMYK: u32 = 5;
 
-/// TIFF PhotometricInterpretation: YCbCr (typically converted to RGB for display)
+/// TIFF `PhotometricInterpretation`: YCbCr (typically converted to RGB for display)
 pub const TIFF_PHOTOMETRIC_YCBCR: u32 = 6;
 
-/// TIFF PhotometricInterpretation: CIE L*a*b*
+/// TIFF `PhotometricInterpretation`: CIE L*a*b*
 pub const TIFF_PHOTOMETRIC_CIELAB: u32 = 8;
 
 // ============================================================================
 // BMP Compression Constants
 // ============================================================================
 
-/// BMP compression: BI_RGB (no compression)
+/// BMP compression: `BI_RGB` (no compression)
 pub const BMP_COMPRESSION_RGB: u32 = 0;
 
-/// BMP compression: BI_RLE8 (8-bit RLE)
+/// BMP compression: `BI_RLE8` (8-bit RLE)
 pub const BMP_COMPRESSION_RLE8: u32 = 1;
 
-/// BMP compression: BI_RLE4 (4-bit RLE)
+/// BMP compression: `BI_RLE4` (4-bit RLE)
 pub const BMP_COMPRESSION_RLE4: u32 = 2;
 
-/// BMP compression: BI_BITFIELDS (bit fields)
+/// BMP compression: `BI_BITFIELDS` (bit fields)
 pub const BMP_COMPRESSION_BITFIELDS: u32 = 3;
 
-/// BMP compression: BI_JPEG (JPEG compression)
+/// BMP compression: `BI_JPEG` (JPEG compression)
 pub const BMP_COMPRESSION_JPEG: u32 = 4;
 
-/// BMP compression: BI_PNG (PNG compression)
+/// BMP compression: `BI_PNG` (PNG compression)
 pub const BMP_COMPRESSION_PNG: u32 = 5;
 
 // ============================================================================
@@ -257,7 +257,7 @@ pub fn has_png_signature(data: &[u8]) -> bool {
     data.len() >= 8 && &data[0..8] == PNG_SIGNATURE
 }
 
-/// Check if data starts with GIF signature (GIF87a or GIF89a)
+/// Check if data starts with GIF signature (`GIF87a` or `GIF89a`)
 #[inline]
 pub fn has_gif_signature(data: &[u8]) -> bool {
     data.len() >= 6 && (&data[0..6] == GIF87A_SIGNATURE || &data[0..6] == GIF89A_SIGNATURE)

@@ -91,6 +91,36 @@ fn test_csv_delimiter_detection_tab() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
     assert_eq!(metadata.delimiter, Some("\\t".to_string()));
+    assert_eq!(metadata.column_count, 3);
+}
+
+/// `.tsv` path forces tab delimiter even if comma appears in sniffed sample (extension hint).
+#[test]
+fn test_tsv_path_uses_tab_reader() {
+    let content = b"a\tb\tc\n1\t2\t3\n";
+    let stats = ParseResult {
+        file_path: "data.tsv".to_string(),
+        file_type: FileType::Csv,
+        ..get_test_stats()
+    };
+    let metadata = extract_csv_metadata(content, &stats, &RuntimeConfig::default()).unwrap();
+    assert_eq!(metadata.delimiter, Some("\\t".to_string()));
+    assert_eq!(metadata.column_count, 3);
+    assert_eq!(metadata.row_count, 1);
+}
+
+/// `.psv` path uses pipe as field separator.
+#[test]
+fn test_psv_path_uses_pipe_reader() {
+    let content = b"col1|col2|col3\nv1|v2|v3\n";
+    let stats = ParseResult {
+        file_path: "report.psv".to_string(),
+        file_type: FileType::Csv,
+        ..get_test_stats()
+    };
+    let metadata = extract_csv_metadata(content, &stats, &RuntimeConfig::default()).unwrap();
+    assert_eq!(metadata.delimiter, Some("|".to_string()));
+    assert_eq!(metadata.column_count, 3);
 }
 
 #[test]

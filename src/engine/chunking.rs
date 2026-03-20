@@ -24,7 +24,7 @@ pub struct ProcessingTask {
 /// Adaptive chunking settings calculated from Phase 1 stats
 #[derive(Debug, Clone)]
 pub struct AdaptiveChunking {
-    /// Target number of chunks per file (neat multiple of max_workers)
+    /// Target number of chunks per file (neat multiple of `max_workers`)
     pub chunks_per_file_multiplier: usize,
 }
 
@@ -34,6 +34,7 @@ pub struct AdaptiveChunking {
 /// Uses integer division, so the last chunk may be smaller if there's a remainder.
 /// This ensures neat multiples of workers for optimal load balancing.
 /// The adaptive chunking calculation already accounts for work complexity, so we respect the target.
+#[must_use]
 pub fn optimal_chunk_size(
     collection_size: usize,
     target_chunks: usize,
@@ -55,6 +56,7 @@ pub fn optimal_chunk_size(
 
 /// Calculate adaptive chunking settings based on Phase 1 stats
 /// Returns the multiplier for chunks per file (e.g., 1 = 13 chunks, 2 = 26 chunks for 13 workers)
+#[must_use]
 pub fn calculate_adaptive_chunking(
     tasks: &[ProcessingTask],
     max_workers: usize,
@@ -171,6 +173,7 @@ pub const DEFAULT_AUTO_BATCH: usize = 10_000;
 
 /// Returns a safe path batch size from the process file descriptor limit so we don't exceed "too many open files".
 /// Used when `config.path_batch_size` is 0. Leaves [`RESERVED_FDS`] headroom and caps at [`MAX_AUTO_BATCH`].
+#[must_use]
 pub fn fd_limit_batch_size() -> Option<usize> {
     #[cfg(unix)]
     {
@@ -181,7 +184,8 @@ pub fn fd_limit_batch_size() -> Option<usize> {
         } else {
             soft
         };
-        let batch = limit.saturating_sub(RESERVED_FDS as u64) as usize;
+        let batch_u64 = limit.saturating_sub(RESERVED_FDS as u64);
+        let batch = usize::try_from(batch_u64).unwrap_or(MAX_AUTO_BATCH);
         Some(batch.max(1))
     }
 
@@ -206,6 +210,7 @@ pub enum PathBatchMode {
     Batched { batch_size: usize },
 }
 
+#[must_use]
 pub fn determine_batch_size(input_paths: &[String]) -> PathBatchMode {
     let batch_size = fd_limit_batch_size().unwrap_or(DEFAULT_AUTO_BATCH);
     if input_paths.len() > batch_size {
@@ -221,7 +226,7 @@ pub fn determine_batch_size(input_paths: &[String]) -> PathBatchMode {
 }
 
 /// Process files with adaptive batching based on file count and worker count
-/// Uses a scaled heuristic: batching kicks in when files > workers * threshold_multiplier
+/// Uses a scaled heuristic: batching kicks in when files > workers * `threshold_multiplier`
 /// This prevents thread pool saturation for large batches while maintaining
 /// optimal performance for smaller batches (tested: 224 files = 40s without batching)
 pub fn process_files_with_adaptive_batching<R, F>(

@@ -111,16 +111,14 @@ pub fn extract_bit_depth(tiff_data: &[u8]) -> Option<u32> {
             break;
         }
 
-        let tag = match read_u16_safe(tiff_data, entry_offset, is_little_endian) {
-            Some(t) => t,
-            None => break,
+        let Some(tag) = read_u16_safe(tiff_data, entry_offset, is_little_endian) else {
+            break;
         };
 
         // Tag TIFF_TAG_BITS_PER_SAMPLE = BitsPerSample
         if tag == TIFF_TAG_BITS_PER_SAMPLE {
-            let value = match read_u32_safe(tiff_data, entry_offset + 8, is_little_endian) {
-                Some(v) => v,
-                None => break,
+            let Some(value) = read_u32_safe(tiff_data, entry_offset + 8, is_little_endian) else {
+                break;
             };
             return Some(value);
         }
@@ -134,18 +132,18 @@ pub fn extract_bit_depth(tiff_data: &[u8]) -> Option<u32> {
 ///
 /// Note: Some TIFF files converted from JPEG (e.g., via `sips`) may have non-standard
 /// IFD structures. This function attempts to parse them but falls back to RGB8 if
-/// the PhotometricInterpretation tag cannot be found or parsed.
-pub fn extract_color_type(tiff_data: &[u8]) -> Option<String> {
+/// the `PhotometricInterpretation` tag cannot be found or parsed.
+pub fn extract_color_type(tiff_data: &[u8]) -> String {
     // TIFF color type is stored in IFD entries (tag 262/0x0106: PhotometricInterpretation)
     // This requires parsing the IFD structure
     if tiff_data.len() < 8 {
         // File too small to be valid TIFF, return default
-        return Some(COLOR_TYPE_RGB8.to_string());
+        return COLOR_TYPE_RGB8.to_string();
     }
 
     if !has_tiff_signature(tiff_data) {
         // Not a valid TIFF signature, return default
-        return Some(COLOR_TYPE_RGB8.to_string());
+        return COLOR_TYPE_RGB8.to_string();
     }
 
     let is_little_endian = &tiff_data[0..2] == TIFF_LE_SIGNATURE;
@@ -153,19 +151,19 @@ pub fn extract_color_type(tiff_data: &[u8]) -> Option<String> {
     // Read IFD offset (bytes 4-7)
     let ifd_offset = match read_u32_safe(tiff_data, 4, is_little_endian) {
         Some(offset) => offset as usize,
-        None => return Some(COLOR_TYPE_RGB8.to_string()),
+        None => return COLOR_TYPE_RGB8.to_string(),
     };
 
     // Try to read IFD entry count and look for PhotometricInterpretation tag (262)
     // If IFD offset is out of bounds, return default (RGB)
     if ifd_offset + 2 > tiff_data.len() {
-        return Some(COLOR_TYPE_RGB8.to_string());
+        return COLOR_TYPE_RGB8.to_string();
     }
 
     // Safely read entry count
     let entry_count = match read_u16_safe(tiff_data, ifd_offset, is_little_endian) {
         Some(count) => count as usize,
-        None => return Some(COLOR_TYPE_RGB8.to_string()),
+        None => return COLOR_TYPE_RGB8.to_string(),
     };
 
     // Each IFD entry is 12 bytes: 2 bytes tag, 2 bytes type, 4 bytes count, 4 bytes value/offset
@@ -179,18 +177,17 @@ pub fn extract_color_type(tiff_data: &[u8]) -> Option<String> {
             break;
         }
 
-        let tag = match read_u16_safe(tiff_data, entry_offset, is_little_endian) {
-            Some(t) => t,
-            None => break,
+        let Some(tag) = read_u16_safe(tiff_data, entry_offset, is_little_endian) else {
+            break;
         };
 
         // Tag TIFF_TAG_PHOTOMETRIC_INTERPRETATION = PhotometricInterpretation
         if tag == TIFF_TAG_PHOTOMETRIC_INTERPRETATION {
             // Check type field (bytes 2-3 of IFD entry)
             // Type TIFF_TYPE_SHORT = SHORT (16-bit), Type TIFF_TYPE_LONG = LONG (32-bit)
-            let entry_type = match read_u16_safe(tiff_data, entry_offset + 2, is_little_endian) {
-                Some(t) => t,
-                None => continue,
+            let Some(entry_type) = read_u16_safe(tiff_data, entry_offset + 2, is_little_endian)
+            else {
+                continue;
             };
 
             // PhotometricInterpretation is typically a SHORT (type TIFF_TYPE_SHORT)
@@ -225,15 +222,15 @@ pub fn extract_color_type(tiff_data: &[u8]) -> Option<String> {
                         v if v == TIFF_PHOTOMETRIC_WHITE_IS_ZERO
                             || v == TIFF_PHOTOMETRIC_BLACK_IS_ZERO =>
                         {
-                            Some(COLOR_TYPE_L8.to_string())
+                            COLOR_TYPE_L8.to_string()
                         }
-                        v if v == TIFF_PHOTOMETRIC_RGB => Some(COLOR_TYPE_RGB8.to_string()),
-                        v if v == TIFF_PHOTOMETRIC_PALETTE => Some(COLOR_TYPE_INDEXED8.to_string()),
-                        v if v == TIFF_PHOTOMETRIC_MASK => Some(COLOR_TYPE_L8.to_string()), // Transparency mask
-                        v if v == TIFF_PHOTOMETRIC_CMYK => Some(COLOR_TYPE_CMYK8.to_string()),
-                        v if v == TIFF_PHOTOMETRIC_YCBCR => Some(COLOR_TYPE_RGB8.to_string()),
-                        v if v == TIFF_PHOTOMETRIC_CIELAB => Some(COLOR_TYPE_RGB8.to_string()), // CIE L*a*b*
-                        _ => Some(format!("Unknown({})", value)),
+                        v if v == TIFF_PHOTOMETRIC_RGB => COLOR_TYPE_RGB8.to_string(),
+                        v if v == TIFF_PHOTOMETRIC_PALETTE => COLOR_TYPE_INDEXED8.to_string(),
+                        v if v == TIFF_PHOTOMETRIC_MASK => COLOR_TYPE_L8.to_string(), // Transparency mask
+                        v if v == TIFF_PHOTOMETRIC_CMYK => COLOR_TYPE_CMYK8.to_string(),
+                        v if v == TIFF_PHOTOMETRIC_YCBCR => COLOR_TYPE_RGB8.to_string(),
+                        v if v == TIFF_PHOTOMETRIC_CIELAB => COLOR_TYPE_RGB8.to_string(), // CIE L*a*b*
+                        _ => format!("Unknown({value})"),
                     };
                 }
                 // If we can't read it, skip this tag and continue searching
@@ -243,19 +240,19 @@ pub fn extract_color_type(tiff_data: &[u8]) -> Option<String> {
             // PhotometricInterpretation values
             return match value {
                 v if v == TIFF_PHOTOMETRIC_WHITE_IS_ZERO || v == TIFF_PHOTOMETRIC_BLACK_IS_ZERO => {
-                    Some(COLOR_TYPE_L8.to_string()) // Grayscale
+                    COLOR_TYPE_L8.to_string() // Grayscale
                 }
-                v if v == TIFF_PHOTOMETRIC_RGB => Some(COLOR_TYPE_RGB8.to_string()), // RGB
-                v if v == TIFF_PHOTOMETRIC_PALETTE => Some(COLOR_TYPE_INDEXED8.to_string()), // Palette
-                v if v == TIFF_PHOTOMETRIC_MASK => Some(COLOR_TYPE_L8.to_string()), // Transparency mask (grayscale)
-                v if v == TIFF_PHOTOMETRIC_CMYK => Some(COLOR_TYPE_CMYK8.to_string()), // CMYK
-                v if v == TIFF_PHOTOMETRIC_YCBCR => Some(COLOR_TYPE_RGB8.to_string()), // YCbCr (treated as RGB)
-                v if v == TIFF_PHOTOMETRIC_CIELAB => Some(COLOR_TYPE_RGB8.to_string()), // CIE L*a*b* (treated as RGB for display)
-                _ => Some(format!("Unknown({})", value)),
+                v if v == TIFF_PHOTOMETRIC_RGB => COLOR_TYPE_RGB8.to_string(), // RGB
+                v if v == TIFF_PHOTOMETRIC_PALETTE => COLOR_TYPE_INDEXED8.to_string(), // Palette
+                v if v == TIFF_PHOTOMETRIC_MASK => COLOR_TYPE_L8.to_string(), // Transparency mask (grayscale)
+                v if v == TIFF_PHOTOMETRIC_CMYK => COLOR_TYPE_CMYK8.to_string(), // CMYK
+                v if v == TIFF_PHOTOMETRIC_YCBCR => COLOR_TYPE_RGB8.to_string(), // YCbCr (treated as RGB)
+                v if v == TIFF_PHOTOMETRIC_CIELAB => COLOR_TYPE_RGB8.to_string(), // CIE L*a*b* (treated as RGB for display)
+                _ => format!("Unknown({value})"),
             };
         }
     }
 
     // Default: assume RGB if we can't find it
-    Some(COLOR_TYPE_RGB8.to_string())
+    COLOR_TYPE_RGB8.to_string()
 }

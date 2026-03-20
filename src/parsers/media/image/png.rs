@@ -90,6 +90,6 @@ pub fn extract_color_type(png_data: &[u8]) -> Option<String> {
         (4, 16) => Some(COLOR_TYPE_LA16.to_string()),
         (6, 8) => Some(COLOR_TYPE_RGBA8.to_string()),
         (6, 16) => Some(COLOR_TYPE_RGBA16.to_string()),
-        _ => Some(format!("Unknown({},{})", color_type, bit_depth)),
+        _ => Some(format!("Unknown({color_type},{bit_depth})")),
     }
 }

@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// Higher entropy = more variation in word choice (more creative/diverse writing)
 /// Lower entropy = less variation (more repetitive/structured writing)
 /// Uses frequency-weighted diversity metric
+#[must_use]
 pub fn calculate_template_entropy(
     examples: &BTreeMap<String, Vec<String>>,
     total_count: usize,
@@ -97,7 +98,8 @@ pub fn calculate_template_entropy(
 /// Extract pivot points (language-agnostic structural elements)
 /// Pivot points are words that appear frequently at the same position across sentences
 /// and have high variation in what follows them (indicating structural importance)
-/// Returns empty DashMap if there are too many sentences to process efficiently
+/// Returns empty `DashMap` if there are too many sentences to process efficiently
+#[must_use]
 pub fn extract_pivot_points(
     sentences: &[String],
     config: &RuntimeConfig,
@@ -116,7 +118,7 @@ pub fn extract_pivot_points(
         .enumerate()
         .for_each(|(idx, sentence)| {
             if idx > 0 && idx % 10_000 == 0 {
-                debug!("Processed {} sentences for pivot extraction", idx);
+                debug!("Processed {idx} sentences for pivot extraction");
             }
             let tokens: Vec<&str> = sentence.split_whitespace().collect();
 
@@ -158,7 +160,7 @@ pub fn extract_pivot_points(
     let min_frequency = (total_sentences as f64 * config.text_threshold).max(2.0) as usize;
 
     let mut variation_counts_map: HashMap<(usize, String), HashSet<String>> = HashMap::new();
-    for entry in word_position_variation_flat.iter() {
+    for entry in &word_position_variation_flat {
         let (pos, word, next_word) = entry.key();
         let key = (*pos, word.clone());
         variation_counts_map
@@ -172,7 +174,7 @@ pub fn extract_pivot_points(
         .map(|(k, v)| (k, v.len()))
         .collect();
 
-    for entry in position_word_freq.iter() {
+    for entry in &position_word_freq {
         let (pos, word) = entry.key();
         let count = entry.value();
         if *count >= min_frequency {
@@ -184,7 +186,7 @@ pub fn extract_pivot_points(
             if variation_score >= config.min_pivot_variation
                 && variation_score <= config.max_pivot_variation
             {
-                let pattern_key = format!("P_{}_{}", pos, word);
+                let pattern_key = format!("P_{pos}_{word}");
                 pivot_freq
                     .entry(pattern_key)
                     .and_modify(|c| *c += *count)
@@ -202,6 +204,7 @@ pub fn extract_pivot_points(
 }
 
 /// Calculate writing footprint metrics for text/markdown analysis
+#[must_use]
 pub fn calculate_writing_footprint(
     sentences: &[String],
     templates: &[Template],
@@ -218,10 +221,10 @@ pub fn calculate_writing_footprint(
         .filter(|w| !w.is_empty())
         .collect();
     let unique_words: HashSet<&str> = all_words.iter().copied().collect();
-    let vocabulary_richness = if !all_words.is_empty() {
-        unique_words.len() as f64 / all_words.len() as f64
-    } else {
+    let vocabulary_richness = if all_words.is_empty() {
         0.0
+    } else {
+        unique_words.len() as f64 / all_words.len() as f64
     };
 
     debug!(
@@ -232,10 +235,10 @@ pub fn calculate_writing_footprint(
         .par_iter_adaptive(config)
         .map(|s| s.split_whitespace().count())
         .sum();
-    let avg_sentence_length = if !sentences.is_empty() {
-        total_words as f64 / sentences.len() as f64
-    } else {
+    let avg_sentence_length = if sentences.is_empty() {
         0.0
+    } else {
+        total_words as f64 / sentences.len() as f64
     };
 
     let mut period_count = 0;
@@ -335,7 +338,7 @@ fn find_pivot_position(
         if token_clean.is_empty() {
             return None;
         }
-        let pattern_key = format!("P_{}_{}", pos, token_clean);
+        let pattern_key = format!("P_{pos}_{token_clean}");
         if pivot_patterns.contains_key(&pattern_key) {
             Some((pos, token_clean))
         } else {
@@ -345,6 +348,7 @@ fn find_pivot_position(
 }
 
 /// Uses pivot points to infer subject-verb-object relationships.
+#[must_use]
 pub fn analyze_svo_structure(
     sentences: &[String],
     pivot_patterns: &DashMap<String, usize>,

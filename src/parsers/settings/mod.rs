@@ -17,6 +17,10 @@ pub use xml::{extract_xml_metadata, extract_xml_templates};
 pub use yaml::{extract_yaml_metadata, extract_yaml_templates};
 
 /// Dispatch by file type; fills the appropriate metadata field and returns templates.
+///
+/// # Errors
+///
+/// Propagates errors from the INI, TOML, YAML, or XML metadata/template extractors for the active [`crate::parsers::FileType`].
 pub fn process(
     stats: &mut ParseResult,
     mmap: &Mmap,

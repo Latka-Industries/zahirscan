@@ -15,10 +15,10 @@ fn value_to_type_info(v: &Value) -> TomlTypeInfo {
         Value::Boolean(_) => TomlTypeInfo::Scalar("boolean".to_string()),
         Value::Datetime(_) => TomlTypeInfo::Scalar("datetime".to_string()),
         Value::Array(arr) => {
-            let element = arr
-                .first()
-                .map(value_to_type_info)
-                .unwrap_or_else(|| TomlTypeInfo::Scalar("unknown".to_string()));
+            let element = arr.first().map_or_else(
+                || TomlTypeInfo::Scalar("unknown".to_string()),
+                value_to_type_info,
+            );
             TomlTypeInfo::Array(Box::new(element))
         }
         Value::Table(t) => TomlTypeInfo::Table(
@@ -58,14 +58,18 @@ fn max_depth_rec(d: usize, v: &Value) -> usize {
 }
 
 /// Extract TOML metadata from file content.
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when the content is not valid UTF-8 or is not valid TOML.
 pub fn extract_toml_metadata(
     content: &[u8],
     stats: &ParseResult,
     _config: &RuntimeConfig,
 ) -> Result<TomlMetadata> {
     let s = std::str::from_utf8(content)
-        .map_err(|e| anyhow::anyhow!("TOML must be valid UTF-8: {}", e))?;
-    let value: Value = toml::from_str(s).map_err(|e| anyhow::anyhow!("TOML parse error: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("TOML must be valid UTF-8: {e}"))?;
+    let value: Value = toml::from_str(s).map_err(|e| anyhow::anyhow!("TOML parse error: {e}"))?;
 
     let section_count = Some(count_tables(&value));
     let key_count = Some(count_keys(&value));

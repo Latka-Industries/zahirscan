@@ -153,13 +153,17 @@ pub fn extract_plain_text_from_html(html_str: &str) -> String {
 }
 
 /// Extract HTML metadata from document content.
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when the content is not valid UTF-8.
 pub fn extract_html_metadata(
     content: &[u8],
     stats: &ParseResult,
     _config: &RuntimeConfig,
 ) -> Result<HtmlMetadata> {
     let s = std::str::from_utf8(content)
-        .map_err(|e| anyhow::anyhow!("HTML must be valid UTF-8: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("HTML must be valid UTF-8: {e}"))?;
     let document = Html::parse_document(s);
     let selectors = get_html_selectors();
 
@@ -216,13 +220,17 @@ pub fn extract_html_metadata(
 
 /// Extract templates and writing footprint from HTML by running the plain-text pipeline
 /// on the extracted body text (p, h1–h6, li, td, th, blockquote, figcaption; excludes script/style).
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when the content is not valid UTF-8, or propagates errors from plain-text template extraction.
 pub fn extract_html_templates(
     content: &[u8],
     stats: &crate::parsers::ParseResult,
     config: &RuntimeConfig,
 ) -> Result<crate::results::MiningResult> {
     let s = std::str::from_utf8(content)
-        .map_err(|e| anyhow::anyhow!("HTML must be valid UTF-8: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("HTML must be valid UTF-8: {e}"))?;
     let document = Html::parse_document(s);
     let selectors = get_html_selectors();
     let plain_text = extract_plain_text(&document, selectors);

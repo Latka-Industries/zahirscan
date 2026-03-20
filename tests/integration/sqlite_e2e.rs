@@ -23,7 +23,7 @@ fn sqlite_file_type_detection_extensions() {
             OutputMode::Full,
             None,
             None,
-            OutputSink::Collect,
+            &OutputSink::Collect,
         )
         .expect("extract_zahir");
         assert_eq!(result.outputs.len(), 1);
@@ -44,7 +44,7 @@ fn sqlite_e2e_full_mode() {
         OutputMode::Full,
         None,
         None,
-        OutputSink::Collect,
+        &OutputSink::Collect,
     )
     .expect("extract_zahir");
     let outputs = &result.outputs;
@@ -69,7 +69,7 @@ fn sqlite_e2e_templates_mode() {
         OutputMode::Templates,
         None,
         None,
-        OutputSink::Collect,
+        &OutputSink::Collect,
     )
     .expect("extract_zahir");
     let outputs = &result.outputs;
@@ -87,7 +87,7 @@ fn sqlite_e2e_json_contains_sqlite_metadata() {
         OutputMode::Full,
         None,
         None,
-        OutputSink::Collect,
+        &OutputSink::Collect,
     )
     .expect("extract_zahir");
     let json = serde_json::to_value(&result.outputs[0]).expect("serialize");

@@ -1,4 +1,4 @@
-//! Setup utilities for ZahirScan: logger, config, CLI flag application, input/output path resolution.
+//! Setup utilities for `ZahirScan`: logger, config, CLI flag application, input/output path resolution.
 
 use anyhow::Context;
 use colored::Colorize;
@@ -28,7 +28,7 @@ pub enum OutputSink {
 }
 
 /// Build logger based on development mode.
-/// If dev_mode is true, set log level to Debug.
+/// If `dev_mode` is true, set log level to Debug.
 pub fn build_logger(dev_mode: bool) {
     if dev_mode {
         env_logger::Builder::from_default_env()
@@ -60,7 +60,7 @@ pub fn build_logger(dev_mode: bool) {
     }
 }
 
-/// Path to user config file. Unix: ~/.config/zahirscan/zahirscan.toml (XDG_CONFIG_HOME or $HOME/.config). Windows: %APPDATA%\zahirscan\zahirscan.toml.
+/// Path to user config file. Unix: ~/.config/zahirscan/zahirscan.toml (`XDG_CONFIG_HOME` or $HOME/.config). Windows: %APPDATA%\zahirscan\zahirscan.toml.
 pub fn xdg_config_path() -> Option<std::path::PathBuf> {
     use std::path::PathBuf;
     #[cfg(unix)]
@@ -73,7 +73,7 @@ pub fn xdg_config_path() -> Option<std::path::PathBuf> {
                     .ok()
                     .map(|h| PathBuf::from(h).join(".config"))
             });
-        config_dir.map(|d| d.join(PKG_NAME).join(format!("{}.toml", PKG_NAME)))
+        config_dir.map(|d| d.join(PKG_NAME).join(format!("{PKG_NAME}.toml")))
     }
     #[cfg(windows)]
     {
@@ -87,12 +87,15 @@ pub fn xdg_config_path() -> Option<std::path::PathBuf> {
 
 /// Load config: embedded default (baked in at build) then overlay user config in app data dir.
 /// Only keys present in the user file override; the rest stay from the embedded default.
+///
+/// On load failure (invalid TOML overlay or validation), falls back to [`RuntimeConfig::default`].
+#[must_use]
 pub fn load_config() -> RuntimeConfig {
     let overlay = xdg_config_path();
     match RuntimeConfig::load_config_with_overlay(crate::DEFAULT_CONFIG_TOML, overlay.as_deref()) {
         Ok(config) => {
-            if overlay.as_ref().is_some_and(|p| p.exists()) {
-                debug!("Merged config from {}", overlay.as_ref().unwrap().display());
+            if let Some(p) = overlay.as_ref().filter(|p| p.exists()) {
+                debug!("Merged config from {}", p.display());
             }
             config
         }
@@ -101,7 +104,11 @@ pub fn load_config() -> RuntimeConfig {
 }
 
 /// Apply CLI flags to config (progress, output mode, redact, skip media).
-/// Validates config after applying; returns an error if invalid.
+/// Validates config after applying.
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when [`RuntimeConfig::validate_external`] fails (e.g. invalid numeric ranges).
 pub fn apply_cli_to_config(
     config: &mut RuntimeConfig,
     progress: bool,
@@ -110,7 +117,7 @@ pub fn apply_cli_to_config(
     redact: bool,
     no_media: bool,
 ) -> anyhow::Result<()> {
-    config.show_progress = match (progress, dev, is_stderr_tty()) {
+    config.flags.show_progress = match (progress, dev, is_stderr_tty()) {
         (true, true, _) => {
             debug!("--progress/-p flag was detected but will be disabled (dev mode)");
             false
@@ -125,14 +132,18 @@ pub fn apply_cli_to_config(
     if full {
         config.output_mode = OutputMode::Full;
     }
-    config.redact_paths = redact;
-    config.skip_media_metadata = no_media;
+    config.flags.redact_paths = redact;
+    config.flags.skip_media_metadata = no_media;
     config
         .validate_external()
-        .map_err(|e| anyhow::anyhow!("Invalid config: {}", e))
+        .map_err(|e| anyhow::anyhow!("Invalid config: {e}"))
 }
 
-/// Validate input paths and resolve output directory. Returns (paths, output_dir).
+/// Validate input paths and resolve output directory. Returns (paths, `output_dir`).
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] if `input` is empty, if creating the output directory fails, or if canonicalizing the output path fails.
 pub fn resolve_output_paths(
     input: Vec<String>,
     output: Option<String>,

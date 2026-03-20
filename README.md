@@ -107,7 +107,7 @@ let result = extract_zahir(
     OutputMode::Full,
     None,
     None,
-    OutputSink::Collect,
+    &OutputSink::Collect,
 )?;
 // result.outputs, result.phase1_failed, result.phase2_failed
 ```
@@ -120,14 +120,15 @@ use zahirscan::{extract_zahir, Output, OutputMode, OutputSink};
 
 let collected = Arc::new(Mutex::new(Vec::<(String, zahirscan::Output)>::new()));
 let c = Arc::clone(&collected);
+let sink = OutputSink::StreamOnly(Box::new(move |path, out| {
+    c.lock().unwrap().push((path, out));
+}));
 let result = extract_zahir(
     ["a.log", "b.log"],
     OutputMode::Full,
     None,
     None,
-    OutputSink::StreamOnly(Box::new(move |path, out| {
-        c.lock().unwrap().push((path, out));
-    })),
+    &sink,
 )?;
 // result.outputs is empty; results are in collected
 ```
@@ -140,7 +141,7 @@ use zahirscan::{extract_zahir_from_stream, OutputMode, OutputSink};
 
 let (tx, rx) = mpsc::channel();
 // Producer sends paths, then drops tx
-let result = extract_zahir_from_stream(rx, OutputMode::Full, None, None, OutputSink::Collect)?;
+let result = extract_zahir_from_stream(&rx, OutputMode::Full, None, None, &OutputSink::Collect)?;
 ```
 
 **Inputs**: single path (`&str`, `String`) or multiple (`&[&str]`, `Vec<String>`, etc.). **Config**: pass `Some(&config)` for custom `RuntimeConfig`; `None` uses embedded default. Full API: `ZahirScanResult`, `Output`, `OutputSink`, `Template`, `WritingFootprint`, and per-format metadata: [docs.rs](https://docs.rs/zahirscan).

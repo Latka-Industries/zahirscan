@@ -12,14 +12,21 @@ mod html;
 mod json;
 mod pdf;
 
-pub use csv::{extract_csv_metadata, extract_csv_templates, infer_value_type};
+pub use csv::{
+    delimiter_byte_for_reader, detect_delimiter_byte, extract_csv_metadata, extract_csv_templates,
+    infer_value_type,
+};
 pub use epub::{extract_epub_metadata, extract_epub_templates};
 pub use html::{extract_html_metadata, extract_html_templates};
 pub use json::{extract_json_metadata, extract_json_templates};
 pub use pdf::{extract_pdf_metadata, extract_pdf_templates};
 
-/// Dispatch by file type; fills csv_metadata or html_metadata and returns templates.
+/// Dispatch by file type; fills `csv_metadata` or `html_metadata` and returns templates.
 /// For text-based formats we pass content (&str) so UTF-8 is validated once at the boundary.
+///
+/// # Errors
+///
+/// Returns an error if the mmap is not valid UTF-8 where required, or if a structured parser fails.
 pub fn process(
     stats: &mut ParseResult,
     mmap: &Mmap,

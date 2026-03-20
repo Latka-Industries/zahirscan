@@ -86,7 +86,7 @@ fn main() -> anyhow::Result<()> {
         config.output_mode,
         Some(&config),
         output.as_deref(),
-        zahirscan::OutputSink::Collect,
+        &zahirscan::OutputSink::Collect,
     )?;
 
     utils::path_string_helper::print_progress_handler(
@@ -94,7 +94,7 @@ fn main() -> anyhow::Result<()> {
             "Total time: {}",
             utils::path_string_helper::format_duration(start.elapsed())
         ),
-        config.show_progress,
+        config.flags.show_progress,
     );
 
     Ok(())

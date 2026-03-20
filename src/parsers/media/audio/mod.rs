@@ -32,7 +32,8 @@ pub(crate) fn is_lossless_codec(codec: &str) -> bool {
 }
 
 /// Check if a string contains "opus" (case-insensitive)
-/// Verifies against FILE_EXTENSION_MAP so we only treat known audio codecs as opus.
+/// Verifies against `FILE_EXTENSION_MAP` so we only treat known audio codecs as opus.
+#[must_use]
 pub fn is_opus_codec(s: &str) -> bool {
     is_codec_for_file_type(s, FileType::Audio) && s.to_lowercase().contains("opus")
 }
@@ -61,6 +62,10 @@ fn extract_compression_mode(codec: &str) -> CompressionMode {
 }
 
 /// Extract audio metadata using ffprobe
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when `ffprobe` is missing, not executable, or fails to probe the file path.
 pub fn extract_audio_metadata(
     _content: &[u8],
     stats: &ParseResult,
@@ -165,14 +170,14 @@ pub fn extract_audio_metadata(
     })
 }
 
-/// Extract rich tags (title, artist, album, track, track_total, year, genre, artwork) using lofty
+/// Extract rich tags (title, artist, album, track, `track_total`, year, genre, artwork) using lofty
 fn extract_rich_tags(file_path: &str) -> RichTags {
     // Try to read tags using lofty
     let tagged_file = match read_from_path(file_path) {
         Ok(tf) => tf,
         Err(e) => {
             // Silently fail - not all files have tags, or lofty might not support the format
-            log::debug!("Failed to read tags from {}: {}", file_path, e);
+            log::debug!("Failed to read tags from {file_path}: {e}");
             return RichTags::default();
         }
     };
@@ -206,13 +211,19 @@ fn extract_rich_tags(file_path: &str) -> RichTags {
     let year = tag.date().map(|ts| u32::from(ts.year));
 
     // Genre - use ItemKey::Genre
-    let genre = tag.get_string(ItemKey::Genre).map(|s| s.to_string());
+    let genre = tag
+        .get_string(ItemKey::Genre)
+        .map(std::string::ToString::to_string);
 
     // Album artist - use ItemKey::AlbumArtist
-    let album_artist = tag.get_string(ItemKey::AlbumArtist).map(|s| s.to_string());
+    let album_artist = tag
+        .get_string(ItemKey::AlbumArtist)
+        .map(std::string::ToString::to_string);
 
     // Comments - use ItemKey::Comment
-    let comments = tag.get_string(ItemKey::Comment).map(|s| s.to_string());
+    let comments = tag
+        .get_string(ItemKey::Comment)
+        .map(std::string::ToString::to_string);
 
     // Extract and analyze artwork (cover art)
     let artwork = extract_artwork(tag);
@@ -279,7 +290,7 @@ fn analyze_image_data(image_data: &[u8]) -> Option<ImageMetadata> {
     match image::extract_image_metadata(image_data, &stats, &config) {
         Ok(metadata) => Some(metadata),
         Err(e) => {
-            log::debug!("Failed to extract artwork metadata: {}", e);
+            log::debug!("Failed to extract artwork metadata: {e}");
             None
         }
     }

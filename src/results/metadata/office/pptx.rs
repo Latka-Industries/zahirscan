@@ -1,4 +1,4 @@
-//! PPTX (PowerPoint) metadata structures
+//! PPTX (`PowerPoint`) metadata structures
 
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};

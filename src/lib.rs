@@ -15,7 +15,7 @@
 //! use zahirscan::{extract_zahir, OutputMode};
 //!
 //! // Process with default config (no overlay)
-//! let result = extract_zahir("file.log", OutputMode::Full, None, None, zahirscan::OutputSink::Collect)?;
+//! let result = extract_zahir("file.log", OutputMode::Full, None, None, &zahirscan::OutputSink::Collect)?;
 //!
 //! // Process with explicit config and optional output dir (None = no file write)
 //! let config = zahirscan::RuntimeConfig::new();
@@ -24,7 +24,7 @@
 //!     OutputMode::Templates,
 //!     Some(&config),
 //!     None,
-//!     zahirscan::OutputSink::Collect,
+//!     &zahirscan::OutputSink::Collect,
 //! )?;
 //! # Ok::<(), anyhow::Error>(())
 //! ```
@@ -39,14 +39,15 @@
 //!
 //! let collected = Arc::new(Mutex::new(Vec::<(String, zahirscan::Output)>::new()));
 //! let collected_clone = Arc::clone(&collected);
+//! let sink = OutputSink::StreamOnly(Box::new(move |path, out| {
+//!     collected_clone.lock().unwrap().push((path, out));
+//! }));
 //! let result = extract_zahir(
 //!     ["file1.log", "file2.log"],
 //!     OutputMode::Full,
 //!     None,
 //!     None,
-//!     OutputSink::StreamOnly(Box::new(move |path, out| {
-//!         collected_clone.lock().unwrap().push((path, out));
-//!     })),
+//!     &sink,
 //! )?;
 //! // result.outputs is empty; collected has each (path, Output) as it completed
 //! # Ok::<(), anyhow::Error>(())
@@ -65,7 +66,7 @@
 //! let (tx, rx) = mpsc::channel();
 //! // In another thread: run nefaxer with on_entry: Some(|e| { tx.send(e.path.to_string_lossy().into_owned()).ok(); });
 //! // Then drop(tx). This thread:
-//! let result = extract_zahir_from_stream(rx, OutputMode::Full, None, None, OutputSink::Collect)?;
+//! let result = extract_zahir_from_stream(&rx, OutputMode::Full, None, None, &OutputSink::Collect)?;
 //! # Ok::<(), anyhow::Error>(())
 //! ```
 
@@ -83,7 +84,7 @@ pub mod setup;
 pub mod utils;
 
 // Re-export all public types and functions
-pub use config::RuntimeConfig;
+pub use config::{RuntimeConfig, RuntimeFlags};
 pub use engine::chunking::{ProcessingTask, calculate_adaptive_chunking};
 pub use engine::orchestrator::run_pipeline;
 pub use engine::phases::{mining::phase2_mining, scanning::phase1_scan};
@@ -104,20 +105,24 @@ use utils::path_string_helper::ToPathIter;
 /// * `mode` - Output mode (Templates or Full).
 /// * `config` - If `None`, uses embedded default config only (no overlay). Overlay is for CLI via `setup::load_config()`.
 /// * `output_dir` - If `Some(dir)`, writes per-file output under that directory; if `None`, skips file write (library usage) or uses temp (CLI).
-/// * `output_sink` - Where results go: [`OutputSink::Collect`] (default), [`OutputSink::StreamOnly`] (callback, no collection), or [`OutputSink::Channel`] (send on channel, no collection). Errors are always in the returned [`ZahirScanResult::phase1_failed`] and [`phase2_failed`](ZahirScanResult::phase2_failed).
+/// * `output_sink` - Where results go: [`OutputSink::Collect`] (default), [`OutputSink::StreamOnly`] (callback, no collection), or [`OutputSink::Channel`] (send on channel, no collection). Pass by reference (e.g. `&OutputSink::Collect`). Errors are always in the returned [`ZahirScanResult::phase1_failed`] and [`phase2_failed`](ZahirScanResult::phase2_failed).
 ///
 /// Returns [`ZahirScanResult`]; `outputs` is empty when using `StreamOnly` or `Channel`.
 ///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when no paths are given, [`RuntimeConfig`] validation fails, or the processing pipeline fails (I/O, mmap, parsing, etc.).
+///
 /// # Example
 ///
-/// See crate-level docs for examples (i.e. Collect, or StreamOnly / Channel).
+/// See crate-level docs for examples (i.e. Collect, or `StreamOnly` / Channel).
 #[allow(private_bounds)]
 pub fn extract_zahir<P: ToPathIter>(
     paths: P,
     mode: OutputMode,
     config: Option<&RuntimeConfig>,
     output_dir: Option<&str>,
-    output_sink: OutputSink,
+    output_sink: &OutputSink,
 ) -> Result<ZahirScanResult> {
     let config = match config {
         Some(c) => c.clone(),
@@ -128,7 +133,7 @@ pub fn extract_zahir<P: ToPathIter>(
     };
     config.validate_external()?;
     let config_str = format!("{} CONFIG: {:#?}", PKG_NAME.to_uppercase(), config);
-    debug!("{}", config_str);
+    debug!("{config_str}");
 
     let path_strings = paths.to_path_iter();
     if path_strings.is_empty() {
@@ -138,7 +143,7 @@ pub fn extract_zahir<P: ToPathIter>(
     let mut config_with_mode = config;
     config_with_mode.output_mode = mode;
     let (phase1_failed, phase2) =
-        run_pipeline(&path_strings, output_dir, &config_with_mode, &output_sink)?;
+        run_pipeline(&path_strings, output_dir, &config_with_mode, output_sink)?;
 
     Ok(ZahirScanResult {
         outputs: phase2.outputs,
@@ -155,15 +160,19 @@ pub fn extract_zahir<P: ToPathIter>(
 /// done, drop the sender; this function then processes all received paths and streams results
 /// via `on_output`.
 ///
-/// * `paths_rx` - Channel receiver; block until closed, collecting all path strings.
+/// * `paths_rx` - Reference to the channel receiver; block until closed, collecting all path strings.
 /// * `mode`, `config`, `output_dir`, `output_sink` - Same as [`extract_zahir`].
+///
+/// # Errors
+///
+/// Same as [`extract_zahir`] (delegates after collecting paths from the channel).
 #[allow(clippy::module_name_repetitions)]
 pub fn extract_zahir_from_stream(
-    paths_rx: Receiver<String>,
+    paths_rx: &Receiver<String>,
     mode: OutputMode,
     config: Option<&RuntimeConfig>,
     output_dir: Option<&str>,
-    output_sink: OutputSink,
+    output_sink: &OutputSink,
 ) -> Result<ZahirScanResult> {
     let path_strings: Vec<String> = paths_rx.iter().collect();
     extract_zahir(&path_strings, mode, config, output_dir, output_sink)
