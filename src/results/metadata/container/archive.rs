@@ -32,7 +32,7 @@ pub struct ArchiveMetadata {
     /// Reserved; not currently set (plain .tar is zero-copy, no truncation)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub truncated: Option<bool>,
-    /// Note when full listing is not available (compressed TAR: no decompression; use plain .tar for file_count/entries)
+    /// Note when full listing is not available (compressed TAR: no decompression; use plain .tar for `file_count/entries`)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
 }

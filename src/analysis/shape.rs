@@ -27,6 +27,7 @@ pub struct SentenceShape {
 }
 
 /// Compute shape (word count + end type) for a sentence.
+#[must_use]
 pub fn sentence_shape(sentence: &str) -> SentenceShape {
     let trimmed = sentence.trim();
     let word_count = trimmed.split_whitespace().count();
@@ -43,7 +44,8 @@ pub fn sentence_shape(sentence: &str) -> SentenceShape {
     }
 }
 
-/// Build pattern string for a shape: [WORD_00] [WORD_01] ... [WORD_(n-1)].
+/// Build pattern string for a shape: [`WORD_00`] [`WORD_01`] ... [WORD_(n-1)].
+#[must_use]
 pub fn pattern_for_shape(shape: &SentenceShape) -> String {
     (0..shape.word_count)
         .map(|i| format_placeholder_bracketed_typed(PlaceholderType::Word, i))
@@ -51,7 +53,7 @@ pub fn pattern_for_shape(shape: &SentenceShape) -> String {
         .join(" ")
 }
 
-/// Group sentences by shape (word count + end type). Fills template_groups: pattern → list of sentences.
+/// Group sentences by shape (word count + end type). Fills `template_groups`: pattern → list of sentences.
 /// Coarser than exact-pattern: more sentences share a template.
 pub fn group_sentences_by_shape(
     sentences: &[String],
@@ -74,7 +76,8 @@ pub fn group_sentences_by_shape(
     );
 }
 
-/// True if pattern is only placeholders (e.g. "[WORD_00] [WORD_01] ...") with no literal tokens.
+/// True if pattern is only placeholders (e.g. "[`WORD_00`] [`WORD_01`] ...") with no literal tokens.
+#[must_use]
 pub fn pattern_is_all_placeholders(pattern: &str) -> bool {
     pattern
         .split_whitespace()
@@ -83,11 +86,12 @@ pub fn pattern_is_all_placeholders(pattern: &str) -> bool {
 
 /// True if the token is only punctuation/symbols (no alphanumeric). Used to avoid adding stray
 /// tokens like ")" or "(" as example words.
+#[must_use]
 pub fn token_has_alphanumeric(token: &str) -> bool {
-    token.chars().any(|c| c.is_alphanumeric())
+    token.chars().any(char::is_alphanumeric)
 }
 
-/// Fill examples by position: WORD_00 = first word from each sentence, WORD_01 = second, etc.
+/// Fill examples by position: `WORD_00` = first word from each sentence, `WORD_01` = second, etc.
 /// Used for shape/coarse fallback so we show actual words at each slot.
 /// Skips punctuation-only tokens so they do not appear as example words.
 pub fn extract_examples_by_position(

@@ -1,4 +1,6 @@
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
+use regex::Regex;
+use std::sync::LazyLock;
 
 /// Parse a date string into a Unix timestamp (seconds since epoch)
 ///
@@ -15,6 +17,7 @@ use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 /// 10. Syslog (no year): "Jan 15 00:07:12" — current year is assumed
 ///
 /// Leading/trailing whitespace, brackets, and trailing comma/semicolon are trimmed (e.g. "1/10/2026,", "[2026-01-10 12:54:53.959]").
+#[must_use]
 pub fn parse_date_to_timestamp(date_str: &str) -> Option<i64> {
     let s = date_str
         .trim()
@@ -117,6 +120,7 @@ pub fn parse_date_to_timestamp(date_str: &str) -> Option<i64> {
 }
 
 /// Check if a value looks like a boolean
+#[must_use]
 pub fn is_boolean(value: &str) -> bool {
     matches!(
         value.to_lowercase().as_str(),
@@ -146,6 +150,7 @@ const MAX_TIMESTAMP_MILLIS_F64: f64 = 4_000_000_000_000.0;
 /// Valid ranges:
 /// - Seconds: 1e9 (2001) to 4e9 (2090s)
 /// - Milliseconds: 1e12 (2001) to 4e12 (2090s)
+#[must_use]
 pub fn parse_timestamp_to_seconds(value: &str) -> Option<i64> {
     // Try parsing as integer first (most timestamps are integers)
     if let Ok(ts) = value.parse::<i64>() {
@@ -171,13 +176,13 @@ pub fn parse_timestamp_to_seconds(value: &str) -> Option<i64> {
 }
 
 /// Returns true if the string contains any contiguous digit run of length 10–13 that parses as a Unix timestamp (seconds or milliseconds).
-/// Used for has_timestamps heuristics when timestamps are embedded in a token (e.g. minified JSON).
+/// Used for `has_timestamps` heuristics when timestamps are embedded in a token (e.g. minified JSON).
+#[must_use]
 pub fn contains_unix_timestamp(s: &str) -> bool {
     let b = s.as_bytes();
     for len in [10, 11, 12, 13] {
-        let end = match b.len().checked_sub(len) {
-            Some(e) => e,
-            None => continue,
+        let Some(end) = b.len().checked_sub(len) else {
+            continue;
         };
         for start in 0..=end {
             let slice = &b[start..start + len];
@@ -193,6 +198,7 @@ pub fn contains_unix_timestamp(s: &str) -> bool {
 }
 
 /// Check if a value looks like a number (integer or float)
+#[must_use]
 pub fn is_number(value: &str) -> bool {
     // Skip if it's a timestamp (timestamps are numbers but should be treated separately)
     if parse_timestamp_to_seconds(value).is_some() {
@@ -209,43 +215,41 @@ pub fn is_number(value: &str) -> bool {
     false
 }
 
+static ISO_DATE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)?$")
+        .expect("ISO_DATE_REGEX pattern is valid")
+});
+
+static ISO_DATE_T_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)?$")
+        .expect("ISO_DATE_T_REGEX pattern is valid")
+});
+
+static US_DATE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\d{1,2}[/-]\d{1,2}[/-]\d{4}$").expect("US_DATE_REGEX pattern is valid")
+});
+
 /// Check if a value looks like a date
 ///
 /// Supports:
 /// - ISO 8601: YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, or YYYY-MM-DDTHH:MM:SS (with optional timezone)
 /// - US/European format: MM/DD/YYYY or DD/MM/YYYY (can't distinguish without context)
+#[must_use]
 pub fn is_date(value: &str) -> bool {
-    use regex::Regex;
-
-    // Compile regexes once for better performance using cached_static macro
-    let iso_regex = cached_static!(ISO_DATE_REGEX: Regex =
-        Regex::new(r"^\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)?$").unwrap()
-    );
-
-    let iso_t_regex = cached_static!(ISO_DATE_T_REGEX: Regex =
-        Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)?$").unwrap()
-    );
-
-    let us_regex = cached_static!(US_DATE_REGEX: Regex =
-        Regex::new(r"^\d{1,2}[/-]\d{1,2}[/-]\d{4}$").unwrap()
-    );
-
     // ISO 8601 with space separator: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
-    if iso_regex.is_match(value) {
+    if ISO_DATE_REGEX.is_match(value) {
         return true;
     }
     // ISO 8601 with T separator: YYYY-MM-DDTHH:MM:SS (with optional timezone)
-    if iso_t_regex.is_match(value) {
+    if ISO_DATE_T_REGEX.is_match(value) {
         return true;
     }
     // US/European format: MM/DD/YYYY or DD/MM/YYYY (can't distinguish without context)
-    if us_regex.is_match(value) {
-        return true;
-    }
-    false
+    US_DATE_REGEX.is_match(value)
 }
 
 /// Check if stderr is a TTY
+#[must_use]
 pub fn is_stderr_tty() -> bool {
     std::io::IsTerminal::is_terminal(&std::io::stderr())
 }

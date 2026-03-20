@@ -16,6 +16,7 @@ use crate::utils::path_string_helper::{
 pub type FrequentEntries = Vec<(String, usize)>;
 
 /// Collect entries from a frequency map that meet the threshold (count >= threshold).
+#[must_use]
 pub fn collect_frequent_entries(
     freq: &DashMap<String, usize>,
     threshold: usize,
@@ -27,6 +28,7 @@ pub fn collect_frequent_entries(
 }
 
 /// Filter n-gram and phrase maps by threshold, return frequent lists, and log the result.
+#[must_use]
 pub fn filter_frequent_ngrams_and_phrases(
     ngram_freq: &DashMap<String, usize>,
     phrase_freq: &DashMap<String, usize>,
@@ -47,7 +49,7 @@ pub fn filter_frequent_ngrams_and_phrases(
     (frequent_ngrams, frequent_phrases)
 }
 
-/// Build n-gram and phrase frequency maps from sentences (parallel). Fills ngram_freq and phrase_freq in place.
+/// Build n-gram and phrase frequency maps from sentences (parallel). Fills `ngram_freq` and `phrase_freq` in place.
 pub fn build_ngram_and_phrase_freq(
     sentences: &[String],
     ngram_freq: &DashMap<String, usize>,
@@ -59,7 +61,7 @@ pub fn build_ngram_and_phrase_freq(
         .enumerate()
         .for_each(|(idx, sentence)| {
             if idx > 0 && idx % 10_000 == 0 {
-                debug!("Processed {} sentences for n-grams", idx);
+                debug!("Processed {idx} sentences for n-grams");
             }
 
             let tokens: Vec<&str> = sentence.split_whitespace().collect();
@@ -89,7 +91,7 @@ pub fn build_ngram_and_phrase_freq(
     );
 }
 
-/// Walk a token slice left-to-right: match n-grams where possible, else emit [WORD_idx] per token.
+/// Walk a token slice left-to-right: match n-grams where possible, else emit [`WORD_idx`] per token.
 /// Appends to `pattern_parts` and returns the next placeholder index.
 fn tokens_to_pattern_parts(
     tokens: &[&str],
@@ -125,7 +127,8 @@ fn tokens_to_pattern_parts(
 
 /// Build structural pattern (pivot-based) enriched with n-grams for writing footprint.
 /// Language-agnostic: finds structural pivot points (words with high variation after them).
-/// Emits [WORD_00] [WORD_01] ... pivot ... [WORD_xx] [WORD_xx+1] ... so pattern aligns with examples.
+/// Emits [`WORD_00`] [`WORD_01`] ... pivot ... [`WORD_xx`] [`WORD_xx+1`] ... so pattern aligns with examples.
+#[must_use]
 pub fn build_enriched_structural_pattern(
     tokens: &[&str],
     pivot_patterns: &DashMap<String, usize>,
@@ -141,7 +144,7 @@ pub fn build_enriched_structural_pattern(
     let mut best_score = 0;
 
     for (pos, token) in tokens.iter().enumerate() {
-        let pattern_key = format!("P_{}_{}", pos, token);
+        let pattern_key = format!("P_{pos}_{token}");
         if let Some(count) = pivot_patterns.get(&pattern_key) {
             let score = *count.value();
             if score > best_score {
@@ -190,6 +193,7 @@ pub fn build_enriched_structural_pattern(
 }
 
 /// Build pattern string for text using n-gram matching.
+#[must_use]
 pub fn build_text_pattern(
     tokens: &[&str],
     frequent_ngrams: &[(String, usize)],

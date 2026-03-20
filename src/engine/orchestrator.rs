@@ -14,6 +14,10 @@ use crate::utils::{BATCHED_NO_VALID_FILES_DETAIL_CAP, no_valid_files_error};
 /// Batch size: `config.path_batch_size` if > 0; otherwise derived from the process fd limit ([`fd_limit_batch_size`]) or [`DEFAULT_AUTO_BATCH`].
 /// Caller must set `config.output_mode` before calling. Returns phase1 failed list and phase2 result.
 /// `output_sink` controls where results go; when not [`Collect`](OutputSink::Collect), `Phase2Result::outputs` is empty.
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when Phase 1 scanning fails, no valid files remain to process, adaptive chunking fails, Phase 2 mining fails, or output I/O fails.
 pub fn run_pipeline(
     input_paths: &[String],
     output_dir: Option<&str>,
@@ -55,7 +59,7 @@ fn run_pipeline_single(
         return Err(no_valid_files_error(&phase1.failed, None));
     }
     let adaptive = calculate_adaptive_chunking(&tasks, config.max_workers, config);
-    let phase2 = phase2_mining(tasks, config, &adaptive, skip_file_write, output_sink);
+    let phase2 = phase2_mining(&tasks, config, &adaptive, skip_file_write, output_sink);
     Ok((phase1.failed, phase2))
 }
 
@@ -82,7 +86,7 @@ fn run_pipeline_batched(
         any_batch_had_tasks = true;
         let adaptive = calculate_adaptive_chunking(&phase1.tasks, config.max_workers, config);
         let phase2 = phase2_mining(
-            phase1.tasks,
+            &phase1.tasks,
             config,
             &adaptive,
             skip_file_write,

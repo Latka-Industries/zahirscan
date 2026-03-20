@@ -5,10 +5,10 @@ use kdam::Animation;
 use log::{debug, error};
 
 use crate::config::RuntimeConfig;
-use crate::engine::chunking::{
-    AdaptiveChunking, ProcessingTask, process_files_with_adaptive_batching,
+use crate::engine::{
+    chunking::{AdaptiveChunking, ProcessingTask, process_files_with_adaptive_batching},
+    progress::{ProgressBarConfig, create_progress_bar},
 };
-use crate::engine::progress::{ProgressBarConfig, create_progress_bar};
 use crate::parsers::extract_templates;
 use crate::results::{Output, Phase2Result};
 use crate::setup::OutputSink;
@@ -47,15 +47,16 @@ fn log_phase2_metrics(
             format_bytes(mean_size_per_file),
             mean_time_per_file
         ),
-        config.show_progress,
+        config.flags.show_progress,
     );
 }
 
 /// Phase 2: Template mining and processing.
 /// Writes to files (unless `skip_file_write` is true). Returns outputs and per-file failures (no short-circuit).
 /// When `output_sink` is [`StreamOnly`](OutputSink::StreamOnly) or [`Channel`](OutputSink::Channel), each result is emitted there and not collected; `outputs` is empty.
+#[must_use]
 pub fn phase2_mining(
-    tasks: Vec<ProcessingTask>,
+    tasks: &[ProcessingTask],
     config: &RuntimeConfig,
     adaptive: &AdaptiveChunking,
     skip_file_write: bool,
@@ -75,7 +76,7 @@ pub fn phase2_mining(
     phase2_config.target_chunks_per_file = target_chunks;
 
     // Process files in parallel with adaptive batching
-    let pb = if config.show_progress {
+    let pb = if config.flags.show_progress {
         Some(create_progress_bar(ProgressBarConfig::new(
             tasks.len(),
             "Phase 2: Processing files",
@@ -86,7 +87,7 @@ pub fn phase2_mining(
     };
     // Progress bar will close automatically on drop
     let results: Vec<_> = process_files_with_adaptive_batching(
-        &tasks,
+        tasks,
         config.max_workers,
         config.threshold_multiplier,
         |task| {
@@ -108,7 +109,7 @@ pub fn phase2_mining(
     );
 
     // Calculate and log Phase 2 metrics
-    log_phase2_metrics(phase2_start.elapsed(), &tasks, config.max_workers, config);
+    log_phase2_metrics(phase2_start.elapsed(), tasks, config.max_workers, config);
 
     // Collect outputs and failures (partial success; no short-circuit). Only fill outputs when Collect.
     let mut outputs = Vec::new();

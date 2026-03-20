@@ -31,20 +31,19 @@ pub fn log_phase1_metrics(
 
     print_progress_handler(
         &format!(
-            "Phase 1: Processed {} files ({} valid) in {:.2}s (scan: {:.2}s, path setup: {:.2}s)",
-            input_file_count, valid_file_count, duration_secs, scan_secs, path_secs
+            "Phase 1: Processed {input_file_count} files ({valid_file_count} valid) in {duration_secs:.2}s (scan: {scan_secs:.2}s, path setup: {path_secs:.2}s)"
         ),
-        config.show_progress,
+        config.flags.show_progress,
     );
 }
 
 /// Filter input paths for Phase 1: skip directories and paths that match ignore patterns
 fn phase1_path_filter(p: &str, config: &RuntimeConfig) -> bool {
     if Path::new(p).is_dir() {
-        debug!("Skipping directory: {}", p);
+        debug!("Skipping directory: {p}");
         false
     } else if should_ignore_path(p, config) {
-        debug!("Skipping {} (matches ignore filter)", p);
+        debug!("Skipping {p} (matches ignore filter)");
         false
     } else {
         true
@@ -53,6 +52,7 @@ fn phase1_path_filter(p: &str, config: &RuntimeConfig) -> bool {
 
 /// Phase 1: Initial scan to collect stats and prepare for template mining.
 /// Returns tasks and failed paths with error messages (for TUI/lib to display).
+#[must_use]
 pub fn phase1_scan(
     input_paths: &[String],
     output_dir: Option<&str>,
@@ -74,7 +74,7 @@ pub fn phase1_scan(
 
     // Phase 1: Initial file scan for all files in parallel
     let scan_start = Instant::now();
-    let pb = if config.show_progress {
+    let pb = if config.flags.show_progress {
         Some(create_progress_bar(ProgressBarConfig::new(
             input_paths.len(),
             "Phase 1: Scanning files",
@@ -112,7 +112,7 @@ pub fn phase1_scan(
             Err(e) => {
                 let path = input_paths[i].clone();
                 let msg = e.to_string();
-                error!("Error collecting stats for {}: {}", path, e);
+                error!("Error collecting stats for {path}: {e}");
                 failed.push((path, msg));
             }
         }

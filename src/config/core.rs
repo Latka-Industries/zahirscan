@@ -15,19 +15,32 @@ use super::helpers::{clamp_f64, deep_merge_toml, u64_to_usize, u64_to_usize_min}
 use super::structs::TomlConfig;
 use crate::{validate_min, validate_range_01};
 
-/// Configuration struct for ZahirScan.
+/// User-facing toggles from TOML `[filter]` / CLI (redaction, media skip, progress, hidden files).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuntimeFlags {
+    /// Whether to redact file paths in output (show only filename as ***/filename.ext)
+    pub redact_paths: bool,
+    /// Whether to skip media metadata extraction (audio, video, image)
+    pub skip_media_metadata: bool,
+    /// Whether to show progress bars during processing
+    pub show_progress: bool,
+    /// Skip Unix hidden files (basename starts with .)
+    pub ignore_hidden_files: bool,
+}
+
+/// Configuration struct for `ZahirScan`.
 /// Binary name is always [`crate::PKG_NAME`], not stored in config.
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
     /// Maximum number of parallel workers
     pub max_workers: usize,
-    /// Target number of chunks per file (calculated adaptively, neat multiple of max_workers)
+    /// Target number of chunks per file (calculated adaptively, neat multiple of `max_workers`)
     pub target_chunks_per_file: usize,
     /// Output mode (templates only or full metadata)
     pub output_mode: crate::results::OutputMode,
     /// Static token threshold (0.0-1.0) - percentage of lines that must match for a token to be considered static
     pub static_threshold: f64,
-    /// Threshold for text files (0.0-1.0) - typically much lower than static_threshold for literary text
+    /// Threshold for text files (0.0-1.0) - typically much lower than `static_threshold` for literary text
     pub text_threshold: f64,
     /// Maximum number of lines to sample when extracting examples
     pub max_sample_lines: usize,
@@ -85,20 +98,14 @@ pub struct RuntimeConfig {
     pub small_file_threshold_bytes: usize,
     /// Large file threshold (bytes) - files above this use multiplier=3
     pub large_file_threshold_bytes: usize,
-    /// File batching threshold multiplier - batching kicks in when files > workers * threshold_multiplier
+    /// File batching threshold multiplier - batching kicks in when files > workers * `threshold_multiplier`
     pub threshold_multiplier: usize,
-    /// Minimum collection size for chunking - collections smaller than this will not be chunked (chunk_size = 1)
+    /// Minimum collection size for chunking - collections smaller than this will not be chunked (`chunk_size` = 1)
     pub min_collection_size_for_chunking: usize,
-    /// Whether to redact file paths in output (show only filename as ***/filename.ext)
-    pub redact_paths: bool,
-    /// Whether to skip media metadata extraction (audio, video, image)
-    pub skip_media_metadata: bool,
-    /// Whether to show progress bars during processing
-    pub show_progress: bool,
+    /// Redaction, media skip, progress, and hidden-file filter toggles.
+    pub flags: RuntimeFlags,
     /// File basename patterns to skip before Phase 1 (exact, *suffix, or prefix*)
     pub ignore_patterns: Vec<String>,
-    /// Skip Unix hidden files (basename starts with .)
-    pub ignore_hidden_files: bool,
 }
 
 impl RuntimeConfig {
@@ -107,8 +114,7 @@ impl RuntimeConfig {
         let max_workers = toml_config
             .concurrency
             .max_workers
-            .map(|w| w as usize)
-            .unwrap_or(0);
+            .map_or(0, |w| usize::try_from(w).unwrap_or(usize::MAX));
 
         let mining = toml_config.mining;
         let concurrency = toml_config.concurrency;
@@ -181,11 +187,13 @@ impl RuntimeConfig {
             min_collection_size_for_chunking: u64_to_usize(
                 concurrency.min_collection_size_for_chunking,
             ),
-            redact_paths: false,
-            skip_media_metadata: false,
-            show_progress: false,
+            flags: RuntimeFlags {
+                redact_paths: false,
+                skip_media_metadata: false,
+                show_progress: false,
+                ignore_hidden_files: toml_config.filter.ignore_hidden_files,
+            },
             ignore_patterns: toml_config.filter.ignore_patterns,
-            ignore_hidden_files: toml_config.filter.ignore_hidden_files,
         }
     }
 
@@ -193,6 +201,10 @@ impl RuntimeConfig {
     ///
     /// The file must exist and be valid TOML. Config is validated before return.
     /// For embedded default with no file I/O, use [`RuntimeConfig::new`](Self::new).
+    ///
+    /// # Errors
+    ///
+    /// I/O errors, invalid TOML, or failed [`validate_external`](Self::validate_external).
     pub fn load_from_path(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let content = fs::read_to_string(path)
@@ -212,6 +224,10 @@ impl RuntimeConfig {
     /// Load base config from TOML string and optional overlay file. Only keys present in the overlay override the base.
     ///
     /// Used by the CLI: base is the embedded default; overlay is the user config file (app data dir).
+    ///
+    /// # Errors
+    ///
+    /// Invalid embedded or overlay TOML, read errors for existing overlay paths, merge/serialize issues, or validation failure.
     pub fn load_config_with_overlay(
         base_toml: &str,
         overlay_path: Option<impl AsRef<Path>>,
@@ -246,6 +262,10 @@ impl RuntimeConfig {
     /// Load base config from file and optional overlay file. Only keys present in the overlay override the base.
     ///
     /// For library use when you have a project config.toml on disk (e.g. tests or custom loader).
+    ///
+    /// # Errors
+    ///
+    /// Same categories as [`load_config_with_overlay`](Self::load_config_with_overlay): I/O, TOML, merge, or validation.
     pub fn load_with_overlay(
         base_path: impl AsRef<Path>,
         overlay_path: Option<impl AsRef<Path>>,
@@ -324,21 +344,25 @@ impl RuntimeConfig {
         self.large_file_threshold_bytes = other.large_file_threshold_bytes;
         self.threshold_multiplier = other.threshold_multiplier;
         self.min_collection_size_for_chunking = other.min_collection_size_for_chunking;
-        self.redact_paths = other.redact_paths;
-        self.skip_media_metadata = other.skip_media_metadata;
-        self.show_progress = other.show_progress;
-        self.ignore_patterns = other.ignore_patterns.clone();
-        self.ignore_hidden_files = other.ignore_hidden_files;
+        self.flags = other.flags;
+        self.ignore_patterns.clone_from(&other.ignore_patterns);
     }
 
     /// Default configuration from the embedded config.toml (same source of truth as repo).
     /// No file I/O; uses the TOML baked in at build.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the embedded [`DEFAULT_CONFIG_TOML`](super::DEFAULT_CONFIG_TOML) fails to load, merge, or validate.
+    /// That indicates a broken build; it should not occur for published releases.
+    #[must_use]
     pub fn new() -> Self {
         Self::load_config_with_overlay(super::DEFAULT_CONFIG_TOML, None::<&Path>)
             .expect("embedded default config must be valid")
     }
 
     /// Get the default temp file extension (uses crate [`PKG_NAME`](crate::PKG_NAME)).
+    #[must_use]
     pub fn temp_file_extension(&self) -> String {
         format!("{}.out", crate::PKG_NAME)
     }
@@ -352,6 +376,10 @@ impl RuntimeConfig {
     /// Note: When loading from file, `max_workers = 0` is normalized to `num_cpus - 1` in
     /// [`from_toml_config`](Self::from_toml_config), so the `max_workers == 0` check only fires for
     /// programmatic config.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`anyhow::Error`] when any field is out of its documented range (e.g. thresholds not in 0..=1, `max_workers == 0`).
     pub fn validate_external(&self) -> Result<()> {
         if self.max_workers == 0 {
             return Err(anyhow::anyhow!(

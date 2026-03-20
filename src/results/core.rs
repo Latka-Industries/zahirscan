@@ -26,7 +26,7 @@ pub struct Template {
     pub pattern: String,
     /// Number of lines matching this template
     pub count: usize,
-    /// Examples of values for each placeholder (BTreeMap for sorted keys)
+    /// Examples of values for each placeholder (`BTreeMap` for sorted keys)
     pub examples: BTreeMap<String, Vec<String>>,
 }
 
@@ -79,7 +79,7 @@ pub struct Output {
     pub pdf_metadata: Option<super::metadata::PdfMetadata>,
     /// Document metadata (Mode 2 only, for DOCX and Pages files)
     pub docx_metadata: Option<DocumentMetadata>,
-    /// SQLite metadata (Mode 2 only, for SQLite database files)
+    /// `SQLite` metadata (Mode 2 only, for `SQLite` database files)
     pub sqlite_metadata: Option<SqliteMetadata>,
     /// TOML metadata (Mode 2 only, for TOML config files)
     pub toml_metadata: Option<TomlMetadata>,
@@ -93,7 +93,7 @@ pub struct Output {
     pub yaml_metadata: Option<YamlMetadata>,
     /// INI metadata (Mode 2 only, for INI/.cfg config files)
     pub ini_metadata: Option<IniMetadata>,
-    /// PPTX metadata (Mode 2 only, for PowerPoint files)
+    /// PPTX metadata (Mode 2 only, for `PowerPoint` files)
     pub pptx_metadata: Option<PptxMetadata>,
     /// EPUB metadata (Mode 2 only, for e-book files)
     pub epub_metadata: Option<EpubMetadata>,
@@ -166,6 +166,7 @@ impl Serialize for Output {
 
 impl Output {
     /// Create Mode 1 output (templates + writing footprint if available)
+    #[must_use]
     pub fn templates_only(
         templates: Vec<Template>,
         source: Option<String>,
@@ -180,6 +181,7 @@ impl Output {
     }
 
     /// Create Mode 2 output (full metadata)
+    #[must_use]
     pub fn full(
         templates: Vec<Template>,
         metadata: FileMetadata,
