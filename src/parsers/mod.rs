@@ -24,7 +24,7 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 
 /// Macro to extract metadata with error handling and fallback
-/// Usage: extract_metadata_with_fallback!(stats.field, extract_fn, stats, MetadataType, type_name_expr)
+/// Usage: `extract_metadata_with_fallback!(stats.field`, `extract_fn`, stats, `MetadataType`, `type_name_expr`)
 #[macro_export]
 macro_rules! extract_metadata_with_fallback {
     ($field:expr, $extract_fn:expr, $stats:expr, $metadata_type:path, $type_name:expr) => {
@@ -56,7 +56,7 @@ macro_rules! extract_metadata_with_fallback {
 #[macro_export]
 macro_rules! process_with_metadata {
     ($stats:expr, $mmap:expr, $config:expr, $field:ident, $extract_meta:expr, $metadata_type:path, $file_type:expr, $extract_templates:expr) => {{
-        if !$config.skip_media_metadata {
+        if !$config.flags.skip_media_metadata {
             $crate::extract_metadata_with_fallback!(
                 $stats.$field,
                 $extract_meta,
@@ -69,7 +69,16 @@ macro_rules! process_with_metadata {
     }};
 }
 
-/// Macro to copy all metadata fields from ParseResult to Output.
+/// Wrap an infallible value in [`Result::Ok`] with [`anyhow::Error`] as the error type.
+/// Use with [`process_with_metadata!`] when metadata extractors return `T` instead of `Result<T, _>`.
+#[macro_export]
+macro_rules! ok_anyhow {
+    ($value:expr) => {
+        ::core::result::Result::<_, ::anyhow::Error>::Ok($value)
+    };
+}
+
+/// Macro to copy all metadata fields from `ParseResult` to Output.
 /// Usage: `copy_metadata_fields!(from_stats, to_output)`
 /// This ensures all metadata fields are copied without having to manually list them.
 #[macro_export]
@@ -104,6 +113,7 @@ macro_rules! copy_metadata_fields {
 macro_rules! no_template_mining {
     ($name:ident, $doc:expr) => {
         #[doc = $doc]
+        #[doc = "# Errors\n\nAlways returns `Ok` (metadata-only stub; no template mining)."]
         pub fn $name(
             _content: &[u8],
             stats: &$crate::parsers::ParseResult,
@@ -128,6 +138,10 @@ pub enum ParserCategory {
 
 impl ParserCategory {
     /// Dispatch to the category's parser module.
+    ///
+    /// # Errors
+    ///
+    /// Propagates I/O, UTF-8, or format-specific parser errors from the selected category.
     pub fn process(
         self,
         stats: &mut ParseResult,
@@ -184,16 +198,59 @@ const METADATA_NAMES: [&str; 23] = [
 
 impl FileType {
     /// Get the string representation of the file type for metadata extraction
+    #[must_use]
     pub fn as_metadata_name(&self) -> &'static str {
         METADATA_NAMES[*self as u8 as usize]
     }
 
+    /// Parse a string produced by [`Self::as_metadata_name`].
+    ///
+    /// Compares `s` for **exact** equality (case-sensitive) against the same internal
+    /// name table used by [`Self::as_metadata_name`]. This is the inverse of
+    /// `as_metadata_name` for valid outputs: `from_metadata_name(ft.as_metadata_name()) == Some(ft)`.
+    ///
+    /// Returns `None` if `s` is not one of those strings (e.g. wrong case, typo, or unknown label).
+    #[must_use]
+    pub fn from_metadata_name(s: &str) -> Option<Self> {
+        METADATA_NAMES
+            .iter()
+            .position(|&name| name == s)
+            .map(|i| match i {
+                0 => FileType::Log,
+                1 => FileType::Json,
+                2 => FileType::Text,
+                3 => FileType::Markdown,
+                4 => FileType::Image,
+                5 => FileType::Video,
+                6 => FileType::Audio,
+                7 => FileType::Csv,
+                8 => FileType::Pdf,
+                9 => FileType::Docx,
+                10 => FileType::Xlsx,
+                11 => FileType::Sqlite,
+                12 => FileType::Toml,
+                13 => FileType::Zip,
+                14 => FileType::Xml,
+                15 => FileType::Html,
+                16 => FileType::Yaml,
+                17 => FileType::Ini,
+                18 => FileType::Pptx,
+                19 => FileType::Epub,
+                20 => FileType::Archive,
+                21 => FileType::Code,
+                22 => FileType::Unknown,
+                _ => unreachable!("METADATA_NAMES and match arms must stay in sync"),
+            })
+    }
+
     /// Check if this is a binary file type that still needs processing (metadata extraction)
+    #[must_use]
     pub fn binary_needs_processing(&self) -> bool {
         self.parser_category().is_some()
     }
 
-    /// Category for dispatch to the right parser module (Media -> media::process, etc.).
+    /// Category for dispatch to the right parser module (Media -> `media::process`, etc.).
+    #[must_use]
     pub fn parser_category(self) -> Option<ParserCategory> {
         match self {
             FileType::Image | FileType::Video | FileType::Audio => Some(ParserCategory::Media),
@@ -238,7 +295,7 @@ pub struct ParseResult {
     pub pdf_metadata: Option<crate::results::PdfMetadata>,
     /// Document metadata (for DOCX files)
     pub docx_metadata: Option<crate::results::DocumentMetadata>,
-    /// SQLite metadata (for SQLite database files)
+    /// `SQLite` metadata (for `SQLite` database files)
     pub sqlite_metadata: Option<crate::results::SqliteMetadata>,
     /// TOML metadata (for TOML config files)
     pub toml_metadata: Option<crate::results::TomlMetadata>,
@@ -252,7 +309,7 @@ pub struct ParseResult {
     pub yaml_metadata: Option<crate::results::YamlMetadata>,
     /// INI metadata (for INI/.cfg config files)
     pub ini_metadata: Option<crate::results::IniMetadata>,
-    /// PPTX metadata (for PowerPoint files)
+    /// PPTX metadata (for `PowerPoint` files)
     pub pptx_metadata: Option<crate::results::PptxMetadata>,
     /// EPUB metadata (for e-book files)
     pub epub_metadata: Option<crate::results::EpubMetadata>,
@@ -273,6 +330,7 @@ impl ParseResult {
     }
 
     /// Convert parse result to Output object
+    #[must_use]
     pub fn to_output(&self, mode: OutputMode, config: &RuntimeConfig) -> Output {
         match mode {
             OutputMode::Templates => self.build_templates_output(config),
@@ -282,15 +340,18 @@ impl ParseResult {
 
     fn check_for_writing_footprint(&self, output: &mut Output) {
         if let Some(ref mining) = self.mining_result {
-            output.writing_footprint = mining.writing_footprint.clone();
+            output
+                .writing_footprint
+                .clone_from(&mining.writing_footprint);
         }
     }
 
     /// Build templates-only output (with writing footprint and metadata)
     fn build_templates_output(&self, config: &RuntimeConfig) -> Output {
-        let source_path = match config.redact_paths {
-            true => utils::path_string_helper::redact_path(&self.file_path),
-            false => self.file_path.clone(),
+        let source_path = if config.flags.redact_paths {
+            utils::path_string_helper::redact_path(&self.file_path)
+        } else {
+            self.file_path.clone()
         };
 
         let templates = self
@@ -315,9 +376,10 @@ impl ParseResult {
 
     /// Build full output (with all metadata and compression stats)
     fn build_full_output(&self, config: &RuntimeConfig) -> Output {
-        let source_path = match config.redact_paths {
-            true => utils::path_string_helper::redact_path(&self.file_path),
-            false => self.file_path.clone(),
+        let source_path = if config.flags.redact_paths {
+            utils::path_string_helper::redact_path(&self.file_path)
+        } else {
+            self.file_path.clone()
         };
 
         let metadata = FileMetadata {
@@ -359,7 +421,11 @@ impl ParseResult {
         output
     }
 
-    /// Write the parse result to an output file as JSON
+    /// Write the parse result to an output file as JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be opened/written or JSON serialization fails.
     pub fn write_to_file(
         &self,
         output_path: &str,
@@ -375,7 +441,7 @@ impl ParseResult {
         // Both modes now use the Output object to include writing_footprint
         let output = self.to_output(mode, config);
         let json = serde_json::to_string_pretty(&output)?;
-        writeln!(output_file, "{}", json)?;
+        writeln!(output_file, "{json}")?;
 
         Ok(())
     }
@@ -390,6 +456,10 @@ pub(crate) fn open_mmap(path: &str) -> Result<Mmap> {
 
 /// Phase 1: Initial file scan (fast pass to gather file metadata).
 /// Returns stats only; use [`initial_file_scan_with_mmap`] when the mmap should be reused (e.g. Phase 2).
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be opened or memory-mapped.
 pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
     let (stats, _) = initial_file_scan_with_mmap(path)?;
     Ok(stats)
@@ -448,18 +518,21 @@ fn process_text_or_unknown(
 
 /// Extract templates from a file using probabilistic template mining.
 /// If `mmap` is `Some`, it is reused (avoids double open when called from Phase 2); otherwise the file is opened.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be opened/mapped when `mmap` is `None`, or if the file-type parser fails (I/O, UTF-8, format-specific).
 pub fn extract_templates(
     stats: &mut ParseResult,
     config: &RuntimeConfig,
     mmap: Option<&Mmap>,
 ) -> Result<MiningResult> {
     let owned_mmap;
-    let mmap_ref: &Mmap = match mmap {
-        Some(m) => m,
-        None => {
-            owned_mmap = open_mmap(&stats.file_path)?;
-            &owned_mmap
-        }
+    let mmap_ref: &Mmap = if let Some(m) = mmap {
+        m
+    } else {
+        owned_mmap = open_mmap(&stats.file_path)?;
+        &owned_mmap
     };
     match stats.file_type.parser_category() {
         Some(cat) => cat.process(stats, mmap_ref, config),
