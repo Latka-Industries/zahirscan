@@ -70,11 +70,13 @@ fn main() -> anyhow::Result<()> {
     let mut config = setup::load_config();
     setup::apply_cli_to_config(
         &mut config,
-        args.progress,
-        args.dev,
-        args.full,
-        args.redact,
-        args.no_media,
+        setup::CliRuntimeFlags {
+            progress: args.progress,
+            dev: args.dev,
+            full: args.full,
+            redact: args.redact,
+            no_media: args.no_media,
+        },
     )?;
 
     let (paths, output) = setup::resolve_output_paths(args.input.clone(), args.output.clone())?;

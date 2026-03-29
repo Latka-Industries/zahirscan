@@ -66,11 +66,11 @@ pub fn extract_csv_metadata(
         Err(_) => (None, None, Some(false)),
     };
 
-    let delimiter = utils::format_delimiter_for_metadata(delim_byte);
+    let delimiter_display = utils::format_delimiter_for_metadata(delim_byte);
     let quote_character = utils::detect_quote_character(content_str, field_sep);
     let escape_character = utils::detect_escape_character(
         content_str,
-        delimiter.as_deref(),
+        Some(delimiter_display.as_str()),
         quote_character.as_deref(),
     );
 
@@ -81,23 +81,19 @@ pub fn extract_csv_metadata(
     let mut sample_data: Vec<Vec<String>> = Vec::new();
 
     for result in reader.records() {
-        match result {
-            Ok(record) => {
-                row_count += 1;
-                // If we didn't get column count from headers, use first row
-                if column_count == 0 {
-                    column_count = record.len();
-                }
-                // Collect samples for type inference
-                if sample_data.len() < max_sample_rows {
-                    let row: Vec<String> = record.iter().map(|s: &str| s.to_string()).collect();
-                    sample_data.push(row);
-                }
+        if let Ok(record) = result {
+            row_count += 1;
+            // If we didn't get column count from headers, use first row
+            if column_count == 0 {
+                column_count = record.len();
             }
-            Err(_) => {
-                // Skip malformed rows
-                continue;
+            // Collect samples for type inference
+            if sample_data.len() < max_sample_rows {
+                let row: Vec<String> = record.iter().map(|s: &str| s.to_string()).collect();
+                sample_data.push(row);
             }
+        } else {
+            // Skip malformed rows
         }
     }
 
@@ -127,7 +123,7 @@ pub fn extract_csv_metadata(
         column_names,
         encoding,
         column_types,
-        delimiter,
+        delimiter: Some(delimiter_display),
         quote_character,
         escape_character,
         has_header,

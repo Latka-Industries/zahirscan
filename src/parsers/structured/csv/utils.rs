@@ -64,18 +64,16 @@ pub fn dominant_delimiter_char(content: &str) -> Option<char> {
 /// Byte to pass to [`csv::ReaderBuilder::delimiter`]. Defaults to comma if none dominates.
 #[must_use]
 pub fn detect_delimiter_byte(content: &str) -> u8 {
-    dominant_delimiter_char(content)
-        .map(|c| u8::try_from(u32::from(c)).unwrap_or(b','))
-        .unwrap_or(b',')
+    dominant_delimiter_char(content).map_or(b',', |c| u8::try_from(u32::from(c)).unwrap_or(b','))
 }
 
 /// Format a single-byte delimiter for [`crate::results::CsvMetadata::delimiter`].
 #[must_use]
-pub fn format_delimiter_for_metadata(byte: u8) -> Option<String> {
-    Some(match char::from(byte) {
+pub fn format_delimiter_for_metadata(byte: u8) -> String {
+    match char::from(byte) {
         '\t' => "\\t".to_string(),
         c => c.to_string(),
-    })
+    }
 }
 
 /// Delimiter used for parsing: content-based detection, with optional path hints for
@@ -202,16 +200,16 @@ pub fn detect_escape_character(
 #[must_use]
 pub fn infer_value_type(value: &str) -> String {
     match () {
-        _ if value.is_empty()
+        () if value.is_empty()
             || value.eq_ignore_ascii_case("null")
             || value.eq_ignore_ascii_case("nil") =>
         {
             CsvValueTypes::NULL.to_string()
         }
-        _ if is_boolean(value) => CsvValueTypes::BOOLEAN.to_string(),
-        _ if parse_timestamp_to_seconds(value).is_some() => CsvValueTypes::TIMESTAMP.to_string(),
-        _ if is_number(value) => CsvValueTypes::NUMBER.to_string(),
-        _ if is_date(value) => CsvValueTypes::DATE.to_string(),
-        _ => CsvValueTypes::STRING.to_string(),
+        () if is_boolean(value) => CsvValueTypes::BOOLEAN.to_string(),
+        () if parse_timestamp_to_seconds(value).is_some() => CsvValueTypes::TIMESTAMP.to_string(),
+        () if is_number(value) => CsvValueTypes::NUMBER.to_string(),
+        () if is_date(value) => CsvValueTypes::DATE.to_string(),
+        () => CsvValueTypes::STRING.to_string(),
     }
 }

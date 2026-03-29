@@ -168,7 +168,7 @@ fn process_task_phase2(
     if !skip_file_write {
         stats
             .write_to_file(&task.output_path, config.output_mode, config)
-            .inspect(|_| debug!("Output written to: {}", task.output_path))
+            .inspect(|()| debug!("Output written to: {}", task.output_path))
             .inspect_err(|e| error!("Error writing {}: {}", task.output_path, e))?;
     }
 

@@ -50,12 +50,12 @@ fn should_omit_tar_entry_path(path: &str) -> bool {
 fn detect_archive_format(path: &str) -> TarFormat {
     let lo = path.to_lowercase();
     match () {
-        _ if lo.ends_with(".tar.xz") => TarFormat::TarXz,
-        _ if lo.ends_with(".tar.bz2") => TarFormat::TarBz2,
-        _ if lo.ends_with(".tgz") => TarFormat::Tgz,
-        _ if lo.ends_with(".tar.gz") => TarFormat::TarGz,
-        _ if lo.ends_with(".tar") => TarFormat::Tar,
-        _ => TarFormat::Tar,
+        () if lo.ends_with(".tar.xz") => TarFormat::TarXz,
+        () if lo.ends_with(".tar.bz2") => TarFormat::TarBz2,
+        () if lo.ends_with(".tgz") => TarFormat::Tgz,
+        () if lo.ends_with(".tar.gz") => TarFormat::TarGz,
+        () if lo.ends_with(".tar") => TarFormat::Tar,
+        () => TarFormat::Tar,
     }
 }
 
