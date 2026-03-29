@@ -27,12 +27,20 @@ fn is_true_value(val: &str) -> bool {
     matches!(val.to_lowercase().as_str(), "true" | "yes" | "1" | "y")
 }
 
+/// Cached mean for [`StatsCalculator`]: unset, computed empty slice, or computed value.
+#[derive(Clone, Copy)]
+enum MeanCache {
+    Uncached,
+    None,
+    Some(f64),
+}
+
 /// Optimized statistics calculator with lazy computation and caching
 /// Avoids redundant calculations (e.g., mean is reused by stdev)
 struct StatsCalculator<'a> {
     values: &'a [f64],
     sorted_values: &'a [f64],
-    cached_mean: std::cell::Cell<Option<Option<f64>>>,
+    cached_mean: std::cell::Cell<MeanCache>,
 }
 
 impl<'a> StatsCalculator<'a> {
@@ -42,25 +50,28 @@ impl<'a> StatsCalculator<'a> {
         Self {
             values,
             sorted_values,
-            cached_mean: std::cell::Cell::new(None),
+            cached_mean: std::cell::Cell::new(MeanCache::Uncached),
         }
     }
 
     /// Calculate the mean, with caching to avoid redundant computation
     fn mean(&self) -> Option<f64> {
-        // Check cache first
-        if let Some(cached) = self.cached_mean.get() {
-            return cached;
+        match self.cached_mean.get() {
+            MeanCache::Uncached => {
+                let result = if self.values.is_empty() {
+                    None
+                } else {
+                    Some(self.values.iter().sum::<f64>() / self.values.len() as f64)
+                };
+                self.cached_mean.set(match result {
+                    None => MeanCache::None,
+                    Some(m) => MeanCache::Some(m),
+                });
+                result
+            }
+            MeanCache::None => None,
+            MeanCache::Some(m) => Some(m),
         }
-
-        // Compute and cache
-        let result = if self.values.is_empty() {
-            None
-        } else {
-            Some(self.values.iter().sum::<f64>() / self.values.len() as f64)
-        };
-        self.cached_mean.set(Some(result));
-        result
     }
 
     /// Calculate the median from sorted values
@@ -70,7 +81,10 @@ impl<'a> StatsCalculator<'a> {
         }
         let mid = self.sorted_values.len() / 2;
         if self.sorted_values.len().is_multiple_of(2) {
-            Some((self.sorted_values[mid - 1] + self.sorted_values[mid]) / 2.0)
+            Some(f64::midpoint(
+                self.sorted_values[mid - 1],
+                self.sorted_values[mid],
+            ))
         } else {
             Some(self.sorted_values[mid])
         }
@@ -175,7 +189,7 @@ pub fn compute_date_stats_from_timestamps(timestamps: Vec<i64>) -> Option<DateSt
     }
 
     let mut sorted = timestamps;
-    sorted.sort();
+    sorted.sort_unstable();
     let min_ts = sorted.first().copied()?;
     let max_ts = sorted.last().copied()?;
 

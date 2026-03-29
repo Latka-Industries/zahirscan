@@ -41,14 +41,12 @@ pub fn extract_video_metadata(
     // ============================================================================
 
     // Basic video properties
-    let (width, height) = video_stream
-        .map(|s| {
-            (
-                s.width.and_then(|w| usize::try_from(w).ok()).unwrap_or(0),
-                s.height.and_then(|h| usize::try_from(h).ok()).unwrap_or(0),
-            )
-        })
-        .unwrap_or((0, 0));
+    let (width, height) = video_stream.map_or((0, 0), |s| {
+        (
+            s.width.and_then(|w| usize::try_from(w).ok()).unwrap_or(0),
+            s.height.and_then(|h| usize::try_from(h).ok()).unwrap_or(0),
+        )
+    });
     let coded_width =
         video_stream.and_then(|s| s.coded_width.and_then(|w| usize::try_from(w).ok()));
     let coded_height =
