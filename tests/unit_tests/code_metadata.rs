@@ -29,6 +29,9 @@ fn detect_file_type_known_types_stay_known() {
     assert_eq!(detect_file_type("foo.sqlite3"), FileType::Sqlite);
     assert_eq!(detect_file_type("data.json"), FileType::Json);
     assert_eq!(detect_file_type("readme.md"), FileType::Markdown);
+    assert_eq!(detect_file_type("track.aif"), FileType::Audio);
+    assert_eq!(detect_file_type("track.aiff"), FileType::Audio);
+    assert_eq!(detect_file_type("track.aifc"), FileType::Audio);
 }
 
 #[test]
