@@ -7,13 +7,14 @@
 
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
+use anyhow::Result;
+use rayon::prelude::*;
+use rayon::slice::ParallelSlice;
+
 use crate::config::RuntimeConfig;
 use crate::engine::chunking::optimal_chunk_size;
 use crate::parsers::ParseResult;
 use crate::results::metadata::{ArchiveEntry, ArchiveMetadata};
-use anyhow::Result;
-use rayon::prelude::*;
-use rayon::slice::ParallelSlice;
 
 /// TAR archive format: plain or compressed. Used for detection and to choose the right decoder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

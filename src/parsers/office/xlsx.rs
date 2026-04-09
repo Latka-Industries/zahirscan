@@ -9,15 +9,15 @@ use log::warn;
 use quick_xml::Reader as XmlReader;
 use quick_xml::events::Event;
 
+use crate::config::RuntimeConfig;
+use crate::parsers::ParseResult;
+use crate::results::DocumentMetadata;
+
 use super::constants::{
     CP_NAMESPACE, DOCX_CORE_PROPERTIES, OFFICE_CORE_XML, REVISION_ELEMENT, XLSX_APP_XML,
     XLSX_ATTR_NAME, XLSX_LPSTR, XLSX_SHEET, XLSX_WORKBOOK_XML,
 };
 use super::utils::{has_namespace, open_office_archive, read_xml_from_archive};
-
-use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::results::DocumentMetadata;
 
 /// Extract XLSX metadata
 pub fn extract_xlsx_metadata(

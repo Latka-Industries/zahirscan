@@ -2,12 +2,13 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::Result;
+use serde_norway::Value;
+
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::YamlMetadata;
 use crate::results::metadata::settings::yaml::YamlTypeInfo;
-use anyhow::Result;
-use serde_norway::Value;
 
 /// Convert a `serde_norway::Value` to a `YamlTypeInfo`.
 fn value_to_yaml_type_info(v: &Value) -> YamlTypeInfo {

@@ -1,15 +1,16 @@
 //! JSON file template extraction using JSON-aware parsing
 
-use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::parsers::traits::{AdaptiveParallel, build_mining_result, empty_mining_result};
-use crate::results::{JsonMetadata, MiningResult, Template};
-use crate::utils::path_string_helper::{PlaceholderType, format_placeholder_typed};
 use anyhow::Result;
 use dashmap::DashMap;
 use rayon::prelude::*;
 use serde_json::Value;
 use std::collections::BTreeMap;
+
+use crate::config::RuntimeConfig;
+use crate::parsers::ParseResult;
+use crate::parsers::traits::{AdaptiveParallel, build_mining_result, empty_mining_result};
+use crate::results::{JsonMetadata, MiningResult, Template};
+use crate::utils::path_string_helper::{PlaceholderType, format_placeholder_typed};
 
 /// JSON placeholder constants and formatting utilities
 struct JsonPlaceholders;

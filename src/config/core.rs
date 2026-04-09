@@ -11,9 +11,10 @@ use std::path::Path;
 use toml::Value as TomlValue;
 use toml::map::Map;
 
+use crate::{validate_min, validate_range_01};
+
 use super::helpers::{clamp_f64, deep_merge_toml, u64_to_usize, u64_to_usize_min};
 use super::structs::TomlConfig;
-use crate::{validate_min, validate_range_01};
 
 /// User-facing toggles from TOML `[filter]` / CLI (redaction, media skip, progress, hidden files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

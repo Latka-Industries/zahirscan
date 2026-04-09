@@ -1,11 +1,5 @@
 //! Media parsers: audio, image, video.
 
-use crate::config::RuntimeConfig;
-use crate::parsers::{FileType, ParseResult};
-use crate::results::MiningResult;
-use anyhow::Result;
-use memmap2::Mmap;
-
 pub mod audio;
 pub mod image;
 pub mod video;
@@ -13,6 +7,13 @@ pub mod video;
 pub use audio::{extract_audio_metadata, extract_audio_templates};
 pub use image::{extract_image_metadata, extract_image_templates};
 pub use video::{extract_video_metadata, extract_video_templates};
+
+use anyhow::Result;
+use memmap2::Mmap;
+
+use crate::config::RuntimeConfig;
+use crate::parsers::{FileType, ParseResult};
+use crate::results::MiningResult;
 
 /// Dispatch by file type; fills the appropriate metadata field and returns templates.
 ///

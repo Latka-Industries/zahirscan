@@ -1,8 +1,9 @@
+use anyhow::Result;
+use memmap2::Mmap;
+
 use crate::config::RuntimeConfig;
 use crate::parsers::{FileType, ParseResult};
 use crate::results::MiningResult;
-use anyhow::Result;
-use memmap2::Mmap;
 
 pub mod archive;
 pub mod zip;

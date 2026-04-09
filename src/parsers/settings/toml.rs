@@ -1,11 +1,12 @@
 //! TOML file metadata extraction
 
+use anyhow::Result;
+use toml::Value;
+
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::TomlMetadata;
 use crate::results::metadata::settings::toml::TomlTypeInfo;
-use anyhow::Result;
-use toml::Value;
 
 fn value_to_type_info(v: &Value) -> TomlTypeInfo {
     match v {

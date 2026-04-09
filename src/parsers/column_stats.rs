@@ -1,12 +1,13 @@
 //! Shared column statistics computation utilities
 //! Used by both CSV and `SQLite` parsers for consistent statistics calculation
 
-use crate::config::RuntimeConfig;
-use crate::parsers::traits::AdaptiveParallel;
-use crate::results::{BooleanStats, DateStats, NumericStats};
 use chrono::DateTime;
 use dashmap::{DashMap, DashSet};
 use rayon::prelude::*;
+
+use crate::config::RuntimeConfig;
+use crate::parsers::traits::AdaptiveParallel;
+use crate::results::{BooleanStats, DateStats, NumericStats};
 
 /// Number of seconds constants for date statistics
 const SECONDS_PER_MINUTE: f64 = 60.0;

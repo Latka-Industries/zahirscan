@@ -1,14 +1,16 @@
 //! DOCX file text extraction and metadata
 
-use super::constants::{CP_NAMESPACE, DOCX_CORE_PROPERTIES, OFFICE_CORE_XML, REVISION_ELEMENT};
-use super::utils::{decode_xml_entities, has_namespace, open_office_archive};
+use log::warn;
+use quick_xml::Reader;
+use quick_xml::events::Event;
+
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::DocumentMetadata;
 use crate::utils::zip_read::read_zip_entry_to_string_limited;
-use log::warn;
-use quick_xml::Reader;
-use quick_xml::events::Event;
+
+use super::constants::{CP_NAMESPACE, DOCX_CORE_PROPERTIES, OFFICE_CORE_XML, REVISION_ELEMENT};
+use super::utils::{decode_xml_entities, has_namespace, open_office_archive};
 
 /// Extract DOCX metadata and text content
 pub fn extract_docx_metadata(

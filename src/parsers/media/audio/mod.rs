@@ -14,8 +14,10 @@ use crate::config::RuntimeConfig;
 use crate::parsers::media::image;
 use crate::parsers::{CompressionMode, FileType, ParseResult, media_helpers};
 use crate::results::{AudioMetadata as OutputAudioMetadata, ImageMetadata};
-use crate::utils::ffprobe_handler::{check_ffprobe_available, run_ffprobe_safe};
-use crate::utils::filetypes::{get_extensions_for_file_type, is_codec_for_file_type};
+use crate::utils::{
+    ffprobe_handler::{check_ffprobe_available, run_ffprobe_safe},
+    filetypes::{get_extensions_for_file_type, is_codec_for_file_type},
+};
 
 /// Lossless audio codec extensions
 /// Maps codec extensions to their compression mode

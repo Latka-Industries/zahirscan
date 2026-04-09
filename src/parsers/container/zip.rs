@@ -3,13 +3,13 @@
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
+use anyhow::Result;
+use zip::ZipArchive;
+
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::metadata::{ZipEntry, ZipMetadata};
-use crate::utils::filetypes::detect_file_type;
-use crate::utils::path_string_helper::should_ignore_path;
-use anyhow::Result;
-use zip::ZipArchive;
+use crate::utils::{filetypes::detect_file_type, path_string_helper::should_ignore_path};
 
 /// Path-prefix rules not covered by `[filter]` (e.g. __MACOSX/). Basename-based
 /// filtering uses `should_ignore_path` from config.

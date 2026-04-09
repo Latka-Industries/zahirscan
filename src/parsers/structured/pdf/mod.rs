@@ -2,12 +2,13 @@
 
 mod utils;
 
-use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::results::PdfMetadata;
 use anyhow::Result;
 use log::warn;
 use pdf::file::FileOptions;
+
+use crate::config::RuntimeConfig;
+use crate::parsers::ParseResult;
+use crate::results::PdfMetadata;
 
 /// Extract document info from PDF info dictionary
 fn extract_document_info(info: &pdf::object::InfoDict, metadata: &mut PdfMetadata) {

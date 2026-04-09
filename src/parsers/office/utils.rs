@@ -1,11 +1,12 @@
 //! Shared utilities for Office document parsing (DOCX, PPTX, XLSX).
 //! XML helpers, entity decoding, ZIP archive handling, and read helpers.
 
-use crate::utils::zip_read::read_zip_entry_to_string_limited;
 use log::warn;
 use quick_xml::escape::unescape;
 use std::io::Cursor;
 use zip::ZipArchive;
+
+use crate::utils::zip_read::read_zip_entry_to_string_limited;
 
 /// Check if an XML element name contains a specific namespace prefix
 ///
