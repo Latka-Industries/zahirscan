@@ -1,15 +1,16 @@
 //! PPTX (`PowerPoint`) metadata extraction
 
-use std::io::Read;
-
-use super::constants::{OFFICE_CORE_XML, PPTX_CORE_PROPERTIES};
-use super::utils::{has_namespace, open_office_archive};
-use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::results::PptxMetadata;
 use log::warn;
 use quick_xml::Reader;
 use quick_xml::events::Event;
+
+use crate::config::RuntimeConfig;
+use crate::parsers::ParseResult;
+use crate::results::PptxMetadata;
+use crate::utils::zip_read::read_zip_entry_to_string_limited;
+
+use super::constants::{OFFICE_CORE_XML, PPTX_CORE_PROPERTIES};
+use super::utils::{has_namespace, open_office_archive};
 
 /// Extract PPTX metadata from file content.
 /// PPTX is a ZIP (OOXML) containing docProps/core.xml (title, author, dates) and
@@ -17,7 +18,7 @@ use quick_xml::events::Event;
 pub fn extract_pptx_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &RuntimeConfig,
+    config: &RuntimeConfig,
 ) -> PptxMetadata {
     let mut metadata = PptxMetadata {
         file_size: Some(stats.byte_count),
@@ -28,18 +29,26 @@ pub fn extract_pptx_metadata(
         return metadata;
     };
 
-    if let Ok(mut f) = archive.by_name(OFFICE_CORE_XML) {
-        let mut xml = String::new();
-        if f.read_to_string(&mut xml).is_ok() {
-            extract_core_properties(&xml, &mut metadata);
-        }
+    if let Ok(f) = archive.by_name(OFFICE_CORE_XML)
+        && let Ok(xml) = read_zip_entry_to_string_limited(
+            f,
+            config.max_zip_entry_uncompressed_bytes,
+            OFFICE_CORE_XML,
+            &stats.file_path,
+        )
+    {
+        extract_core_properties(&xml, &mut metadata);
     }
 
-    if let Ok(mut f) = archive.by_name("ppt/presentation.xml") {
-        let mut xml = String::new();
-        if f.read_to_string(&mut xml).is_ok() {
-            metadata.slide_count = Some(count_sld_id_elements(&xml));
-        }
+    if let Ok(f) = archive.by_name("ppt/presentation.xml")
+        && let Ok(xml) = read_zip_entry_to_string_limited(
+            f,
+            config.max_zip_entry_uncompressed_bytes,
+            "ppt/presentation.xml",
+            &stats.file_path,
+        )
+    {
+        metadata.slide_count = Some(count_sld_id_elements(&xml));
     }
 
     metadata

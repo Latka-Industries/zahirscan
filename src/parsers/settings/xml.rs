@@ -85,7 +85,7 @@ fn merge_child(children: &mut BTreeMap<String, XmlTypeInfo>, key: String, value:
     if let Some(existing) = children.remove(&key) {
         let mut arr = match existing {
             XmlTypeInfo::Array(inner) => XmlTypeInfo::Array(inner),
-            _ => XmlTypeInfo::Array(Box::new(existing)),
+            XmlTypeInfo::Element { .. } => XmlTypeInfo::Array(Box::new(existing)),
         };
         if let XmlTypeInfo::Array(ref mut inner) = arr {
             merge_element_into(inner.as_mut(), value);

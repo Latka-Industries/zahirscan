@@ -1,19 +1,20 @@
 //! EPUB (e-book) metadata and body text extraction
 
-use std::collections::HashMap;
-use std::io::{Cursor, Read};
-
-use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::parsers::structured::html;
-use crate::parsers::text::plain_text::extract_text_templates;
-use crate::parsers::traits::empty_mining_result;
-use crate::results::{EpubMetadata, MiningResult};
 use anyhow::Result;
 use log::{debug, warn};
 use quick_xml::Reader;
 use quick_xml::events::{BytesEnd, BytesStart, Event};
+use std::collections::HashMap;
+use std::io::Cursor;
 use zip::ZipArchive;
+
+use crate::config::RuntimeConfig;
+use crate::parsers::{
+    ParseResult, structured::html, text::plain_text::extract_text_templates,
+    traits::empty_mining_result,
+};
+use crate::results::{EpubMetadata, MiningResult};
+use crate::utils::zip_read::read_zip_entry_to_string_limited;
 
 /// Return the value of the first attribute whose name is in `names`, or None.
 fn get_first_attr_value(e: &BytesStart, names: &[&[u8]]) -> Option<String> {
@@ -93,7 +94,7 @@ macro_rules! set_metadata_field {
 pub fn extract_epub_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &RuntimeConfig,
+    config: &RuntimeConfig,
 ) -> Result<EpubMetadata> {
     let metadata = EpubMetadata {
         file_size: Some(stats.byte_count),
@@ -113,22 +114,38 @@ pub fn extract_epub_metadata(
         return Ok(metadata);
     }
 
-    let opf_path =
-        read_container_rootfile(&mut archive).or_else(|| try_common_opf_paths(&mut archive));
+    let max = config.max_zip_entry_uncompressed_bytes;
+    let opf_path = read_container_rootfile(&mut archive, max, &stats.file_path)
+        .or_else(|| try_common_opf_paths(&mut archive));
 
     let Some(opf_path) = opf_path else {
         return Ok(metadata);
     };
 
-    Ok(parse_opf(&mut archive, &opf_path, metadata))
+    Ok(parse_opf(
+        &mut archive,
+        &opf_path,
+        metadata,
+        max,
+        &stats.file_path,
+    ))
 }
 
 /// Read container.xml file and parse the rootfile path
 /// Returns the rootfile path or None if not found
-fn read_container_rootfile(archive: &mut ZipArchive<Cursor<&[u8]>>) -> Option<String> {
-    let mut f = archive.by_name(EpubPaths::CONTAINER_XML).ok()?;
-    let mut xml = String::new();
-    f.read_to_string(&mut xml).ok()?;
+fn read_container_rootfile(
+    archive: &mut ZipArchive<Cursor<&[u8]>>,
+    max_uncompressed_bytes: usize,
+    epub_path: &str,
+) -> Option<String> {
+    let f = archive.by_name(EpubPaths::CONTAINER_XML).ok()?;
+    let xml = read_zip_entry_to_string_limited(
+        f,
+        max_uncompressed_bytes,
+        EpubPaths::CONTAINER_XML,
+        epub_path,
+    )
+    .ok()?;
     parse_container_rootfile(&xml)
 }
 
@@ -175,15 +192,17 @@ fn parse_opf(
     archive: &mut ZipArchive<Cursor<&[u8]>>,
     path: &str,
     mut metadata: EpubMetadata,
+    max_uncompressed_bytes: usize,
+    epub_path: &str,
 ) -> EpubMetadata {
-    let Ok(mut f) = archive.by_name(path) else {
+    let Ok(f) = archive.by_name(path) else {
         return metadata;
     };
 
-    let mut xml = String::new();
-    if f.read_to_string(&mut xml).is_err() {
+    let Ok(xml) = read_zip_entry_to_string_limited(f, max_uncompressed_bytes, path, epub_path)
+    else {
         return metadata;
-    }
+    };
 
     extract_metadata_from_opf(&xml, &mut metadata);
     metadata.chapter_count = Some(count_spine_itemrefs(&xml));
@@ -313,7 +332,11 @@ fn resolve_content_path(opf_path: &str, href: &str) -> String {
 }
 
 /// Extract full body text from EPUB in spine order (all content documents concatenated).
-fn extract_epub_body_text(content: &[u8]) -> Result<String> {
+fn extract_epub_body_text(
+    content: &[u8],
+    max_uncompressed_bytes: usize,
+    epub_path: &str,
+) -> Result<String> {
     let mut archive = ZipArchive::new(Cursor::new(content))
         .map_err(|e| anyhow::anyhow!("EPUB: failed to open as ZIP: {e}"))?;
 
@@ -322,16 +345,16 @@ fn extract_epub_body_text(content: &[u8]) -> Result<String> {
         return Ok(String::new());
     }
 
-    let opf_path =
-        read_container_rootfile(&mut archive).or_else(|| try_common_opf_paths(&mut archive));
+    let opf_path = read_container_rootfile(&mut archive, max_uncompressed_bytes, epub_path)
+        .or_else(|| try_common_opf_paths(&mut archive));
     let opf_path = opf_path.ok_or_else(|| anyhow::anyhow!("EPUB: no package document found"))?;
 
-    let mut opf_xml = String::new();
-    archive
+    let opf_f = archive
         .by_name(&opf_path)
-        .map_err(|e| anyhow::anyhow!("EPUB: cannot read OPF: {e}"))?
-        .read_to_string(&mut opf_xml)
-        .map_err(|e| anyhow::anyhow!("EPUB: OPF read error: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("EPUB: cannot read OPF: {e}"))?;
+    let opf_xml =
+        read_zip_entry_to_string_limited(opf_f, max_uncompressed_bytes, &opf_path, epub_path)
+            .map_err(|e| anyhow::anyhow!("EPUB: OPF read error: {e}"))?;
 
     let manifest = parse_manifest_from_opf(&opf_xml);
     let spine_order = parse_spine_order_from_opf(&opf_xml);
@@ -348,17 +371,21 @@ fn extract_epub_body_text(content: &[u8]) -> Result<String> {
             continue;
         };
         let content_path = resolve_content_path(&opf_path, href);
-        let mut entry = match archive.by_name(&content_path) {
+        let entry = match archive.by_name(&content_path) {
             Ok(e) => e,
             Err(e) => {
                 warn!("EPUB: cannot open content document '{content_path}': {e}");
                 continue;
             }
         };
-        let mut html_content = String::new();
-        if entry.read_to_string(&mut html_content).is_err() {
+        let Ok(html_content) = read_zip_entry_to_string_limited(
+            entry,
+            max_uncompressed_bytes,
+            &content_path,
+            epub_path,
+        ) else {
             continue;
-        }
+        };
         let text = html::extract_plain_text_from_html(&html_content);
         if !text.is_empty() {
             body_parts.push(text);
@@ -378,7 +405,11 @@ pub fn extract_epub_templates(
     stats: &ParseResult,
     config: &RuntimeConfig,
 ) -> Result<MiningResult> {
-    let body_text = match extract_epub_body_text(content) {
+    let body_text = match extract_epub_body_text(
+        content,
+        config.max_zip_entry_uncompressed_bytes,
+        &stats.file_path,
+    ) {
         Ok(t) => t,
         Err(e) => {
             warn!("EPUB body text extraction failed: {e}");

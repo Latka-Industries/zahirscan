@@ -9,8 +9,8 @@ use crate::utils::filetypes::is_codec_for_file_type;
 
 /// Check if a codec string represents MP3
 /// Verifies against `FILE_EXTENSION_MAP` so we only treat known audio codecs as MP3.
-pub fn is_mp3_codec(codec: &str) -> bool {
-    is_codec_for_file_type(codec, FileType::Audio) && codec.to_lowercase().contains("mp3")
+pub fn is_mp3_codec(codec_ref: &str) -> bool {
+    is_codec_for_file_type(codec_ref, FileType::Audio) && codec_ref.to_lowercase().contains("mp3")
 }
 
 /// MP3 frame header constants
@@ -75,24 +75,24 @@ mod mp3_constants {
     }
 }
 
-/// Skip ID3v2 if present, otherwise rewind to file start. Returns `None` on I/O failure.
-fn skip_id3v2_prefix(file: &mut File) -> Option<()> {
+/// Skip `ID3v2` if present, otherwise rewind to file start. Returns `None` on I/O failure.
+fn skip_id3v2_prefix(file_ref: &mut File) -> Option<()> {
     let mut header = [0u8; 10];
-    file.read_exact(&mut header).ok()?;
+    file_ref.read_exact(&mut header).ok()?;
     if &header[0..3] == b"ID3" {
         let size = ((header[6] as u32) << 21)
             | ((header[7] as u32) << 14)
             | ((header[8] as u32) << 7)
             | (header[9] as u32);
         let id3_size = 10 + u64::from(size);
-        file.seek(SeekFrom::Start(id3_size)).ok()?;
+        file_ref.seek(SeekFrom::Start(id3_size)).ok()?;
     } else {
-        file.seek(SeekFrom::Start(0)).ok()?;
+        file_ref.seek(SeekFrom::Start(0)).ok()?;
     }
     Some(())
 }
 
-fn mp3_frame_sync_valid(frame_header: &[u8; 4]) -> bool {
+fn mp3_frame_sync_valid(frame_header: [u8; 4]) -> bool {
     frame_header[0] == mp3_constants::FRAME_SYNC_BYTE
         && (frame_header[1] & mp3_constants::FRAME_SYNC_MASK) == mp3_constants::FRAME_SYNC_MASK
 }
@@ -117,25 +117,28 @@ fn side_info_byte_count(mpeg_version: u8, channel_mode: u8) -> usize {
 }
 
 /// After the first frame header: skip CRC (if any), side info, then read Xing/LAME VBR byte.
-fn bitrate_mode_after_first_frame(file: &mut File, frame_header: &[u8; 4]) -> Option<BitrateMode> {
+fn bitrate_mode_after_first_frame(
+    file_ref: &mut File,
+    frame_header: [u8; 4],
+) -> Option<BitrateMode> {
     let has_crc = (frame_header[1] & mp3_constants::PROTECTION_BIT_MASK) == 0;
     if has_crc {
-        file.seek(SeekFrom::Current(2)).ok()?;
+        file_ref.seek(SeekFrom::Current(2)).ok()?;
     }
     let mpeg_version = (frame_header[1] >> 3) & mp3_constants::MPEG_VERSION_MASK;
     let channel_mode = (frame_header[3] >> 6) & mp3_constants::CHANNEL_MODE_MASK;
     let side_n = side_info_byte_count(mpeg_version, channel_mode);
     let side_off = i64::try_from(side_n).unwrap_or(i64::MAX);
-    file.seek(SeekFrom::Current(side_off)).ok()?;
+    file_ref.seek(SeekFrom::Current(side_off)).ok()?;
 
     let mut xing_header = [0u8; 4];
-    file.read_exact(&mut xing_header).ok()?;
+    file_ref.read_exact(&mut xing_header).ok()?;
     if &xing_header != b"Xing" && &xing_header != b"Info" {
         return None;
     }
 
     let mut flags = [0u8; 4];
-    file.read_exact(&mut flags).ok()?;
+    file_ref.read_exact(&mut flags).ok()?;
 
     let mut skip_bytes = 0u64;
     if (flags[3] & mp3_constants::xing_flags::FRAME_COUNT) != 0 {
@@ -150,17 +153,18 @@ fn bitrate_mode_after_first_frame(file: &mut File, frame_header: &[u8; 4]) -> Op
     if (flags[3] & mp3_constants::xing_flags::QUALITY) != 0 {
         skip_bytes += 4;
     }
-    file.seek(SeekFrom::Current(skip_bytes.cast_signed()))
+    file_ref
+        .seek(SeekFrom::Current(skip_bytes.cast_signed()))
         .ok()?;
 
     let mut lame_version = [0u8; 9];
-    file.read_exact(&mut lame_version).ok()?;
+    file_ref.read_exact(&mut lame_version).ok()?;
     if &lame_version[0..4] != b"LAME" {
         return None;
     }
 
     let mut revision_vbr_byte = [0u8; 1];
-    file.read_exact(&mut revision_vbr_byte).ok()?;
+    file_ref.read_exact(&mut revision_vbr_byte).ok()?;
     let vbr_method = revision_vbr_byte[0] & mp3_constants::VBR_METHOD_MASK;
 
     match vbr_method {
@@ -182,14 +186,14 @@ fn bitrate_mode_after_first_frame(file: &mut File, frame_header: &[u8; 4]) -> Op
 ///
 /// Note: Many MP3 files (especially CBR) don't have a Xing/Info header,
 /// so this will return None for those files.
-pub fn read_lame_tag_bitrate_mode(file_path: &str) -> Option<BitrateMode> {
-    let mut file = File::open(file_path).ok()?;
+pub fn read_lame_tag_bitrate_mode(file_path_ref: &str) -> Option<BitrateMode> {
+    let mut file = File::open(file_path_ref).ok()?;
     skip_id3v2_prefix(&mut file)?;
 
     let mut frame_header = [0u8; 4];
     file.read_exact(&mut frame_header).ok()?;
-    if !mp3_frame_sync_valid(&frame_header) {
+    if !mp3_frame_sync_valid(frame_header) {
         return None;
     }
-    bitrate_mode_after_first_frame(&mut file, &frame_header)
+    bitrate_mode_after_first_frame(&mut file, frame_header)
 }

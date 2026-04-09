@@ -20,41 +20,41 @@ pub use video::{extract_video_metadata, extract_video_templates};
 ///
 /// Propagates errors from the image, video, or audio metadata/template extractors for the active [`crate::parsers::FileType`].
 pub fn process(
-    stats: &mut ParseResult,
-    mmap: &Mmap,
-    config: &RuntimeConfig,
+    stats_ref: &mut ParseResult,
+    mmap_ref: &Mmap,
+    config_ref: &RuntimeConfig,
 ) -> Result<MiningResult> {
-    match stats.file_type {
+    match stats_ref.file_type {
         FileType::Image => crate::process_with_metadata!(
-            stats,
-            mmap,
-            config,
+            stats_ref,
+            mmap_ref,
+            config_ref,
             image_metadata,
-            extract_image_metadata(mmap, stats, config),
+            extract_image_metadata(mmap_ref, stats_ref, config_ref),
             crate::results::ImageMetadata,
             FileType::Image,
-            extract_image_templates(mmap, stats, config)
+            extract_image_templates(mmap_ref, stats_ref, config_ref)
         ),
         FileType::Video => crate::process_with_metadata!(
-            stats,
-            mmap,
-            config,
+            stats_ref,
+            mmap_ref,
+            config_ref,
             video_metadata,
-            extract_video_metadata(mmap, stats, config),
+            extract_video_metadata(mmap_ref, stats_ref, config_ref),
             crate::results::VideoMetadata,
             FileType::Video,
-            extract_video_templates(mmap, stats, config)
+            extract_video_templates(mmap_ref, stats_ref, config_ref)
         ),
         FileType::Audio => crate::process_with_metadata!(
-            stats,
-            mmap,
-            config,
+            stats_ref,
+            mmap_ref,
+            config_ref,
             audio_metadata,
-            extract_audio_metadata(mmap, stats, config),
+            extract_audio_metadata(mmap_ref, stats_ref, config_ref),
             crate::results::AudioMetadata,
             FileType::Audio,
-            extract_audio_templates(mmap, stats, config)
+            extract_audio_templates(mmap_ref, stats_ref, config_ref)
         ),
-        _ => unreachable!("media::process called with {:?}", stats.file_type),
+        _ => unreachable!("media::process called with {:?}", stats_ref.file_type),
     }
 }

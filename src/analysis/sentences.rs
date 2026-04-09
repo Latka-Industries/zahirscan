@@ -1,10 +1,11 @@
 //! Sentence-level text analysis: extraction, structure, patterns.
 //! Used by markdown and text parsers for sentence boundaries and structure.
 
-use crate::analysis::Punctuation;
-use crate::config::RuntimeConfig;
 use dashmap::DashMap;
 use log::debug;
+
+use crate::analysis::Punctuation;
+use crate::config::RuntimeConfig;
 
 /// Trait for sentence-level text analysis
 /// Used by markdown and text parsers for analyzing sentence structure and patterns

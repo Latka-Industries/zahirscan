@@ -250,12 +250,12 @@ pub fn compute_boolean_stats_from_strings(
         }
     });
 
-    let total = total_count.into_iter().next().map_or(0, |(_, c)| c);
+    let total = total_count.into_iter().next().map_or(0, |((), c)| c);
     if total == 0 {
         return None;
     }
 
-    let true_val = true_count.into_iter().next().map_or(0, |(_, c)| c);
+    let true_val = true_count.into_iter().next().map_or(0, |((), c)| c);
     let true_percentage = (true_val as f64 / total as f64) * 100.0;
 
     Some(BooleanStats {
@@ -286,7 +286,7 @@ pub fn compute_null_and_unique_stats(values: &[String], config: &RuntimeConfig) 
         }
     });
 
-    let null_count_val = null_count.into_iter().next().map_or(0, |(_, c)| c);
+    let null_count_val = null_count.into_iter().next().map_or(0, |((), c)| c);
     let null_percentage = (null_count_val as f64 / total as f64) * 100.0;
     let unique_count = unique_set.len();
 

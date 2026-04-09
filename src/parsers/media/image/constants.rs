@@ -247,36 +247,38 @@ pub fn is_jpeg_rst_marker(marker: u8) -> bool {
 
 /// Check if data starts with JPEG SOI marker
 #[inline]
-pub fn has_jpeg_signature(data: &[u8]) -> bool {
-    data.len() >= 2 && data[0] == JPEG_SOI[0] && data[1] == JPEG_SOI[1]
+pub fn has_jpeg_signature(data_ref: &[u8]) -> bool {
+    data_ref.len() >= 2 && data_ref[0] == JPEG_SOI[0] && data_ref[1] == JPEG_SOI[1]
 }
 
 /// Check if data starts with PNG signature
 #[inline]
-pub fn has_png_signature(data: &[u8]) -> bool {
-    data.len() >= 8 && &data[0..8] == PNG_SIGNATURE
+pub fn has_png_signature(data_ref: &[u8]) -> bool {
+    data_ref.len() >= 8 && &data_ref[0..8] == PNG_SIGNATURE
 }
 
 /// Check if data starts with GIF signature (`GIF87a` or `GIF89a`)
 #[inline]
-pub fn has_gif_signature(data: &[u8]) -> bool {
-    data.len() >= 6 && (&data[0..6] == GIF87A_SIGNATURE || &data[0..6] == GIF89A_SIGNATURE)
+pub fn has_gif_signature(data_ref: &[u8]) -> bool {
+    data_ref.len() >= 6
+        && (&data_ref[0..6] == GIF87A_SIGNATURE || &data_ref[0..6] == GIF89A_SIGNATURE)
 }
 
 /// Check if data starts with WebP signature
 #[inline]
-pub fn has_webp_signature(data: &[u8]) -> bool {
-    data.len() >= 12 && &data[0..4] == WEBP_RIFF && &data[8..12] == WEBP_FORMAT
+pub fn has_webp_signature(data_ref: &[u8]) -> bool {
+    data_ref.len() >= 12 && &data_ref[0..4] == WEBP_RIFF && &data_ref[8..12] == WEBP_FORMAT
 }
 
 /// Check if data starts with BMP signature
 #[inline]
-pub fn has_bmp_signature(data: &[u8]) -> bool {
-    data.len() >= 2 && &data[0..2] == BMP_SIGNATURE
+pub fn has_bmp_signature(data_ref: &[u8]) -> bool {
+    data_ref.len() >= 2 && &data_ref[0..2] == BMP_SIGNATURE
 }
 
 /// Check if data starts with TIFF signature (little-endian or big-endian)
 #[inline]
-pub fn has_tiff_signature(data: &[u8]) -> bool {
-    data.len() >= 2 && (&data[0..2] == TIFF_LE_SIGNATURE || &data[0..2] == TIFF_BE_SIGNATURE)
+pub fn has_tiff_signature(data_ref: &[u8]) -> bool {
+    data_ref.len() >= 2
+        && (&data_ref[0..2] == TIFF_LE_SIGNATURE || &data_ref[0..2] == TIFF_BE_SIGNATURE)
 }

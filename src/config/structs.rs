@@ -163,6 +163,8 @@ impl Default for PivotConfig {
 pub(crate) struct FileTypeSpecificConfig {
     pub markdown_preview_length: u64,
     pub max_csv_sample_rows: u64,
+    /// Max decompressed bytes per ZIP member when reading OOXML / EPUB (0 = unlimited).
+    pub max_zip_entry_uncompressed_bytes: u64,
 }
 
 impl Default for FileTypeSpecificConfig {
@@ -170,6 +172,7 @@ impl Default for FileTypeSpecificConfig {
         Self {
             markdown_preview_length: 100,
             max_csv_sample_rows: 200,
+            max_zip_entry_uncompressed_bytes: 52_428_800, // 50 MiB
         }
     }
 }

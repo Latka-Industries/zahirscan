@@ -13,16 +13,16 @@ use ffprobe::Stream;
 ///
 /// Returns [`anyhow::Error`] when `ffprobe` is missing, not executable, or fails to probe the file path.
 pub fn extract_video_metadata(
-    _content: &[u8],
-    stats: &ParseResult,
-    _config: &RuntimeConfig,
+    _content_ref: &[u8],
+    stats_ref: &ParseResult,
+    _config_ref: &RuntimeConfig,
 ) -> Result<OutputVideoMetadata> {
     // Check if ffprobe is available before attempting extraction
     check_ffprobe_available()?;
 
     // Run ffprobe to get comprehensive metadata
     // Uses safe, hardcoded arguments via run_ffprobe_safe()
-    let probe_result = run_ffprobe_safe(&stats.file_path)?;
+    let probe_result = run_ffprobe_safe(&stats_ref.file_path)?;
 
     // ============================================================================
     // Format-level metadata (container information)
@@ -157,18 +157,21 @@ pub fn extract_video_metadata(
         container_format,
         video_stream_size,
         audio_stream_size,
-        stream_size: Some(stats.byte_count),
+        stream_size: Some(stats_ref.byte_count),
         encoded_library,
     })
 }
 
 /// Extract bit depth from stream or derive from pixel format
-fn extract_bit_depth(stream: Option<&Stream>, pixel_format: Option<&String>) -> Option<u32> {
-    stream
+fn extract_bit_depth(
+    stream_ref: Option<&Stream>,
+    pixel_format_ref: Option<&String>,
+) -> Option<u32> {
+    stream_ref
         .and_then(|s| s.bits_per_raw_sample.as_ref())
         .and_then(|b| b.parse::<u32>().ok())
         .or_else(|| {
-            pixel_format.and_then(|pix_fmt| {
+            pixel_format_ref.and_then(|pix_fmt| {
                 if pix_fmt.contains("10") {
                     Some(10)
                 } else if pix_fmt.contains("12") {
@@ -190,14 +193,14 @@ fn extract_bit_depth(stream: Option<&Stream>, pixel_format: Option<&String>) -> 
 ///
 /// Derives chroma subsampling ratio from pixel format name.
 /// Examples: yuv420p -> "4:2:0", yuv422p -> "4:2:2"
-fn extract_chroma_subsampling(pix_fmt: &str) -> Option<String> {
-    if pix_fmt.contains("420") {
+fn extract_chroma_subsampling(pix_fmt_ref: &str) -> Option<String> {
+    if pix_fmt_ref.contains("420") {
         Some("4:2:0".to_string())
-    } else if pix_fmt.contains("422") {
+    } else if pix_fmt_ref.contains("422") {
         Some("4:2:2".to_string())
-    } else if pix_fmt.contains("444") {
+    } else if pix_fmt_ref.contains("444") {
         Some("4:4:4".to_string())
-    } else if pix_fmt.contains("411") {
+    } else if pix_fmt_ref.contains("411") {
         Some("4:1:1".to_string())
     } else {
         None
@@ -210,8 +213,8 @@ fn extract_chroma_subsampling(pix_fmt: &str) -> Option<String> {
 /// - "progressive" -> progressive scan
 /// - "tt"/"tb" -> interlaced (top field first)
 /// - "bb"/"bt" -> interlaced (bottom field first)
-fn extract_scan_type(field_order: &str) -> Option<String> {
-    match field_order {
+fn extract_scan_type(field_order_ref: &str) -> Option<String> {
+    match field_order_ref {
         "progressive" => Some("progressive".to_string()),
         "tt" | "tb" => Some("interlaced (top field first)".to_string()),
         "bb" | "bt" => Some("interlaced (bottom field first)".to_string()),
@@ -224,14 +227,14 @@ fn extract_scan_type(field_order: &str) -> Option<String> {
 /// Supports two formats:
 /// - Fraction format: "25/1", "30000/1001" -> converts to decimal
 /// - Decimal format: "29.97" -> parsed directly
-fn parse_frame_rate(fr_str: &str) -> Option<f64> {
-    if fr_str.is_empty() {
+fn parse_frame_rate(fr_str_ref: &str) -> Option<f64> {
+    if fr_str_ref.is_empty() {
         return None;
     }
 
-    if fr_str.contains('/') {
+    if fr_str_ref.contains('/') {
         // Fraction format: "25/1" or "30000/1001"
-        let parts: Vec<&str> = fr_str.split('/').collect();
+        let parts: Vec<&str> = fr_str_ref.split('/').collect();
         if parts.len() == 2
             && let (Ok(num), Ok(den)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>())
             && den != 0.0
@@ -241,7 +244,7 @@ fn parse_frame_rate(fr_str: &str) -> Option<f64> {
         None
     } else {
         // Decimal format: "29.97"
-        fr_str.parse::<f64>().ok()
+        fr_str_ref.parse::<f64>().ok()
     }
 }
 

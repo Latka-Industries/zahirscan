@@ -23,7 +23,7 @@ use crate::results::DocumentMetadata;
 pub fn extract_xlsx_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &RuntimeConfig,
+    config: &RuntimeConfig,
 ) -> DocumentMetadata {
     let mut metadata = DocumentMetadata {
         file_size: Some(stats.byte_count),
@@ -39,6 +39,7 @@ pub fn extract_xlsx_metadata(
         OFFICE_CORE_XML,
         "XLSX",
         &stats.file_path,
+        config.max_zip_entry_uncompressed_bytes,
         |xml| extract_core_properties(xml, &mut metadata),
     );
 
@@ -47,6 +48,7 @@ pub fn extract_xlsx_metadata(
         XLSX_APP_XML,
         "XLSX",
         &stats.file_path,
+        config.max_zip_entry_uncompressed_bytes,
         |xml| extract_app_properties(xml, &mut metadata),
     );
 
@@ -55,6 +57,7 @@ pub fn extract_xlsx_metadata(
         XLSX_WORKBOOK_XML,
         "XLSX",
         &stats.file_path,
+        config.max_zip_entry_uncompressed_bytes,
         |xml| extract_sheet_info(xml, &mut metadata),
     );
 

@@ -7,18 +7,23 @@ use super::constants::{
 };
 
 /// Extract compression info from BMP data
-pub fn extract_compression(bmp_data: &[u8]) -> Option<String> {
+pub fn extract_compression(bmp_data_ref: &[u8]) -> Option<String> {
     // Check BMP signature (first 2 bytes: "BM")
-    if bmp_data.len() < 54 {
+    if bmp_data_ref.len() < 54 {
         return None;
     }
 
-    if !has_bmp_signature(bmp_data) {
+    if !has_bmp_signature(bmp_data_ref) {
         return None;
     }
 
     // Read compression field at offset 30 (4 bytes, little-endian)
-    let compression = u32::from_le_bytes([bmp_data[30], bmp_data[31], bmp_data[32], bmp_data[33]]);
+    let compression = u32::from_le_bytes([
+        bmp_data_ref[30],
+        bmp_data_ref[31],
+        bmp_data_ref[32],
+        bmp_data_ref[33],
+    ]);
 
     // BMP compression constants
     match compression {
@@ -33,33 +38,33 @@ pub fn extract_compression(bmp_data: &[u8]) -> Option<String> {
 }
 
 /// Extract bit depth from BMP data
-pub fn extract_bit_depth(bmp_data: &[u8]) -> Option<u32> {
+pub fn extract_bit_depth(bmp_data_ref: &[u8]) -> Option<u32> {
     // BMP bit depth is at offset 28 (2 bytes, little-endian)
-    if bmp_data.len() < 30 {
+    if bmp_data_ref.len() < 30 {
         return None;
     }
 
-    if !has_bmp_signature(bmp_data) {
+    if !has_bmp_signature(bmp_data_ref) {
         return None;
     }
 
-    let bit_depth = u16::from_le_bytes([bmp_data[28], bmp_data[29]]);
+    let bit_depth = u16::from_le_bytes([bmp_data_ref[28], bmp_data_ref[29]]);
     Some(bit_depth as u32)
 }
 
 /// Extract color type from BMP data
-pub fn extract_color_type(bmp_data: &[u8]) -> Option<String> {
+pub fn extract_color_type(bmp_data_ref: &[u8]) -> Option<String> {
     // BMP color type depends on bit depth
     // Bit depth is at offset 28 (2 bytes, little-endian)
-    if bmp_data.len() < 30 {
+    if bmp_data_ref.len() < 30 {
         return None;
     }
 
-    if !has_bmp_signature(bmp_data) {
+    if !has_bmp_signature(bmp_data_ref) {
         return None;
     }
 
-    let bit_depth = u16::from_le_bytes([bmp_data[28], bmp_data[29]]);
+    let bit_depth = u16::from_le_bytes([bmp_data_ref[28], bmp_data_ref[29]]);
 
     // BMP color type mapping based on bit depth
     match bit_depth {
