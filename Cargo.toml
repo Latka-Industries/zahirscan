@@ -1,6 +1,6 @@
 [package]
 name = "zahirscan"
-version = "0.2.16"
+version = "0.2.17"
 edition = "2024"
 rust-version = "1.93"
 authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
@@ -40,7 +40,7 @@ ffprobe = "0.4.0"
 image = "0.25.10"
 kdam = "0.6.4"
 linguist = "0.1.6"
-lofty = "0.23.3"
+lofty = "0.24.0"
 log = "0.4.29"
 memmap2 = "0.9.9"
 num_cpus = "1.17.0"
