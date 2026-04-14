@@ -14,8 +14,10 @@ use crate::config::RuntimeConfig;
 use crate::parsers::media::image;
 use crate::parsers::{CompressionMode, FileType, ParseResult, media_helpers};
 use crate::results::{AudioMetadata as OutputAudioMetadata, ImageMetadata};
-use crate::utils::ffprobe_handler::{check_ffprobe_available, run_ffprobe_safe};
-use crate::utils::filetypes::{get_extensions_for_file_type, is_codec_for_file_type};
+use crate::utils::{
+    ffprobe_handler::{check_ffprobe_available, run_ffprobe_safe},
+    filetypes::{get_extensions_for_file_type, is_codec_for_file_type},
+};
 
 /// Lossless audio codec extensions
 /// Maps codec extensions to their compression mode
@@ -23,9 +25,9 @@ const LOSSLESS_CODECS: &[&str] = &["flac", "alac", "wavpack", "ape"];
 
 /// Check if a codec string represents a lossless audio format
 /// Verifies against extension map from tools.rs for consistency
-pub(crate) fn is_lossless_codec(codec: &str) -> bool {
+pub(crate) fn is_lossless_codec(codec_ref: &str) -> bool {
     let audio_extensions = get_extensions_for_file_type(FileType::Audio);
-    let codec_lower = codec.to_lowercase();
+    let codec_lower = codec_ref.to_lowercase();
     LOSSLESS_CODECS.iter().any(|lossless_ext| {
         codec_lower.contains(lossless_ext) && audio_extensions.contains(lossless_ext)
     })
@@ -34,8 +36,8 @@ pub(crate) fn is_lossless_codec(codec: &str) -> bool {
 /// Check if a string contains "opus" (case-insensitive)
 /// Verifies against `FILE_EXTENSION_MAP` so we only treat known audio codecs as opus.
 #[must_use]
-pub fn is_opus_codec(s: &str) -> bool {
-    is_codec_for_file_type(s, FileType::Audio) && s.to_lowercase().contains("opus")
+pub fn is_opus_codec(s_ref: &str) -> bool {
+    is_codec_for_file_type(s_ref, FileType::Audio) && s_ref.to_lowercase().contains("opus")
 }
 
 /// Rich tag metadata extracted from audio files
@@ -53,8 +55,8 @@ struct RichTags {
     artwork: Option<ImageMetadata>,
 }
 
-fn extract_compression_mode(codec: &str) -> CompressionMode {
-    if is_lossless_codec(codec) {
+fn extract_compression_mode(codec_ref: &str) -> CompressionMode {
+    if is_lossless_codec(codec_ref) {
         CompressionMode::Lossless
     } else {
         CompressionMode::Lossy
@@ -67,16 +69,16 @@ fn extract_compression_mode(codec: &str) -> CompressionMode {
 ///
 /// Returns [`anyhow::Error`] when `ffprobe` is missing, not executable, or fails to probe the file path.
 pub fn extract_audio_metadata(
-    _content: &[u8],
-    stats: &ParseResult,
-    _config: &RuntimeConfig,
+    _content_ref: &[u8],
+    stats_ref: &ParseResult,
+    _config_ref: &RuntimeConfig,
 ) -> Result<OutputAudioMetadata> {
     // Check if ffprobe is available before attempting extraction
     check_ffprobe_available()?;
 
     // Run ffprobe to get comprehensive metadata
     // Uses safe, hardcoded arguments via run_ffprobe_safe()
-    let probe_result = run_ffprobe_safe(&stats.file_path)?;
+    let probe_result = run_ffprobe_safe(&stats_ref.file_path)?;
 
     // ============================================================================
     // Format-level metadata (container information)
@@ -123,7 +125,7 @@ pub fn extract_audio_metadata(
     let bit_rate_mode = audio_codec
         .as_ref()
         .filter(|codec| mp3::is_mp3_codec(codec))
-        .and_then(|_| mp3::read_lame_tag_bitrate_mode(&stats.file_path))
+        .and_then(|_| mp3::read_lame_tag_bitrate_mode(&stats_ref.file_path))
         .or_else(|| {
             media_helpers::extract_bitrate_mode(
                 audio_codec.as_ref(),
@@ -139,7 +141,7 @@ pub fn extract_audio_metadata(
     // ============================================================================
     // Rich tag metadata using lofty (title, artist, album, track, track_total, year, genre, artwork)
     // ============================================================================
-    let rich_tags = extract_rich_tags(&stats.file_path);
+    let rich_tags = extract_rich_tags(&stats_ref.file_path);
 
     Ok(OutputAudioMetadata {
         duration_seconds,
@@ -171,13 +173,13 @@ pub fn extract_audio_metadata(
 }
 
 /// Extract rich tags (title, artist, album, track, `track_total`, year, genre, artwork) using lofty
-fn extract_rich_tags(file_path: &str) -> RichTags {
+fn extract_rich_tags(file_path_ref: &str) -> RichTags {
     // Try to read tags using lofty
-    let tagged_file = match read_from_path(file_path) {
+    let tagged_file = match read_from_path(file_path_ref) {
         Ok(tf) => tf,
         Err(e) => {
             // Silently fail - not all files have tags, or lofty might not support the format
-            log::debug!("Failed to read tags from {file_path}: {e}");
+            log::debug!("Failed to read tags from {file_path_ref}: {e}");
             return RichTags::default();
         }
     };
@@ -243,9 +245,9 @@ fn extract_rich_tags(file_path: &str) -> RichTags {
 }
 
 /// Extract and analyze artwork/cover art from audio file tags
-fn extract_artwork(tag: &lofty::tag::Tag) -> Option<ImageMetadata> {
+fn extract_artwork(tag_ref: &lofty::tag::Tag) -> Option<ImageMetadata> {
     // Look for front cover artwork
-    for picture in tag.pictures() {
+    for picture in tag_ref.pictures() {
         if picture.pic_type() == PictureType::CoverFront {
             // Get the image data
             let image_data = picture.data();
@@ -256,7 +258,7 @@ fn extract_artwork(tag: &lofty::tag::Tag) -> Option<ImageMetadata> {
     }
 
     // If no front cover found, try any cover type
-    for picture in tag.pictures() {
+    for picture in tag_ref.pictures() {
         if matches!(
             picture.pic_type(),
             PictureType::CoverFront
@@ -272,13 +274,13 @@ fn extract_artwork(tag: &lofty::tag::Tag) -> Option<ImageMetadata> {
 }
 
 /// Analyze image data using the existing image parser
-fn analyze_image_data(image_data: &[u8]) -> Option<ImageMetadata> {
+fn analyze_image_data(image_data_ref: &[u8]) -> Option<ImageMetadata> {
     // Create a minimal ParseResult for the image parser
     let stats = ParseResult {
         file_path: String::new(), // Not needed for image analysis
         file_type: FileType::Image,
         line_count: 0,
-        byte_count: image_data.len(),
+        byte_count: image_data_ref.len(),
         token_count: 0,
         duration: std::time::Duration::ZERO,
         is_binary: true,
@@ -287,7 +289,7 @@ fn analyze_image_data(image_data: &[u8]) -> Option<ImageMetadata> {
 
     // Use the existing image parser
     let config = RuntimeConfig::default();
-    match image::extract_image_metadata(image_data, &stats, &config) {
+    match image::extract_image_metadata(image_data_ref, &stats, &config) {
         Ok(metadata) => Some(metadata),
         Err(e) => {
             log::debug!("Failed to extract artwork metadata: {e}");

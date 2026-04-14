@@ -2,12 +2,13 @@
 
 use anyhow::Result;
 
-use super::chunking::{PathBatchMode, calculate_adaptive_chunking, determine_batch_size};
-use super::phases::{mining::phase2_mining, scanning::phase1_scan};
 use crate::config::RuntimeConfig;
 use crate::results::Phase2Result;
 use crate::setup::OutputSink;
 use crate::utils::{BATCHED_NO_VALID_FILES_DETAIL_CAP, no_valid_files_error};
+
+use super::chunking::{PathBatchMode, calculate_adaptive_chunking, determine_batch_size};
+use super::phases::{mining::phase2_mining, scanning::phase1_scan};
 
 /// Run the full pipeline: Phase 1 → empty-tasks check → adaptive chunking → Phase 2.
 /// When path count exceeds the batch size, processes in batches so mmaps are dropped between batches (avoids "too many open files").

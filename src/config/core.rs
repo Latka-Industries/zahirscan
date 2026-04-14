@@ -11,9 +11,10 @@ use std::path::Path;
 use toml::Value as TomlValue;
 use toml::map::Map;
 
+use crate::{validate_min, validate_range_01};
+
 use super::helpers::{clamp_f64, deep_merge_toml, u64_to_usize, u64_to_usize_min};
 use super::structs::TomlConfig;
-use crate::{validate_min, validate_range_01};
 
 /// User-facing toggles from TOML `[filter]` / CLI (redaction, media skip, progress, hidden files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,6 +95,8 @@ pub struct RuntimeConfig {
     pub markdown_preview_length: usize,
     /// Maximum number of rows to sample for CSV type inference
     pub max_csv_sample_rows: usize,
+    /// Max decompressed size (bytes) per ZIP entry when reading OOXML / EPUB (`0` = unlimited).
+    pub max_zip_entry_uncompressed_bytes: usize,
     /// Small file threshold (bytes) - files below this use multiplier=1
     pub small_file_threshold_bytes: usize,
     /// Large file threshold (bytes) - files above this use multiplier=3
@@ -181,6 +184,9 @@ impl RuntimeConfig {
             max_common_pivots: u64_to_usize_min(mining.pivot.max_common_pivots, 1),
             markdown_preview_length: u64_to_usize_min(mining.file_types.markdown_preview_length, 1),
             max_csv_sample_rows: u64_to_usize_min(mining.file_types.max_csv_sample_rows, 1),
+            max_zip_entry_uncompressed_bytes: u64_to_usize(
+                mining.file_types.max_zip_entry_uncompressed_bytes,
+            ),
             small_file_threshold_bytes: u64_to_usize(concurrency.small_file_threshold_bytes),
             large_file_threshold_bytes: u64_to_usize(concurrency.large_file_threshold_bytes),
             threshold_multiplier: u64_to_usize(concurrency.threshold_multiplier),
@@ -340,6 +346,7 @@ impl RuntimeConfig {
         self.max_common_pivots = other.max_common_pivots;
         self.markdown_preview_length = other.markdown_preview_length;
         self.max_csv_sample_rows = other.max_csv_sample_rows;
+        self.max_zip_entry_uncompressed_bytes = other.max_zip_entry_uncompressed_bytes;
         self.small_file_threshold_bytes = other.small_file_threshold_bytes;
         self.large_file_threshold_bytes = other.large_file_threshold_bytes;
         self.threshold_multiplier = other.threshold_multiplier;
@@ -410,6 +417,14 @@ impl RuntimeConfig {
             entropy_small_sample_discount,
             "entropy_small_sample_discount"
         );
+        if self.max_zip_entry_uncompressed_bytes != 0
+            && self.max_zip_entry_uncompressed_bytes < 1024
+        {
+            return Err(anyhow::anyhow!(
+                "config: max_zip_entry_uncompressed_bytes must be 0 (unlimited) or >= 1024 (got {})",
+                self.max_zip_entry_uncompressed_bytes
+            ));
+        }
         Ok(())
     }
 }

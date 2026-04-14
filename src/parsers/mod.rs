@@ -14,14 +14,15 @@ pub mod text;
 pub mod traits;
 pub use media_helpers::{BitrateMode, CompressionMode};
 
-use crate::config::RuntimeConfig;
-use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
-use crate::utils;
 use anyhow::Result;
 use memmap2::Mmap;
 use serde_json;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
+
+use crate::config::RuntimeConfig;
+use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
+use crate::utils;
 
 /// Macro to extract metadata with error handling and fallback
 /// Usage: `extract_metadata_with_fallback!(stats.field`, `extract_fn`, stats, `MetadataType`, `type_name_expr`)

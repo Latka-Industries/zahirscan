@@ -1,7 +1,5 @@
 //! Image file metadata extraction
 
-pub mod metadata;
-
 mod bmp;
 mod constants;
 mod gif;
@@ -10,13 +8,16 @@ mod png;
 mod tiff;
 mod webp;
 
-use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::results::ImageMetadata;
+pub mod metadata;
+
 use anyhow::Result;
 use image::ImageReader;
 use metadata::{FormatMetadata, format_from_string};
 use std::io::Cursor;
+
+use crate::config::RuntimeConfig;
+use crate::parsers::ParseResult;
+use crate::results::ImageMetadata;
 
 /// Extract image metadata
 /// Uses `into_dimensions()` to read only header metadata without decoding the full image
@@ -25,12 +26,12 @@ use std::io::Cursor;
 ///
 /// Currently always returns [`Ok`]; malformed images yield partial metadata rather than an error.
 pub fn extract_image_metadata(
-    content: &[u8],
-    stats: &ParseResult,
-    _config: &RuntimeConfig,
+    content_ref: &[u8],
+    stats_ref: &ParseResult,
+    _config_ref: &RuntimeConfig,
 ) -> Result<ImageMetadata> {
-    let reader = ImageReader::new(Cursor::new(content));
-    let stream_size = Some(stats.byte_count);
+    let reader = ImageReader::new(Cursor::new(content_ref));
+    let stream_size = Some(stats_ref.byte_count);
 
     match reader.with_guessed_format() {
         Ok(reader) => {
@@ -44,10 +45,10 @@ pub fn extract_image_metadata(
                 .and_then(format_from_string)
                 .map_or((None, None, None, None), |image_format| {
                     (
-                        image_format.extract_chroma_subsampling(content),
-                        image_format.extract_compression(content),
-                        image_format.extract_bit_depth(content),
-                        image_format.extract_color_type(content),
+                        image_format.extract_chroma_subsampling(content_ref),
+                        image_format.extract_compression(content_ref),
+                        image_format.extract_bit_depth(content_ref),
+                        image_format.extract_color_type(content_ref),
                     )
                 });
 

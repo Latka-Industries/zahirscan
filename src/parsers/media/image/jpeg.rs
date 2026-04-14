@@ -8,40 +8,40 @@ use super::constants::{
 use log::warn;
 
 /// Extract chroma subsampling from JPEG data
-pub fn extract_subsampling(jpeg_data: &[u8]) -> Option<String> {
-    jpeg_chroma_subsampling(jpeg_data)
+pub fn extract_subsampling(jpeg_data_ref: &[u8]) -> Option<String> {
+    jpeg_chroma_subsampling(jpeg_data_ref)
 }
 
 /// Extract compression info from JPEG data
-pub fn extract_compression(_jpeg_data: &[u8]) -> String {
+pub fn extract_compression(_jpeg_data_ref: &[u8]) -> String {
     // JPEG quality is not stored in the file - it's an encoding parameter
     // We can only note that it's JPEG compression
     "JPEG".to_string()
 }
 
 /// Extract bit depth from JPEG data
-pub fn extract_bit_depth(jpeg_data: &[u8]) -> Option<u32> {
+pub fn extract_bit_depth(jpeg_data_ref: &[u8]) -> Option<u32> {
     // JPEG is typically 8-bit per channel, but can be 12-bit for some variants
     // Check SOF marker precision field (byte after marker in SOF segment)
-    if !has_jpeg_signature(jpeg_data) {
+    if !has_jpeg_signature(jpeg_data_ref) {
         return None;
     }
 
     let mut i = 2usize;
-    while i + 4 <= jpeg_data.len() {
-        if jpeg_data[i] != 0xFF {
+    while i + 4 <= jpeg_data_ref.len() {
+        if jpeg_data_ref[i] != 0xFF {
             i += 1;
             continue;
         }
 
-        while i < jpeg_data.len() && jpeg_data[i] == 0xFF {
+        while i < jpeg_data_ref.len() && jpeg_data_ref[i] == 0xFF {
             i += 1;
         }
-        if i >= jpeg_data.len() {
+        if i >= jpeg_data_ref.len() {
             break;
         }
 
-        let marker = jpeg_data[i];
+        let marker = jpeg_data_ref[i];
         i += 1;
 
         match marker {
@@ -51,21 +51,21 @@ pub fn extract_bit_depth(jpeg_data: &[u8]) -> Option<u32> {
             _ => {}
         }
 
-        if i + 2 > jpeg_data.len() {
+        if i + 2 > jpeg_data_ref.len() {
             break;
         }
-        let seg_len = u16::from_be_bytes([jpeg_data[i], jpeg_data[i + 1]]) as usize;
+        let seg_len = u16::from_be_bytes([jpeg_data_ref[i], jpeg_data_ref[i + 1]]) as usize;
         i += 2;
 
         // SOF markers
         let is_sof = is_jpeg_sof_marker(marker);
-        if is_sof && seg_len >= 3 && i < jpeg_data.len() {
+        if is_sof && seg_len >= 3 && i < jpeg_data_ref.len() {
             // Precision is the first byte of the SOF segment
-            let precision = jpeg_data[i];
+            let precision = jpeg_data_ref[i];
             return Some(precision as u32);
         }
 
-        if seg_len < 2 || i + (seg_len - 2) > jpeg_data.len() {
+        if seg_len < 2 || i + (seg_len - 2) > jpeg_data_ref.len() {
             break;
         }
         i += seg_len - 2;
@@ -76,30 +76,30 @@ pub fn extract_bit_depth(jpeg_data: &[u8]) -> Option<u32> {
 }
 
 /// Extract color type from JPEG data
-pub fn extract_color_type(jpeg_data: &[u8]) -> Option<String> {
+pub fn extract_color_type(jpeg_data_ref: &[u8]) -> Option<String> {
     // JPEG color type depends on number of components in SOF marker
     // 1 component = grayscale (L8)
     // 3 components = RGB (Rgb8)
     // 4 components = CMYK (not standard, but possible)
-    if !has_jpeg_signature(jpeg_data) {
+    if !has_jpeg_signature(jpeg_data_ref) {
         return None;
     }
 
     let mut i = 2usize;
-    while i + 4 <= jpeg_data.len() {
-        if jpeg_data[i] != 0xFF {
+    while i + 4 <= jpeg_data_ref.len() {
+        if jpeg_data_ref[i] != 0xFF {
             i += 1;
             continue;
         }
 
-        while i < jpeg_data.len() && jpeg_data[i] == 0xFF {
+        while i < jpeg_data_ref.len() && jpeg_data_ref[i] == 0xFF {
             i += 1;
         }
-        if i >= jpeg_data.len() {
+        if i >= jpeg_data_ref.len() {
             break;
         }
 
-        let marker = jpeg_data[i];
+        let marker = jpeg_data_ref[i];
         i += 1;
 
         match marker {
@@ -109,18 +109,18 @@ pub fn extract_color_type(jpeg_data: &[u8]) -> Option<String> {
             _ => {}
         }
 
-        if i + 2 > jpeg_data.len() {
+        if i + 2 > jpeg_data_ref.len() {
             break;
         }
-        let seg_len = u16::from_be_bytes([jpeg_data[i], jpeg_data[i + 1]]) as usize;
+        let seg_len = u16::from_be_bytes([jpeg_data_ref[i], jpeg_data_ref[i + 1]]) as usize;
         i += 2;
 
         // SOF markers
         let is_sof = is_jpeg_sof_marker(marker);
-        if is_sof && seg_len >= 6 && i + 5 <= jpeg_data.len() {
+        if is_sof && seg_len >= 6 && i + 5 <= jpeg_data_ref.len() {
             // SOF segment layout: [P][Yhi][Ylo][Xhi][Xlo][Nf]...
             // P = precision (byte 0), Y = height (bytes 1-2), X = width (bytes 3-4), Nf = components (byte 5)
-            let num_components = jpeg_data[i + 5];
+            let num_components = jpeg_data_ref[i + 5];
             return match num_components {
                 1 => Some(COLOR_TYPE_L8.to_string()),    // Grayscale
                 3 => Some(COLOR_TYPE_RGB8.to_string()),  // RGB
@@ -129,7 +129,7 @@ pub fn extract_color_type(jpeg_data: &[u8]) -> Option<String> {
             };
         }
 
-        if seg_len < 2 || i + (seg_len - 2) > jpeg_data.len() {
+        if seg_len < 2 || i + (seg_len - 2) > jpeg_data_ref.len() {
             break;
         }
         i += seg_len - 2;
@@ -144,29 +144,29 @@ pub fn extract_color_type(jpeg_data: &[u8]) -> Option<String> {
 /// We look for a Start Of Frame marker (SOF0/SOF1/SOF2/etc), then read the
 /// per-component sampling factors. This avoids requiring libjpeg-turbo / NASM
 /// in CI (pure Rust, header-only parsing).
-fn jpeg_chroma_subsampling(jpeg_data: &[u8]) -> Option<String> {
+fn jpeg_chroma_subsampling(jpeg_data_ref: &[u8]) -> Option<String> {
     // Must start with SOI (FF D8)
-    if jpeg_data.len() < 4 || jpeg_data[0] != 0xFF || jpeg_data[1] != 0xD8 {
+    if jpeg_data_ref.len() < 4 || jpeg_data_ref[0] != 0xFF || jpeg_data_ref[1] != 0xD8 {
         return None;
     }
 
     let mut i = 2usize;
-    while i + 4 <= jpeg_data.len() {
+    while i + 4 <= jpeg_data_ref.len() {
         // Find next marker (0xFF ...)
-        if jpeg_data[i] != 0xFF {
+        if jpeg_data_ref[i] != 0xFF {
             i += 1;
             continue;
         }
 
         // Skip fill bytes (FF FF...)
-        while i < jpeg_data.len() && jpeg_data[i] == 0xFF {
+        while i < jpeg_data_ref.len() && jpeg_data_ref[i] == 0xFF {
             i += 1;
         }
-        if i >= jpeg_data.len() {
+        if i >= jpeg_data_ref.len() {
             break;
         }
 
-        let marker = jpeg_data[i];
+        let marker = jpeg_data_ref[i];
         i += 1;
 
         // Markers without length field (standalone)
@@ -177,12 +177,12 @@ fn jpeg_chroma_subsampling(jpeg_data: &[u8]) -> Option<String> {
             _ => {}
         }
 
-        if i + 2 > jpeg_data.len() {
+        if i + 2 > jpeg_data_ref.len() {
             break;
         }
-        let seg_len = u16::from_be_bytes([jpeg_data[i], jpeg_data[i + 1]]) as usize;
+        let seg_len = u16::from_be_bytes([jpeg_data_ref[i], jpeg_data_ref[i + 1]]) as usize;
         i += 2;
-        if seg_len < 2 || i + (seg_len - 2) > jpeg_data.len() {
+        if seg_len < 2 || i + (seg_len - 2) > jpeg_data_ref.len() {
             break;
         }
 
@@ -191,7 +191,7 @@ fn jpeg_chroma_subsampling(jpeg_data: &[u8]) -> Option<String> {
         if is_sof {
             // SOF segment layout:
             // [P][Yhi][Ylo][Xhi][Xlo][Nf] then Nf * ([Ci][HiVi][Tqi])
-            let seg = &jpeg_data[i..i + (seg_len - 2)];
+            let seg = &jpeg_data_ref[i..i + (seg_len - 2)];
             if seg.len() < 6 {
                 return None;
             }

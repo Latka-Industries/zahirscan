@@ -1,9 +1,10 @@
 //! Common utilities for parsers
 
+use rayon::prelude::*;
+
 use crate::config::RuntimeConfig;
 use crate::parsers::{ParseResult, estimate_compressed_tokens_with_footprint};
 use crate::results::{MiningResult, Template};
-use rayon::prelude::*;
 
 /// Create an empty `MiningResult` (no templates found)
 /// This is shared across all parsers for empty content cases

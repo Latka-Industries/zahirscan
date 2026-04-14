@@ -7,9 +7,9 @@ use super::constants::{
 };
 
 /// Extract compression info from PNG data
-pub fn extract_compression(png_data: &[u8]) -> Option<String> {
+pub fn extract_compression(png_data_ref: &[u8]) -> Option<String> {
     // Check PNG signature (first 8 bytes)
-    if has_png_signature(png_data) {
+    if has_png_signature(png_data_ref) {
         // PNG compression method is always DEFLATE (method 0 per PNG spec)
         // Compression level is not stored in the file - it's an encoding parameter
         Some("DEFLATE".to_string())
@@ -19,7 +19,7 @@ pub fn extract_compression(png_data: &[u8]) -> Option<String> {
 }
 
 /// Extract bit depth from PNG data
-pub fn extract_bit_depth(png_data: &[u8]) -> Option<u32> {
+pub fn extract_bit_depth(png_data_ref: &[u8]) -> Option<u32> {
     // PNG structure:
     // Bytes 0-7: PNG signature
     // Bytes 8-11: Chunk length (4 bytes, big-endian)
@@ -28,27 +28,27 @@ pub fn extract_bit_depth(png_data: &[u8]) -> Option<u32> {
     // Bytes 20-23: Height (4 bytes)
     // Byte 24: Bit depth
     // Byte 25: Color type
-    if png_data.len() < 25 {
+    if png_data_ref.len() < 25 {
         return None;
     }
 
     // Check PNG signature
-    if !has_png_signature(png_data) {
+    if !has_png_signature(png_data_ref) {
         return None;
     }
 
     // Check IHDR chunk signature (bytes 12-15 should be "IHDR")
-    if &png_data[12..16] != PNG_IHDR {
+    if &png_data_ref[12..16] != PNG_IHDR {
         return None;
     }
 
     // Bit depth is at byte 24 (8th byte of IHDR data)
-    let bit_depth = png_data[24];
+    let bit_depth = png_data_ref[24];
     Some(bit_depth as u32)
 }
 
 /// Extract color type from PNG data
-pub fn extract_color_type(png_data: &[u8]) -> Option<String> {
+pub fn extract_color_type(png_data_ref: &[u8]) -> Option<String> {
     // PNG structure:
     // Bytes 0-7: PNG signature
     // Bytes 8-11: Chunk length (4 bytes, big-endian)
@@ -57,22 +57,22 @@ pub fn extract_color_type(png_data: &[u8]) -> Option<String> {
     // Bytes 20-23: Height (4 bytes)
     // Byte 24: Bit depth
     // Byte 25: Color type
-    if png_data.len() < 26 {
+    if png_data_ref.len() < 26 {
         return None;
     }
 
     // Check PNG signature
-    if !has_png_signature(png_data) {
+    if !has_png_signature(png_data_ref) {
         return None;
     }
 
     // Check IHDR chunk signature (bytes 12-15 should be "IHDR")
-    if &png_data[12..16] != PNG_IHDR {
+    if &png_data_ref[12..16] != PNG_IHDR {
         return None;
     }
 
-    let bit_depth = png_data[24];
-    let color_type = png_data[25];
+    let bit_depth = png_data_ref[24];
+    let color_type = png_data_ref[25];
 
     // PNG color type values:
     // 0 = Grayscale

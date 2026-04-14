@@ -3,8 +3,10 @@
 
 use log::warn;
 use quick_xml::escape::unescape;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 use zip::ZipArchive;
+
+use crate::utils::zip_read::read_zip_entry_to_string_limited;
 
 /// Check if an XML element name contains a specific namespace prefix
 ///
@@ -58,19 +60,23 @@ pub(crate) fn read_xml_from_archive<F>(
     file_path: &str,
     file_type: &str,
     stats_file_path: &str,
+    max_uncompressed_bytes: usize,
     mut extractor: F,
 ) where
     F: FnMut(&str),
 {
+    let container = format!("{file_type} {stats_file_path}");
     match archive.by_name(file_path) {
-        Ok(mut file) => {
-            let mut xml_content = String::new();
-            if file.read_to_string(&mut xml_content).is_ok() {
-                extractor(&xml_content);
-            } else {
-                warn!("Failed to read {file_path} from {file_type} {stats_file_path}");
-            }
-        }
+        Ok(file) => match read_zip_entry_to_string_limited(
+            file,
+            max_uncompressed_bytes,
+            file_path,
+            &container,
+        ) {
+            Ok(xml_content) => extractor(&xml_content),
+            Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {}
+            Err(e) => warn!("Failed to read {file_path} from {file_type} {stats_file_path}: {e}"),
+        },
         Err(e) => {
             warn!("{file_path} not found in {file_type} {stats_file_path}: {e:?}");
         }

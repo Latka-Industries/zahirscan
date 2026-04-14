@@ -2,12 +2,13 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::Result;
+
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::parsers::structured::infer_value_type;
 use crate::results::IniMetadata;
 use crate::results::metadata::settings::ini::IniTypeInfo;
-use anyhow::Result;
 
 /// INI syntax markers/delimiters
 struct IniSyntax {

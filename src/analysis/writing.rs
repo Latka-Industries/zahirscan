@@ -1,14 +1,15 @@
 //! Writing footprint and SVO analysis utilities.
 //! Shared analysis functions for text and markdown parsers.
 
-use crate::config::RuntimeConfig;
-use crate::parsers::traits::AdaptiveParallel;
-use crate::results::{PunctuationMetrics, SVOAnalysis, Template, WritingFootprint};
 use dashmap::DashMap;
 use log::debug;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+use crate::config::RuntimeConfig;
+use crate::parsers::traits::AdaptiveParallel;
+use crate::results::{PunctuationMetrics, SVOAnalysis, Template, WritingFootprint};
 
 /// Calculate entropy (variation) for a template
 /// Higher entropy = more variation in word choice (more creative/diverse writing)

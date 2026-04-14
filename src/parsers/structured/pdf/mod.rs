@@ -2,30 +2,55 @@
 
 mod utils;
 
+use anyhow::Result;
+use log::warn;
+use lopdf::{Dictionary, Document, decode_text_string};
+
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::PdfMetadata;
-use anyhow::Result;
-use log::warn;
-use pdf::file::FileOptions;
 
-/// Extract document info from PDF info dictionary
-fn extract_document_info(info: &pdf::object::InfoDict, metadata: &mut PdfMetadata) {
-    metadata.title = utils::extract_text_str(info.title.as_ref());
-    metadata.author = utils::extract_text_str(info.author.as_ref());
-    metadata.subject = utils::extract_text_str(info.subject.as_ref());
-    metadata.creator = utils::extract_text_str(info.creator.as_ref());
-    metadata.producer = utils::extract_text_str(info.producer.as_ref());
+/// PDF name objects for the trailer and Info dictionary (PDF 32000-2).
+struct PdfName;
+impl PdfName {
+    const TRAILER_INFO: &'static [u8] = b"Info";
+    const TRAILER_ENCRYPT: &'static [u8] = b"Encrypt";
 
-    // Dates are Option<pdf::primitive::Date> - convert to ISO 8601 format
-    metadata.creation_date = info
-        .creation_date
-        .as_ref()
-        .and_then(utils::extract_pdf_date_to_iso8601);
-    metadata.modification_date = info
-        .mod_date
-        .as_ref()
-        .and_then(utils::extract_pdf_date_to_iso8601);
+    const TITLE: &'static [u8] = b"Title";
+    const AUTHOR: &'static [u8] = b"Author";
+    const SUBJECT: &'static [u8] = b"Subject";
+    const CREATOR: &'static [u8] = b"Creator";
+    const PRODUCER: &'static [u8] = b"Producer";
+    const CREATION_DATE: &'static [u8] = b"CreationDate";
+    const MOD_DATE: &'static [u8] = b"ModDate";
+}
+
+fn info_text(dict: &Dictionary, key: &[u8]) -> Option<String> {
+    dict.get(key)
+        .ok()
+        .and_then(|obj| decode_text_string(obj).ok())
+}
+
+fn info_dict(doc: &Document) -> Option<&Dictionary> {
+    let info_obj = doc.trailer.get(PdfName::TRAILER_INFO).ok()?;
+    let (_, obj) = doc.dereference(info_obj).ok()?;
+    obj.as_dict().ok()
+}
+
+/// Extract document info from PDF Info dictionary
+fn extract_document_info(dict: &Dictionary, metadata: &mut PdfMetadata) {
+    metadata.title = info_text(dict, PdfName::TITLE);
+    metadata.author = info_text(dict, PdfName::AUTHOR);
+    metadata.subject = info_text(dict, PdfName::SUBJECT);
+    metadata.creator = info_text(dict, PdfName::CREATOR);
+    metadata.producer = info_text(dict, PdfName::PRODUCER);
+
+    metadata.creation_date = info_text(dict, PdfName::CREATION_DATE)
+        .as_deref()
+        .and_then(utils::format_pdf_date);
+    metadata.modification_date = info_text(dict, PdfName::MOD_DATE)
+        .as_deref()
+        .and_then(utils::format_pdf_date);
 }
 
 /// Extract PDF metadata
@@ -43,31 +68,20 @@ pub fn extract_pdf_metadata(
         ..Default::default()
     };
 
-    // Try to parse the PDF
-    // Note: FileOptions::load() requires ownership of the data, so to_vec() is necessary.
-    // The PDF crate needs to own the data to parse it, similar to how other parsers work.
-    let data = content.to_vec();
-    let file = match FileOptions::cached().load(data) {
-        Ok(f) => f,
+    let doc = match Document::load_mem(content) {
+        Ok(d) => d,
         Err(e) => {
-            // If parsing fails, log the error and return minimal metadata with file size.
             warn!("Failed to parse PDF {}: {:?}", stats.file_path, e);
             return Ok(metadata);
         }
     };
 
-    // Extract PDF version
-    metadata.pdf_version = file.version().ok();
+    metadata.pdf_version = Some(doc.version.clone());
+    metadata.page_count = Some(doc.get_pages().len());
+    metadata.is_encrypted = Some(doc.trailer.get(PdfName::TRAILER_ENCRYPT).is_ok());
 
-    // Extract page count (convert u32 to usize)
-    metadata.page_count = Some(file.num_pages() as usize);
-
-    // Check encryption status
-    metadata.is_encrypted = Some(file.trailer.encrypt_dict.is_some());
-
-    // Extract document info (metadata dictionary) if present
-    if let Some(ref info) = file.trailer.info_dict {
-        extract_document_info(info, &mut metadata);
+    if let Some(dict) = info_dict(&doc) {
+        extract_document_info(dict, &mut metadata);
     }
 
     Ok(metadata)

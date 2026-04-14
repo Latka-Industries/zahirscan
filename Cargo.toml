@@ -1,6 +1,6 @@
 [package]
 name = "zahirscan"
-version = "0.2.17"
+version = "0.2.18"
 edition = "2024"
 rust-version = "1.93"
 authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
@@ -42,22 +42,22 @@ kdam = "0.6.4"
 linguist = "0.1.6"
 lofty = "0.24.0"
 log = "0.4.29"
+lopdf = "0.40.0"
 memmap2 = "0.9.9"
 num_cpus = "1.17.0"
-pdf = "0.10.0"
 png = "0.18.0"
 quick-xml = { version = "0.39.2", features = ["serialize"] }
-rayon = "1.11.0"
+rayon = "1.12.0"
 regex = "1.12.2"
 rlimit = "0.11"
-rusqlite = { version = "0.38.0", features = ["bundled"] }
+rusqlite = { version = "0.39.0", features = ["bundled"] }
 scraper = "0.26.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 serde_norway = "0.9.42"
 tempfile = "3.27.0"
 toml = { version = "1.1.2", features = ["parse", "serde"] }
-zip = "8.5.0"
+zip = "8.5.1"
 
 [profile.release]
 opt-level = "s"
@@ -71,5 +71,5 @@ overflow-checks = false
 [dev-dependencies]
 anyhow = "1.0.100"
 criterion = { version = "0.8.1", features = ["html_reports"] }
-rusqlite = { version = "0.38.0", features = ["bundled"] }
+rusqlite = { version = "0.39.0", features = ["bundled"] }
 tempfile = "3.12.0"

@@ -3,13 +3,14 @@
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
+use anyhow::Result;
+use quick_xml::Reader;
+use quick_xml::events::Event;
+
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::results::XmlMetadata;
 use crate::results::metadata::settings::xml::XmlTypeInfo;
-use anyhow::Result;
-use quick_xml::Reader;
-use quick_xml::events::Event;
 
 /// Attribute name "xmlns" and prefix for namespace declarations (e.g. xmlns, xmlns:foo).
 const ATTR_XMLNS: &[u8] = b"xmlns";
@@ -85,7 +86,7 @@ fn merge_child(children: &mut BTreeMap<String, XmlTypeInfo>, key: String, value:
     if let Some(existing) = children.remove(&key) {
         let mut arr = match existing {
             XmlTypeInfo::Array(inner) => XmlTypeInfo::Array(inner),
-            _ => XmlTypeInfo::Array(Box::new(existing)),
+            XmlTypeInfo::Element { .. } => XmlTypeInfo::Array(Box::new(existing)),
         };
         if let XmlTypeInfo::Array(ref mut inner) = arr {
             merge_element_into(inner.as_mut(), value);

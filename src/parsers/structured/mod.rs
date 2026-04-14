@@ -1,11 +1,5 @@
 //! Structured formats: CSV, HTML, JSON, EPUB, PDF.
 
-use crate::config::RuntimeConfig;
-use crate::parsers::{FileType, ParseResult};
-use crate::results::MiningResult;
-use anyhow::Result;
-use memmap2::Mmap;
-
 mod csv;
 mod epub;
 mod html;
@@ -21,6 +15,12 @@ pub use html::{extract_html_metadata, extract_html_templates};
 pub use json::{extract_json_metadata, extract_json_templates};
 pub use pdf::{extract_pdf_metadata, extract_pdf_templates};
 
+use anyhow::Result;
+use memmap2::Mmap;
+
+use crate::config::RuntimeConfig;
+use crate::parsers::{FileType, ParseResult};
+use crate::results::MiningResult;
 /// Dispatch by file type; fills `csv_metadata` or `html_metadata` and returns templates.
 /// For text-based formats we pass content (&str) so UTF-8 is validated once at the boundary.
 ///

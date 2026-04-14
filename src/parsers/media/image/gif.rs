@@ -3,9 +3,9 @@
 use super::constants::{COLOR_TYPE_INDEXED8, has_gif_signature};
 
 /// Extract compression info from GIF data
-pub fn extract_compression(gif_data: &[u8]) -> Option<String> {
+pub fn extract_compression(gif_data_ref: &[u8]) -> Option<String> {
     // Check GIF signature (first 6 bytes: "GIF87a" or "GIF89a")
-    if has_gif_signature(gif_data) {
+    if has_gif_signature(gif_data_ref) {
         // GIF always uses LZW compression (lossless)
         Some("LZW".to_string())
     } else {
@@ -14,14 +14,14 @@ pub fn extract_compression(gif_data: &[u8]) -> Option<String> {
 }
 
 /// Extract color type from GIF data
-pub fn extract_color_type(gif_data: &[u8]) -> Option<String> {
+pub fn extract_color_type(gif_data_ref: &[u8]) -> Option<String> {
     // GIF logical screen descriptor starts at byte 6
     // Byte 10 contains packed fields: global color table flag, color resolution, sort flag, global color table size
-    if gif_data.len() < 11 {
+    if gif_data_ref.len() < 11 {
         return None;
     }
 
-    if !has_gif_signature(gif_data) {
+    if !has_gif_signature(gif_data_ref) {
         return None;
     }
 

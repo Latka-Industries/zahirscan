@@ -31,6 +31,7 @@ pub mod ffprobe_handler;
 pub mod filetypes;
 pub mod path_string_helper;
 pub mod typecheck;
+pub mod zip_read;
 
 use anyhow::anyhow;
 

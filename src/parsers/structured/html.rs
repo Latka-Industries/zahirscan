@@ -1,10 +1,13 @@
 //! HTML file metadata extraction
 
-use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::results::HtmlMetadata;
 use anyhow::Result;
 use scraper::{Html, Selector};
+
+use crate::config::RuntimeConfig;
+use crate::parsers::{
+    ParseResult, text::plain_text::extract_text_templates, traits::empty_mining_result,
+};
+use crate::results::{HtmlMetadata, MiningResult};
 
 /// Extract text content from the first matching element
 macro_rules! extract_text {
@@ -226,16 +229,16 @@ pub fn extract_html_metadata(
 /// Returns [`anyhow::Error`] when the content is not valid UTF-8, or propagates errors from plain-text template extraction.
 pub fn extract_html_templates(
     content: &[u8],
-    stats: &crate::parsers::ParseResult,
+    stats: &ParseResult,
     config: &RuntimeConfig,
-) -> Result<crate::results::MiningResult> {
+) -> Result<MiningResult> {
     let s = std::str::from_utf8(content)
         .map_err(|e| anyhow::anyhow!("HTML must be valid UTF-8: {e}"))?;
     let document = Html::parse_document(s);
     let selectors = get_html_selectors();
     let plain_text = extract_plain_text(&document, selectors);
     if plain_text.trim().is_empty() {
-        return Ok(crate::parsers::traits::empty_mining_result(stats));
+        return Ok(empty_mining_result(stats));
     }
-    crate::parsers::text::plain_text::extract_text_templates(&plain_text, stats, config)
+    extract_text_templates(&plain_text, stats, config)
 }

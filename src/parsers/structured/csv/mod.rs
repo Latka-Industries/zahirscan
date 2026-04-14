@@ -7,16 +7,17 @@ pub mod utils;
 
 pub use utils::*;
 
+use anyhow::Result;
+use csv::ReaderBuilder;
+use dashmap::DashMap;
+use rayon::prelude::*;
+use std::io::Cursor;
+
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::parsers::column_stats;
 use crate::parsers::traits::AdaptiveParallel;
 use crate::results::{BooleanStats, CsvMetadata, DateStats, NumericStats};
-use ::csv::ReaderBuilder;
-use anyhow::Result;
-use dashmap::DashMap;
-use rayon::prelude::*;
-use std::io::Cursor;
 
 /// Extract CSV metadata
 ///

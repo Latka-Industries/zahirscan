@@ -1,21 +1,22 @@
 //! DOCX file text extraction and metadata
 
-use std::io::Read;
-
-use super::constants::{CP_NAMESPACE, DOCX_CORE_PROPERTIES, OFFICE_CORE_XML, REVISION_ELEMENT};
-use super::utils::{decode_xml_entities, has_namespace, open_office_archive};
-use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::results::DocumentMetadata;
 use log::warn;
 use quick_xml::Reader;
 use quick_xml::events::Event;
+
+use crate::config::RuntimeConfig;
+use crate::parsers::ParseResult;
+use crate::results::DocumentMetadata;
+use crate::utils::zip_read::read_zip_entry_to_string_limited;
+
+use super::constants::{CP_NAMESPACE, DOCX_CORE_PROPERTIES, OFFICE_CORE_XML, REVISION_ELEMENT};
+use super::utils::{decode_xml_entities, has_namespace, open_office_archive};
 
 /// Extract DOCX metadata and text content
 pub fn extract_docx_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &RuntimeConfig,
+    config: &RuntimeConfig,
 ) -> DocumentMetadata {
     let mut metadata = DocumentMetadata {
         file_size: Some(stats.byte_count),
@@ -27,17 +28,21 @@ pub fn extract_docx_metadata(
     };
 
     let document_xml = match archive.by_name("word/document.xml") {
-        Ok(mut file) => {
-            let mut xml_content = String::new();
-            if let Err(e) = file.read_to_string(&mut xml_content) {
+        Ok(file) => match read_zip_entry_to_string_limited(
+            file,
+            config.max_zip_entry_uncompressed_bytes,
+            "word/document.xml",
+            &stats.file_path,
+        ) {
+            Ok(xml) => xml,
+            Err(e) => {
                 warn!(
-                    "Failed to read word/document.xml from DOCX {}: {:?}",
+                    "Failed to read word/document.xml from DOCX {}: {}",
                     stats.file_path, e
                 );
                 return metadata;
             }
-            xml_content
-        }
+        },
         Err(e) => {
             warn!(
                 "word/document.xml not found in DOCX {}: {:?}",
@@ -55,11 +60,15 @@ pub fn extract_docx_metadata(
     metadata.character_count_no_spaces = Some(character_count_no_spaces);
     metadata.paragraph_count = Some(paragraph_count);
 
-    if let Ok(mut file) = archive.by_name(OFFICE_CORE_XML) {
-        let mut xml_content = String::new();
-        if file.read_to_string(&mut xml_content).is_ok() {
-            extract_core_properties(&xml_content, &mut metadata);
-        }
+    if let Ok(file) = archive.by_name(OFFICE_CORE_XML)
+        && let Ok(xml_content) = read_zip_entry_to_string_limited(
+            file,
+            config.max_zip_entry_uncompressed_bytes,
+            OFFICE_CORE_XML,
+            &stats.file_path,
+        )
+    {
+        extract_core_properties(&xml_content, &mut metadata);
     }
 
     metadata

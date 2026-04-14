@@ -9,21 +9,21 @@ use log::warn;
 use quick_xml::Reader as XmlReader;
 use quick_xml::events::Event;
 
+use crate::config::RuntimeConfig;
+use crate::parsers::ParseResult;
+use crate::results::DocumentMetadata;
+
 use super::constants::{
     CP_NAMESPACE, DOCX_CORE_PROPERTIES, OFFICE_CORE_XML, REVISION_ELEMENT, XLSX_APP_XML,
     XLSX_ATTR_NAME, XLSX_LPSTR, XLSX_SHEET, XLSX_WORKBOOK_XML,
 };
 use super::utils::{has_namespace, open_office_archive, read_xml_from_archive};
 
-use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::results::DocumentMetadata;
-
 /// Extract XLSX metadata
 pub fn extract_xlsx_metadata(
     content: &[u8],
     stats: &ParseResult,
-    _config: &RuntimeConfig,
+    config: &RuntimeConfig,
 ) -> DocumentMetadata {
     let mut metadata = DocumentMetadata {
         file_size: Some(stats.byte_count),
@@ -39,6 +39,7 @@ pub fn extract_xlsx_metadata(
         OFFICE_CORE_XML,
         "XLSX",
         &stats.file_path,
+        config.max_zip_entry_uncompressed_bytes,
         |xml| extract_core_properties(xml, &mut metadata),
     );
 
@@ -47,6 +48,7 @@ pub fn extract_xlsx_metadata(
         XLSX_APP_XML,
         "XLSX",
         &stats.file_path,
+        config.max_zip_entry_uncompressed_bytes,
         |xml| extract_app_properties(xml, &mut metadata),
     );
 
@@ -55,6 +57,7 @@ pub fn extract_xlsx_metadata(
         XLSX_WORKBOOK_XML,
         "XLSX",
         &stats.file_path,
+        config.max_zip_entry_uncompressed_bytes,
         |xml| extract_sheet_info(xml, &mut metadata),
     );
 
