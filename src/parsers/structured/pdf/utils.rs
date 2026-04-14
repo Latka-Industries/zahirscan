@@ -8,29 +8,6 @@ mod defaults {
 
 use defaults::{TIMEZONE_HOUR_MIN, TIMEZONE_UTC};
 
-/// Extract PDF date string from Debug representation
-/// The pdf crate's Date type formats as "Date(...)" in Debug, so we extract the inner string
-fn extract_date_string_from_debug(debug_str: &str) -> &str {
-    // Debug format is "Date(...)" - extract the inner content
-    debug_str
-        .strip_prefix("Date(")
-        .and_then(|s| s.strip_suffix(")"))
-        .unwrap_or(debug_str)
-}
-
-/// Extract and format a PDF date to ISO 8601 format
-/// Takes a `pdf::primitive::Date` reference and returns Option<String> with ISO 8601 date
-pub(crate) fn extract_pdf_date_to_iso8601(date: &pdf::primitive::Date) -> Option<String> {
-    let debug_str = format!("{date:?}");
-    let date_str = extract_date_string_from_debug(&debug_str);
-    format_pdf_date(date_str)
-}
-
-/// Extract `PdfString` to String, converting None to None
-pub(crate) fn extract_text_str(text_str: Option<&pdf::primitive::PdfString>) -> Option<String> {
-    text_str.map(pdf::primitive::PdfString::to_string_lossy)
-}
-
 /// Extract and validate a date component from a PDF date string
 /// Returns the component string if valid, or None if invalid
 fn extract_date_component<'a>(
