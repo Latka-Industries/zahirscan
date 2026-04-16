@@ -17,6 +17,7 @@ use super::helpers::{clamp_f64, deep_merge_toml, u64_to_usize, u64_to_usize_min}
 use super::structs::TomlConfig;
 
 /// User-facing toggles from TOML `[filter]` / CLI (redaction, media skip, progress, hidden files).
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuntimeFlags {
     /// Whether to redact file paths in output (show only filename as ***/filename.ext)

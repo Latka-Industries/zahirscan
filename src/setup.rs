@@ -106,10 +106,20 @@ pub fn load_config() -> RuntimeConfig {
 /// CLI boolean flags merged into [`RuntimeConfig`] by [`apply_cli_to_config`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CliRuntimeFlags {
-    pub progress: bool,
+    pub mode: CliRuntimeMode,
+    pub processing: CliRuntimeProcessing,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CliRuntimeMode {
     pub dev: bool,
     pub full: bool,
     pub redact: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CliRuntimeProcessing {
+    pub progress: bool,
     pub no_media: bool,
 }
 
@@ -120,7 +130,11 @@ pub struct CliRuntimeFlags {
 ///
 /// Returns [`anyhow::Error`] when [`RuntimeConfig::validate_external`] fails (e.g. invalid numeric ranges).
 pub fn apply_cli_to_config(config: &mut RuntimeConfig, cli: CliRuntimeFlags) -> anyhow::Result<()> {
-    config.flags.show_progress = match (cli.progress, cli.dev, is_stderr_tty()) {
+    config.flags.show_progress = match (
+        cli.processing.progress,
+        cli.mode.dev,
+        is_stderr_tty(),
+    ) {
         (true, true, _) => {
             debug!("--progress/-p flag was detected but will be disabled (dev mode)");
             false
@@ -132,11 +146,11 @@ pub fn apply_cli_to_config(config: &mut RuntimeConfig, cli: CliRuntimeFlags) -> 
         (true, false, true) => true,
         (false, _, _) => false,
     };
-    if cli.full {
+    if cli.mode.full {
         config.output_mode = OutputMode::Full;
     }
-    config.flags.redact_paths = cli.redact;
-    config.flags.skip_media_metadata = cli.no_media;
+    config.flags.redact_paths = cli.mode.redact;
+    config.flags.skip_media_metadata = cli.processing.no_media;
     config
         .validate_external()
         .map_err(|e| anyhow::anyhow!("Invalid config: {e}"))
