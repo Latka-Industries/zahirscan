@@ -1,19 +1,26 @@
-//! Structured formats: CSV, HTML, JSON, EPUB, PDF.
+//! Structured formats: CSV, HTML, JSON, EPUB, PDF, columnar binaries (Parquet, Arrow IPC, Avro, ORC), and `NumPy` (NPY/NPZ).
 
+mod columnar;
 mod csv;
 mod epub;
 mod html;
 mod json;
+mod numpy;
 mod pdf;
+mod table_sample_profile;
 
+pub use columnar::*;
 pub use csv::{
     delimiter_byte_for_reader, detect_delimiter_byte, extract_csv_metadata, extract_csv_templates,
-    infer_value_type,
 };
 pub use epub::{extract_epub_metadata, extract_epub_templates};
 pub use html::{extract_html_metadata, extract_html_templates};
 pub use json::{extract_json_metadata, extract_json_templates};
+pub use numpy::{
+    extract_npy_metadata, extract_npy_templates, extract_npz_metadata, extract_npz_templates,
+};
 pub use pdf::{extract_pdf_metadata, extract_pdf_templates};
+pub use table_sample_profile::*;
 
 use anyhow::Result;
 use memmap2::Mmap;
@@ -21,8 +28,8 @@ use memmap2::Mmap;
 use crate::config::RuntimeConfig;
 use crate::parsers::{FileType, ParseResult};
 use crate::results::MiningResult;
-/// Dispatch by file type; fills `csv_metadata` or `html_metadata` and returns templates.
-/// For text-based formats we pass content (&str) so UTF-8 is validated once at the boundary.
+
+/// Dispatch by file type; fills structured metadata fields and returns templates.
 ///
 /// # Errors
 ///
@@ -77,6 +84,66 @@ pub fn process(
             crate::results::PdfMetadata,
             FileType::Pdf,
             extract_pdf_templates(mmap, stats, config)
+        ),
+        FileType::Parquet => crate::process_with_metadata!(
+            stats,
+            mmap,
+            config,
+            parquet_metadata,
+            extract_parquet_metadata(mmap, stats, config),
+            crate::results::ParquetMetadata,
+            FileType::Parquet,
+            extract_parquet_templates(mmap, stats, config)
+        ),
+        FileType::ArrowIpc => crate::process_with_metadata!(
+            stats,
+            mmap,
+            config,
+            arrow_ipc_metadata,
+            extract_arrow_ipc_metadata(mmap, stats, config),
+            crate::results::ArrowIpcMetadata,
+            FileType::ArrowIpc,
+            extract_arrow_ipc_templates(mmap, stats, config)
+        ),
+        FileType::Avro => crate::process_with_metadata!(
+            stats,
+            mmap,
+            config,
+            avro_metadata,
+            extract_avro_metadata(mmap, stats, config),
+            crate::results::AvroMetadata,
+            FileType::Avro,
+            extract_avro_templates(mmap, stats, config)
+        ),
+        FileType::Orc => crate::process_with_metadata!(
+            stats,
+            mmap,
+            config,
+            orc_metadata,
+            extract_orc_metadata(mmap, stats, config),
+            crate::results::OrcMetadata,
+            FileType::Orc,
+            extract_orc_templates(mmap, stats, config)
+        ),
+        FileType::Npy => crate::process_with_metadata!(
+            stats,
+            mmap,
+            config,
+            npy_metadata,
+            extract_npy_metadata(mmap, stats, config),
+            crate::results::NpyMetadata,
+            FileType::Npy,
+            extract_npy_templates(mmap, stats, config)
+        ),
+        FileType::Npz => crate::process_with_metadata!(
+            stats,
+            mmap,
+            config,
+            npz_metadata,
+            extract_npz_metadata(mmap, stats, config),
+            crate::results::NpzMetadata,
+            FileType::Npz,
+            extract_npz_templates(mmap, stats, config)
         ),
         _ => unreachable!("structured::process called with {:?}", stats.file_type),
     }

@@ -19,4 +19,8 @@ pub use office::{DocumentMetadata, PptxMetadata};
 pub use settings::{IniMetadata, TomlMetadata, XmlMetadata, YamlMetadata};
 pub use sqlite::{ColumnInfo, ForeignKeyInfo, IndexInfo, SqliteMetadata, TableInfo};
 pub use stats::{BlobStats, BooleanStats, DateStats, NumericStats, TextStats};
-pub use structured::{CsvMetadata, EpubMetadata, HtmlMetadata, JsonMetadata, PdfMetadata};
+pub use structured::{
+    ArrowIpcMetadata, AvroMetadata, ColumnarCommonFields, CsvMetadata, EpubMetadata, HtmlMetadata,
+    JsonMetadata, NpyLayoutSummary, NpyMetadata, NpzMetadata, NpzNpyEntrySummary, OrcMetadata,
+    ParquetMetadata, PdfMetadata,
+};

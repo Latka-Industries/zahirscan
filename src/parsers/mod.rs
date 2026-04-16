@@ -104,6 +104,12 @@ macro_rules! copy_metadata_fields {
         $to.code_metadata = $from.code_metadata.clone();
         $to.log_metadata = $from.log_metadata.clone();
         $to.json_metadata = $from.json_metadata.clone();
+        $to.parquet_metadata = $from.parquet_metadata.clone();
+        $to.arrow_ipc_metadata = $from.arrow_ipc_metadata.clone();
+        $to.avro_metadata = $from.avro_metadata.clone();
+        $to.orc_metadata = $from.orc_metadata.clone();
+        $to.npy_metadata = $from.npy_metadata.clone();
+        $to.npz_metadata = $from.npz_metadata.clone();
     };
 }
 
@@ -130,7 +136,7 @@ macro_rules! no_template_mining {
 pub enum ParserCategory {
     Media,      // Image | Video | Audio -> media::process
     Office,     // Docx | Xlsx | Pptx -> office::process
-    Structured, // Csv | Html | Json | Epub | Pdf -> structured::process
+    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | Arrow IPC | Avro | ORC | NPY | NPZ -> structured::process
     Settings,   // Toml | Yaml | Xml | Ini -> settings::process
     Container,  // Zip | Archive -> container::process
     Sqlite,
@@ -187,13 +193,45 @@ pub enum FileType {
     Epub,
     Archive,
     Code,
+    Parquet,
+    ArrowIpc,
+    Avro,
+    Orc,
+    Npy,
+    Npz,
     #[default]
     Unknown,
 }
 
-const METADATA_NAMES: [&str; 23] = [
-    "Log", "JSON", "Text", "Markdown", "Image", "Video", "Audio", "CSV", "PDF", "DOCX", "XLSX",
-    "SQLite", "TOML", "ZIP", "XML", "HTML", "YAML", "INI", "PPTX", "EPUB", "Archive", "Code",
+const METADATA_NAMES: [&str; 29] = [
+    "Log",
+    "JSON",
+    "Text",
+    "Markdown",
+    "Image",
+    "Video",
+    "Audio",
+    "CSV",
+    "PDF",
+    "DOCX",
+    "XLSX",
+    "SQLite",
+    "TOML",
+    "ZIP",
+    "XML",
+    "HTML",
+    "YAML",
+    "INI",
+    "PPTX",
+    "EPUB",
+    "Archive",
+    "Code",
+    "Parquet",
+    "Arrow IPC",
+    "Avro",
+    "ORC",
+    "NPY",
+    "NPZ",
     "Unknown",
 ];
 
@@ -239,7 +277,13 @@ impl FileType {
                 19 => FileType::Epub,
                 20 => FileType::Archive,
                 21 => FileType::Code,
-                22 => FileType::Unknown,
+                22 => FileType::Parquet,
+                23 => FileType::ArrowIpc,
+                24 => FileType::Avro,
+                25 => FileType::Orc,
+                26 => FileType::Npy,
+                27 => FileType::Npz,
+                28 => FileType::Unknown,
                 _ => unreachable!("METADATA_NAMES and match arms must stay in sync"),
             })
     }
@@ -256,9 +300,17 @@ impl FileType {
         match self {
             FileType::Image | FileType::Video | FileType::Audio => Some(ParserCategory::Media),
             FileType::Docx | FileType::Xlsx | FileType::Pptx => Some(ParserCategory::Office),
-            FileType::Csv | FileType::Html | FileType::Json | FileType::Epub | FileType::Pdf => {
-                Some(ParserCategory::Structured)
-            }
+            FileType::Csv
+            | FileType::Html
+            | FileType::Json
+            | FileType::Epub
+            | FileType::Pdf
+            | FileType::Parquet
+            | FileType::ArrowIpc
+            | FileType::Avro
+            | FileType::Orc
+            | FileType::Npy
+            | FileType::Npz => Some(ParserCategory::Structured),
             FileType::Toml | FileType::Yaml | FileType::Xml | FileType::Ini => {
                 Some(ParserCategory::Settings)
             }
@@ -322,6 +374,18 @@ pub struct ParseResult {
     pub log_metadata: Option<crate::results::LogMetadata>,
     /// JSON file metadata (for JSON files)
     pub json_metadata: Option<crate::results::JsonMetadata>,
+    /// Parquet columnar metadata
+    pub parquet_metadata: Option<crate::results::ParquetMetadata>,
+    /// Arrow IPC / Feather metadata
+    pub arrow_ipc_metadata: Option<crate::results::ArrowIpcMetadata>,
+    /// Avro OCF metadata
+    pub avro_metadata: Option<crate::results::AvroMetadata>,
+    /// ORC metadata
+    pub orc_metadata: Option<crate::results::OrcMetadata>,
+    /// `NumPy` `.npy` array header / layout metadata
+    pub npy_metadata: Option<crate::results::NpyMetadata>,
+    /// `NumPy` `.npz` archive (ZIP of `.npy`) metadata
+    pub npz_metadata: Option<crate::results::NpzMetadata>,
 }
 
 impl ParseResult {

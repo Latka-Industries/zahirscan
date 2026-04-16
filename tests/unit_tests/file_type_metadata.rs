@@ -1,9 +1,10 @@
 //! `FileType::as_metadata_name` / `from_metadata_name` round-trip and edge cases.
 
 use zahirscan::FileType;
+use zahirscan::utils::filetypes::detect_file_type;
 
 /// Every `FileType` variant in `repr(u8)` order (must match `parsers/mod.rs`).
-fn all_file_types() -> [FileType; 23] {
+fn all_file_types() -> [FileType; 29] {
     [
         FileType::Log,
         FileType::Json,
@@ -27,6 +28,12 @@ fn all_file_types() -> [FileType; 23] {
         FileType::Epub,
         FileType::Archive,
         FileType::Code,
+        FileType::Parquet,
+        FileType::ArrowIpc,
+        FileType::Avro,
+        FileType::Orc,
+        FileType::Npy,
+        FileType::Npz,
         FileType::Unknown,
     ]
 }
@@ -54,6 +61,21 @@ fn from_metadata_name_returns_none_for_unknown_strings() {
 
 #[test]
 fn file_type_discriminant_range_matches_variant_count() {
-    assert_eq!(FileType::Unknown as u8, 22);
-    assert_eq!(all_file_types().len(), 23);
+    assert_eq!(FileType::Parquet as u8, 22);
+    assert_eq!(FileType::Orc as u8, 25);
+    assert_eq!(FileType::Npy as u8, 26);
+    assert_eq!(FileType::Npz as u8, 27);
+    assert_eq!(FileType::Unknown as u8, 28);
+    assert_eq!(all_file_types().len(), 29);
+}
+
+#[test]
+fn detect_file_type_columnar_extensions() {
+    assert_eq!(detect_file_type("a.parquet"), FileType::Parquet);
+    assert_eq!(detect_file_type("b.feather"), FileType::ArrowIpc);
+    assert_eq!(detect_file_type("c.arrow"), FileType::ArrowIpc);
+    assert_eq!(detect_file_type("d.avro"), FileType::Avro);
+    assert_eq!(detect_file_type("e.orc"), FileType::Orc);
+    assert_eq!(detect_file_type("f.npy"), FileType::Npy);
+    assert_eq!(detect_file_type("g.npz"), FileType::Npz);
 }

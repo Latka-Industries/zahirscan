@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 use crate::engine::chunking::ProcessingTask;
 
+#[allow(clippy::wildcard_imports)]
 use super::metadata::*;
 use super::writing::{CompressionStats, WritingFootprint};
 
@@ -105,6 +106,18 @@ pub struct Output {
     pub log_metadata: Option<LogMetadata>,
     /// JSON file metadata (Mode 2 only, for JSON files)
     pub json_metadata: Option<JsonMetadata>,
+    /// Parquet metadata (Mode 2 only)
+    pub parquet_metadata: Option<super::metadata::ParquetMetadata>,
+    /// Arrow IPC / Feather metadata (Mode 2 only)
+    pub arrow_ipc_metadata: Option<super::metadata::ArrowIpcMetadata>,
+    /// Avro OCF metadata (Mode 2 only)
+    pub avro_metadata: Option<super::metadata::AvroMetadata>,
+    /// ORC metadata (Mode 2 only)
+    pub orc_metadata: Option<super::metadata::OrcMetadata>,
+    /// `NumPy` `.npy` metadata (Mode 2 only)
+    pub npy_metadata: Option<super::metadata::NpyMetadata>,
+    /// `NumPy` `.npz` metadata (Mode 2 only)
+    pub npz_metadata: Option<super::metadata::NpzMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -124,8 +137,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 29 fields: 1 required (templates) + 28 optional fields
-        let mut state = serializer.serialize_struct("Output", 29)?;
+        // Maximum 35 fields: 1 required (templates) + 34 optional fields
+        let mut state = serializer.serialize_struct("Output", 35)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -159,6 +172,12 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.code_metadata, "code_metadata");
         crate::serialize_optional!(state, self.log_metadata, "log_metadata");
         crate::serialize_optional!(state, self.json_metadata, "json_metadata");
+        crate::serialize_optional!(state, self.parquet_metadata, "parquet_metadata");
+        crate::serialize_optional!(state, self.arrow_ipc_metadata, "arrow_ipc_metadata");
+        crate::serialize_optional!(state, self.avro_metadata, "avro_metadata");
+        crate::serialize_optional!(state, self.orc_metadata, "orc_metadata");
+        crate::serialize_optional!(state, self.npy_metadata, "npy_metadata");
+        crate::serialize_optional!(state, self.npz_metadata, "npz_metadata");
 
         state.end()
     }

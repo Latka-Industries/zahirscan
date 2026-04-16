@@ -11,9 +11,10 @@
 use zahirscan::config::RuntimeConfig;
 use zahirscan::parsers::ParseResult;
 use zahirscan::results::{
-    ArchiveMetadata, AudioMetadata, CodeMetadata, CsvMetadata, DocumentMetadata, EpubMetadata,
-    HtmlMetadata, ImageMetadata, IniMetadata, PdfMetadata, PptxMetadata, SqliteMetadata,
-    TomlMetadata, VideoMetadata, XmlMetadata, YamlMetadata, ZipMetadata, create_minimal_fallback,
+    ArchiveMetadata, ArrowIpcMetadata, AudioMetadata, AvroMetadata, CodeMetadata, CsvMetadata,
+    DocumentMetadata, EpubMetadata, HtmlMetadata, ImageMetadata, IniMetadata, OrcMetadata,
+    ParquetMetadata, PdfMetadata, PptxMetadata, SqliteMetadata, TomlMetadata, VideoMetadata,
+    XmlMetadata, YamlMetadata, ZipMetadata, create_minimal_fallback,
 };
 use zahirscan::{FileType, OutputMode};
 
@@ -44,6 +45,10 @@ fn parse_result_with_all_metadata() -> ParseResult {
         epub_metadata: Some(create_minimal_fallback::<EpubMetadata>(0)),
         archive_metadata: Some(create_minimal_fallback::<ArchiveMetadata>(0)),
         code_metadata: Some(CodeMetadata::default()),
+        parquet_metadata: Some(ParquetMetadata::default()),
+        arrow_ipc_metadata: Some(ArrowIpcMetadata::default()),
+        avro_metadata: Some(AvroMetadata::default()),
+        orc_metadata: Some(OrcMetadata::default()),
         ..Default::default()
     };
     stats.mining_result = Some(zahirscan::results::MiningResult {
@@ -90,4 +95,14 @@ fn test_all_metadata_copied_to_output() {
         "archive_metadata not copied"
     );
     assert!(output.code_metadata.is_some(), "code_metadata not copied");
+    assert!(
+        output.parquet_metadata.is_some(),
+        "parquet_metadata not copied"
+    );
+    assert!(
+        output.arrow_ipc_metadata.is_some(),
+        "arrow_ipc_metadata not copied"
+    );
+    assert!(output.avro_metadata.is_some(), "avro_metadata not copied");
+    assert!(output.orc_metadata.is_some(), "orc_metadata not copied");
 }

@@ -1,7 +1,5 @@
 //! Utility functions for CSV parsing and type inference
 
-use crate::utils::typecheck::{is_boolean, is_date, is_number, parse_timestamp_to_seconds};
-
 /// Common CSV characters and patterns
 struct CsvSyntax {
     delimiters: [char; 5],
@@ -17,18 +15,6 @@ impl CsvSyntax {
             backslash_escapes: ["\\\"", "\\'", "\\\\"],
         }
     }
-}
-
-/// Value type names for CSV type inference
-struct CsvValueTypes;
-
-impl CsvValueTypes {
-    const NULL: &'static str = "null";
-    const BOOLEAN: &'static str = "boolean";
-    const TIMESTAMP: &'static str = "timestamp";
-    const NUMBER: &'static str = "number";
-    const DATE: &'static str = "date";
-    const STRING: &'static str = "string";
 }
 
 /// Sample the first lines and pick the most frequent delimiter among common separators.
@@ -193,23 +179,5 @@ pub fn detect_escape_character(
         quote.map(std::string::ToString::to_string)
     } else {
         None
-    }
-}
-
-/// Infer the data type of a single value
-#[must_use]
-pub fn infer_value_type(value: &str) -> String {
-    match () {
-        () if value.is_empty()
-            || value.eq_ignore_ascii_case("null")
-            || value.eq_ignore_ascii_case("nil") =>
-        {
-            CsvValueTypes::NULL.to_string()
-        }
-        () if is_boolean(value) => CsvValueTypes::BOOLEAN.to_string(),
-        () if parse_timestamp_to_seconds(value).is_some() => CsvValueTypes::TIMESTAMP.to_string(),
-        () if is_number(value) => CsvValueTypes::NUMBER.to_string(),
-        () if is_date(value) => CsvValueTypes::DATE.to_string(),
-        () => CsvValueTypes::STRING.to_string(),
     }
 }

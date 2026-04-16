@@ -6,7 +6,7 @@ use anyhow::Result;
 
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
-use crate::parsers::structured::infer_value_type;
+use crate::parsers::structured::infer_value_type_match;
 use crate::results::IniMetadata;
 use crate::results::metadata::settings::ini::IniTypeInfo;
 
@@ -160,7 +160,7 @@ fn ini_schema_from_sections(
         .map(|(sec, kvs)| {
             let table = kvs
                 .into_iter()
-                .map(|(k, v)| (k, IniTypeInfo::Scalar(infer_value_type(&v))))
+                .map(|(k, v)| (k, IniTypeInfo::Scalar(infer_value_type_match(&v))))
                 .collect();
             (sec, IniTypeInfo::Table(table))
         })

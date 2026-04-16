@@ -1,6 +1,6 @@
 [package]
 name = "zahirscan"
-version = "0.2.18"
+version = "0.2.19"
 edition = "2024"
 rust-version = "1.93"
 authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
@@ -29,9 +29,14 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.100"
+apache-avro = { version = "0.21.0", features = ["snappy"] }
+arrow-array = "58.1.0"
+arrow-cast = { version = "58.1.0", default-features = false }
+arrow-ipc = "58.1.0"
+arrow-schema = "58.1.0"
 calamine = "0.34.0"
 chrono = { version = "0.4.43", features = ["serde"] }
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { version = "4.6.1", features = ["derive"] }
 colored = "3.1.1"
 csv = "1.4.0"
 dashmap = "6.1.0"
@@ -45,6 +50,9 @@ log = "0.4.29"
 lopdf = "0.40.0"
 memmap2 = "0.9.9"
 num_cpus = "1.17.0"
+bytes = "1.10.1"
+orc-rust = { version = "0.8.0", default-features = false }
+parquet = "58.1.0"
 png = "0.18.0"
 quick-xml = { version = "0.39.2", features = ["serialize"] }
 rayon = "1.12.0"
