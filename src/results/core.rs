@@ -118,6 +118,10 @@ pub struct Output {
     pub npy_metadata: Option<super::metadata::NpyMetadata>,
     /// `NumPy` `.npz` metadata (Mode 2 only)
     pub npz_metadata: Option<super::metadata::NpzMetadata>,
+    /// HDF5 metadata (Mode 2 only)
+    pub hdf5_metadata: Option<super::metadata::Hdf5Metadata>,
+    /// NetCDF metadata (Mode 2 only)
+    pub netcdf_metadata: Option<super::metadata::NetCdfMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -137,8 +141,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 35 fields: 1 required (templates) + 34 optional fields
-        let mut state = serializer.serialize_struct("Output", 35)?;
+        // Maximum 37 fields: 1 required (templates) + 36 optional fields
+        let mut state = serializer.serialize_struct("Output", 37)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -178,6 +182,8 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.orc_metadata, "orc_metadata");
         crate::serialize_optional!(state, self.npy_metadata, "npy_metadata");
         crate::serialize_optional!(state, self.npz_metadata, "npz_metadata");
+        crate::serialize_optional!(state, self.hdf5_metadata, "hdf5_metadata");
+        crate::serialize_optional!(state, self.netcdf_metadata, "netcdf_metadata");
 
         state.end()
     }

@@ -21,21 +21,21 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Install ffprobe (Ubuntu)
+      - name: Install system deps (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg libnetcdf-dev pkg-config
 
-      - name: Install ffprobe (macOS)
+      - name: Install system deps (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install ffmpeg
+          brew install ffmpeg netcdf
 
-      - name: Install ffprobe (Windows)
+      - name: Install system deps (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          choco install ffmpeg -y
+          choco install ffmpeg netcdf -y
 
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
@@ -68,6 +68,11 @@ jobs:
         with:
           toolchain: 1.93
 
+      - name: Install NetCDF (Ubuntu)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnetcdf-dev pkg-config
+
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
         with:
@@ -95,6 +100,22 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+
+      - name: Install system deps (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnetcdf-dev pkg-config
+
+      - name: Install system deps (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install netcdf
+
+      - name: Install system deps (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install netcdf -y
 
       - name: Build
         run: cargo build --release

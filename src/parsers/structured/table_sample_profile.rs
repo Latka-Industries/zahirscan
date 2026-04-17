@@ -37,6 +37,48 @@ pub fn infer_value_type_match(value: &str) -> String {
     }
 }
 
+#[inline]
+fn is_null_like_cell(value: &str) -> bool {
+    value.is_empty() || value.eq_ignore_ascii_case("null") || value.eq_ignore_ascii_case("nil")
+}
+
+/// True if every non-null cell matches [`is_boolean`]. Used to reject a plurality "boolean"
+/// when the column also contains integers like `-1` or `2` (still numeric, not boolean).
+fn column_non_null_values_all_boolean_like(sample_data: &[Vec<String>], col_idx: usize) -> bool {
+    for row in sample_data {
+        if col_idx >= row.len() {
+            continue;
+        }
+        let v = row[col_idx].as_str();
+        if is_null_like_cell(v) {
+            continue;
+        }
+        if !is_boolean(v) {
+            return false;
+        }
+    }
+    true
+}
+
+fn winning_type_from_scores(
+    entries: &[(String, usize)],
+    sample_data: &[Vec<String>],
+    col_idx: usize,
+) -> String {
+    let Some((winner, _)) = entries.iter().max_by_key(|(_, c)| c) else {
+        return "string".to_string();
+    };
+    if winner == "boolean" && !column_non_null_values_all_boolean_like(sample_data, col_idx) {
+        return entries
+            .iter()
+            .filter(|(t, _)| t != "boolean")
+            .max_by_key(|(_, c)| c)
+            .map(|(t, _)| t.clone())
+            .unwrap_or_else(|| "string".to_string());
+    }
+    winner.clone()
+}
+
 /// Infer data types for each column using probabilistic analysis
 pub(crate) fn infer_column_types(
     sample_data: &[Vec<String>],
@@ -61,12 +103,10 @@ pub(crate) fn infer_column_types(
     // Determine the most likely type for each column
     type_scores
         .into_iter()
-        .map(|scores| {
-            // Find the type with the highest count
-            scores
-                .into_iter()
-                .max_by_key(|(_, count)| *count)
-                .map_or_else(|| "string".to_string(), |(type_name, _)| type_name)
+        .enumerate()
+        .map(|(col_idx, scores)| {
+            let entries: Vec<(String, usize)> = scores.into_iter().collect();
+            winning_type_from_scores(&entries, sample_data, col_idx)
         })
         .collect()
 }

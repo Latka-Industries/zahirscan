@@ -34,6 +34,8 @@ const FILE_EXTENSION_MAP: &[(&str, FileType)] = file_extension_map! {
     Orc: "orc";
     Npy: "npy";
     Npz: "npz";
+    Hdf5: "h5", "hdf5";
+    NetCdf: "nc", "cdf";
     Html: "html", "htm";
     Docx: "docx";
     Xlsx: "xlsx";

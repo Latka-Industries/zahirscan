@@ -12,9 +12,9 @@ use zahirscan::config::RuntimeConfig;
 use zahirscan::parsers::ParseResult;
 use zahirscan::results::{
     ArchiveMetadata, ArrowIpcMetadata, AudioMetadata, AvroMetadata, CodeMetadata, CsvMetadata,
-    DocumentMetadata, EpubMetadata, HtmlMetadata, ImageMetadata, IniMetadata, OrcMetadata,
-    ParquetMetadata, PdfMetadata, PptxMetadata, SqliteMetadata, TomlMetadata, VideoMetadata,
-    XmlMetadata, YamlMetadata, ZipMetadata, create_minimal_fallback,
+    DocumentMetadata, EpubMetadata, Hdf5Metadata, HtmlMetadata, ImageMetadata, IniMetadata,
+    NetCdfMetadata, OrcMetadata, ParquetMetadata, PdfMetadata, PptxMetadata, SqliteMetadata,
+    TomlMetadata, VideoMetadata, XmlMetadata, YamlMetadata, ZipMetadata, create_minimal_fallback,
 };
 use zahirscan::{FileType, OutputMode};
 
@@ -49,6 +49,8 @@ fn parse_result_with_all_metadata() -> ParseResult {
         arrow_ipc_metadata: Some(ArrowIpcMetadata::default()),
         avro_metadata: Some(AvroMetadata::default()),
         orc_metadata: Some(OrcMetadata::default()),
+        hdf5_metadata: Some(Hdf5Metadata::default()),
+        netcdf_metadata: Some(NetCdfMetadata::default()),
         ..Default::default()
     };
     stats.mining_result = Some(zahirscan::results::MiningResult {
@@ -105,4 +107,12 @@ fn test_all_metadata_copied_to_output() {
     );
     assert!(output.avro_metadata.is_some(), "avro_metadata not copied");
     assert!(output.orc_metadata.is_some(), "orc_metadata not copied");
+    assert!(
+        output.hdf5_metadata.is_some(),
+        "hdf5_metadata not copied (add to copy_metadata_fields!)"
+    );
+    assert!(
+        output.netcdf_metadata.is_some(),
+        "netcdf_metadata not copied (add to copy_metadata_fields!)"
+    );
 }

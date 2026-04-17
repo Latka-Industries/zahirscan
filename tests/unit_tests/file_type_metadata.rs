@@ -4,7 +4,7 @@ use zahirscan::FileType;
 use zahirscan::utils::filetypes::detect_file_type;
 
 /// Every `FileType` variant in `repr(u8)` order (must match `parsers/mod.rs`).
-fn all_file_types() -> [FileType; 29] {
+fn all_file_types() -> [FileType; 31] {
     [
         FileType::Log,
         FileType::Json,
@@ -34,6 +34,8 @@ fn all_file_types() -> [FileType; 29] {
         FileType::Orc,
         FileType::Npy,
         FileType::Npz,
+        FileType::Hdf5,
+        FileType::NetCdf,
         FileType::Unknown,
     ]
 }
@@ -65,8 +67,10 @@ fn file_type_discriminant_range_matches_variant_count() {
     assert_eq!(FileType::Orc as u8, 25);
     assert_eq!(FileType::Npy as u8, 26);
     assert_eq!(FileType::Npz as u8, 27);
-    assert_eq!(FileType::Unknown as u8, 28);
-    assert_eq!(all_file_types().len(), 29);
+    assert_eq!(FileType::Hdf5 as u8, 28);
+    assert_eq!(FileType::NetCdf as u8, 29);
+    assert_eq!(FileType::Unknown as u8, 30);
+    assert_eq!(all_file_types().len(), 31);
 }
 
 #[test]
@@ -78,4 +82,8 @@ fn detect_file_type_columnar_extensions() {
     assert_eq!(detect_file_type("e.orc"), FileType::Orc);
     assert_eq!(detect_file_type("f.npy"), FileType::Npy);
     assert_eq!(detect_file_type("g.npz"), FileType::Npz);
+    assert_eq!(detect_file_type("h.h5"), FileType::Hdf5);
+    assert_eq!(detect_file_type("i.hdf5"), FileType::Hdf5);
+    assert_eq!(detect_file_type("j.nc"), FileType::NetCdf);
+    assert_eq!(detect_file_type("k.cdf"), FileType::NetCdf);
 }

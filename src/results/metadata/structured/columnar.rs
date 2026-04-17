@@ -1,4 +1,4 @@
-//! Columnar binary formats: Parquet, Arrow IPC / Feather, Avro, ORC.
+//! Columnar binary formats: Parquet, Arrow IPC / Feather, Avro, ORC, and CSV (shared table fields).
 //!
 //! Shared table fields live on [`ColumnarCommonFields`]; each format struct composes that
 //! (via `#[serde(flatten)]` for a flat JSON shape) and adds only format-specific columns.
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::results::MinimalFallback;
 use crate::results::{BooleanStats, DateStats, NumericStats};
 
-/// Shared table-oriented fields (aligned with [`super::CsvMetadata`] statistics).
+/// Shared table-oriented fields (used by [`CsvMetadata`] and columnar format metadata).
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ColumnarCommonFields {
     pub row_count: usize,
@@ -81,3 +81,26 @@ pub struct OrcMetadata {
 }
 
 crate::impl_minimal_fallback!(OrcMetadata, _);
+
+/// CSV metadata (Mode 2 only, for CSV files)
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct CsvMetadata {
+    #[serde(flatten)]
+    pub common: ColumnarCommonFields,
+
+    // Format detection (CSV-specific)
+    /// Detected delimiter character (e.g., ",", ";", "\t", "|")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delimiter: Option<String>,
+    /// Detected quote character (e.g., "\"", "'")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quote_character: Option<String>,
+    /// Detected escape character (e.g., "\\", "\"")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub escape_character: Option<String>,
+    /// Whether the CSV has a header row
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_header: Option<bool>,
+}
+
+crate::impl_minimal_fallback!(CsvMetadata, _);

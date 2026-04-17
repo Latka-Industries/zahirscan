@@ -130,11 +130,7 @@ pub struct CliRuntimeProcessing {
 ///
 /// Returns [`anyhow::Error`] when [`RuntimeConfig::validate_external`] fails (e.g. invalid numeric ranges).
 pub fn apply_cli_to_config(config: &mut RuntimeConfig, cli: CliRuntimeFlags) -> anyhow::Result<()> {
-    config.flags.show_progress = match (
-        cli.processing.progress,
-        cli.mode.dev,
-        is_stderr_tty(),
-    ) {
+    config.flags.show_progress = match (cli.processing.progress, cli.mode.dev, is_stderr_tty()) {
         (true, true, _) => {
             debug!("--progress/-p flag was detected but will be disabled (dev mode)");
             false

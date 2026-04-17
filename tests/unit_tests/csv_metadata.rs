@@ -30,16 +30,16 @@ fn test_basic_csv_metadata() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    assert_eq!(metadata.row_count, 3);
-    assert_eq!(metadata.column_count, 3);
+    assert_eq!(metadata.common.row_count, 3);
+    assert_eq!(metadata.common.column_count, 3);
     assert_eq!(metadata.delimiter, Some(",".to_string()));
     assert_eq!(metadata.has_header, Some(true));
-    assert_eq!(metadata.encoding, Some("UTF-8".to_string()));
+    assert_eq!(metadata.common.encoding, Some("UTF-8".to_string()));
 
-    let column_names = metadata.column_names.unwrap();
+    let column_names = metadata.common.column_names.unwrap();
     assert_eq!(column_names, vec!["name", "age", "city"]);
 
-    let column_types = metadata.column_types.unwrap();
+    let column_types = metadata.common.column_types.unwrap();
     assert_eq!(column_types[0], "string"); // name
     assert_eq!(column_types[1], "number"); // age
     assert_eq!(column_types[2], "string"); // city
@@ -56,8 +56,8 @@ fn test_csv_without_header() {
     // When has_headers(true) is used but headers fail, it still tries to read first row as header
     // So we get 2 data rows (Jane and Bob), not 3
     // The actual behavior depends on CSV reader configuration
-    assert!(metadata.row_count >= 2);
-    assert_eq!(metadata.column_count, 3);
+    assert!(metadata.common.row_count >= 2);
+    assert_eq!(metadata.common.column_count, 3);
     // has_header might be false or the reader might have tried to read headers
     assert!(metadata.has_header.is_some());
     // Column names might be None if header detection failed
@@ -91,7 +91,7 @@ fn test_csv_delimiter_detection_tab() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
     assert_eq!(metadata.delimiter, Some("\\t".to_string()));
-    assert_eq!(metadata.column_count, 3);
+    assert_eq!(metadata.common.column_count, 3);
 }
 
 /// `.tsv` path forces tab delimiter even if comma appears in sniffed sample (extension hint).
@@ -105,8 +105,8 @@ fn test_tsv_path_uses_tab_reader() {
     };
     let metadata = extract_csv_metadata(content, &stats, &RuntimeConfig::default()).unwrap();
     assert_eq!(metadata.delimiter, Some("\\t".to_string()));
-    assert_eq!(metadata.column_count, 3);
-    assert_eq!(metadata.row_count, 1);
+    assert_eq!(metadata.common.column_count, 3);
+    assert_eq!(metadata.common.row_count, 1);
 }
 
 /// `.psv` path uses pipe as field separator.
@@ -120,7 +120,7 @@ fn test_psv_path_uses_pipe_reader() {
     };
     let metadata = extract_csv_metadata(content, &stats, &RuntimeConfig::default()).unwrap();
     assert_eq!(metadata.delimiter, Some("|".to_string()));
-    assert_eq!(metadata.column_count, 3);
+    assert_eq!(metadata.common.column_count, 3);
 }
 
 #[test]
@@ -163,7 +163,7 @@ fn test_csv_numeric_statistics() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    let numeric_stats = metadata.numeric_stats.unwrap();
+    let numeric_stats = metadata.common.numeric_stats.unwrap();
     let price_stats = numeric_stats[1].as_ref().unwrap();
 
     assert_eq!(price_stats.min, Some(10.5));
@@ -183,7 +183,7 @@ fn test_csv_date_statistics() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    let date_stats = metadata.date_stats.unwrap();
+    let date_stats = metadata.common.date_stats.unwrap();
     let date_col_stats = date_stats[1].as_ref().unwrap();
 
     assert!(date_col_stats.span_days.is_some());
@@ -200,7 +200,7 @@ fn test_csv_boolean_statistics() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    let boolean_stats = metadata.boolean_stats.unwrap();
+    let boolean_stats = metadata.common.boolean_stats.unwrap();
     let active_stats = boolean_stats[1].as_ref().unwrap();
 
     // 3 out of 5 are true = 60%
@@ -217,7 +217,7 @@ fn test_csv_null_percentages() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    let null_percentages = metadata.null_percentages.unwrap();
+    let null_percentages = metadata.common.null_percentages.unwrap();
     // name column: 1 out of 3 empty = ~33.33%
     assert!(null_percentages[1] > 30.0 && null_percentages[1] < 40.0);
     // age column: 1 out of 3 empty = ~33.33%
@@ -232,7 +232,7 @@ fn test_csv_unique_counts() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    let unique_counts = metadata.unique_counts.unwrap();
+    let unique_counts = metadata.common.unique_counts.unwrap();
     // name column: 3 unique values (John, Jane, Bob) - but John appears twice
     assert!(unique_counts[1] >= 3);
     // category column: 2 unique values (A, B)
@@ -247,7 +247,7 @@ fn test_csv_timestamp_detection() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    let column_types = metadata.column_types.unwrap();
+    let column_types = metadata.common.column_types.unwrap();
     assert_eq!(column_types[1], "timestamp");
 }
 
@@ -259,8 +259,8 @@ fn test_csv_empty_file() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    assert_eq!(metadata.row_count, 0);
-    assert_eq!(metadata.column_count, 0);
+    assert_eq!(metadata.common.row_count, 0);
+    assert_eq!(metadata.common.column_count, 0);
 }
 
 #[test]
@@ -271,8 +271,8 @@ fn test_csv_single_row() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    assert_eq!(metadata.row_count, 1);
-    assert_eq!(metadata.column_count, 2);
+    assert_eq!(metadata.common.row_count, 1);
+    assert_eq!(metadata.common.column_count, 2);
 }
 
 #[test]
@@ -283,7 +283,7 @@ fn test_csv_mixed_types() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    let column_types = metadata.column_types.unwrap();
+    let column_types = metadata.common.column_types.unwrap();
     // Type inference is probabilistic - check that we get expected types
     assert_eq!(column_types[1], "string"); // name
     assert_eq!(column_types[2], "number"); // age
@@ -303,7 +303,7 @@ fn test_csv_encoding_detection() {
     let config = get_test_config();
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
-    assert_eq!(metadata.encoding, Some("UTF-8".to_string()));
+    assert_eq!(metadata.common.encoding, Some("UTF-8".to_string()));
 }
 
 #[test]
@@ -314,7 +314,7 @@ fn test_csv_all_null_column() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    let null_percentages = metadata.null_percentages.unwrap();
+    let null_percentages = metadata.common.null_percentages.unwrap();
     // name column should be 100% null
     assert!((null_percentages[1] - 100.0).abs() < 0.1);
 }

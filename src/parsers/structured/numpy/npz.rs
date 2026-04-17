@@ -35,11 +35,8 @@ fn read_npy_zip_member<R: Read + ?Sized>(
     let logical_len = uncompressed_size;
     let mut layout = parse_npy_prefix(&buf, logical_len);
     if layout.is_err() && buf.len() < max_read {
-        io::copy(
-            &mut zf.take((max_read - buf.len()) as u64),
-            &mut buf,
-        )
-        .context("read npz .npy remainder for header")?;
+        io::copy(&mut zf.take((max_read - buf.len()) as u64), &mut buf)
+            .context("read npz .npy remainder for header")?;
         layout = parse_npy_prefix(&buf, logical_len);
     }
     let layout = layout.context("parse .npy header inside .npz")?;
@@ -49,7 +46,8 @@ fn read_npy_zip_member<R: Read + ?Sized>(
         .max(buf.len());
 
     if buf.len() < need {
-        io::copy(&mut zf.take((need - buf.len()) as u64), &mut buf).context("read npz .npy sample")?;
+        io::copy(&mut zf.take((need - buf.len()) as u64), &mut buf)
+            .context("read npz .npy sample")?;
     }
 
     Ok(buf)

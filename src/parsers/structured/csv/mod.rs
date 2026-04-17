@@ -13,7 +13,7 @@ use std::io::Cursor;
 
 use crate::config::RuntimeConfig;
 use crate::parsers::{ParseResult, structured::table_sample_profile};
-use crate::results::CsvMetadata;
+use crate::results::{ColumnarCommonFields, CsvMetadata};
 
 /// Extract CSV metadata
 ///
@@ -37,7 +37,10 @@ pub fn extract_csv_metadata(
     let Ok(content_str) = std::str::from_utf8(content) else {
         // If not UTF-8, return minimal metadata with encoding info
         return Ok(CsvMetadata {
-            encoding,
+            common: ColumnarCommonFields {
+                encoding,
+                ..Default::default()
+            },
             ..Default::default()
         });
     };
@@ -121,20 +124,22 @@ pub fn extract_csv_metadata(
         };
 
     Ok(CsvMetadata {
-        row_count,
-        column_count,
-        column_names,
-        encoding,
-        column_types,
+        common: ColumnarCommonFields {
+            row_count,
+            column_count,
+            column_names,
+            encoding,
+            column_types,
+            null_percentages,
+            unique_counts,
+            numeric_stats,
+            date_stats,
+            boolean_stats,
+        },
         delimiter: Some(delimiter_display),
         quote_character,
         escape_character,
         has_header,
-        null_percentages,
-        unique_counts,
-        numeric_stats,
-        date_stats,
-        boolean_stats,
     })
 }
 

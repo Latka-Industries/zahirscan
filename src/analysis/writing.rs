@@ -307,7 +307,7 @@ pub fn calculate_writing_footprint(
         }
     }
     let avg_entropy = if entropy_count > 0 {
-        total_entropy / entropy_count as f64
+        total_entropy / f64::from(entropy_count)
     } else {
         0.0
     };

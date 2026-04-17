@@ -110,6 +110,8 @@ macro_rules! copy_metadata_fields {
         $to.orc_metadata = $from.orc_metadata.clone();
         $to.npy_metadata = $from.npy_metadata.clone();
         $to.npz_metadata = $from.npz_metadata.clone();
+        $to.hdf5_metadata = $from.hdf5_metadata.clone();
+        $to.netcdf_metadata = $from.netcdf_metadata.clone();
     };
 }
 
@@ -199,11 +201,13 @@ pub enum FileType {
     Orc,
     Npy,
     Npz,
+    Hdf5,
+    NetCdf,
     #[default]
     Unknown,
 }
 
-const METADATA_NAMES: [&str; 29] = [
+const METADATA_NAMES: [&str; 31] = [
     "Log",
     "JSON",
     "Text",
@@ -232,6 +236,8 @@ const METADATA_NAMES: [&str; 29] = [
     "ORC",
     "NPY",
     "NPZ",
+    "HDF5",
+    "NetCDF",
     "Unknown",
 ];
 
@@ -283,7 +289,9 @@ impl FileType {
                 25 => FileType::Orc,
                 26 => FileType::Npy,
                 27 => FileType::Npz,
-                28 => FileType::Unknown,
+                28 => FileType::Hdf5,
+                29 => FileType::NetCdf,
+                30 => FileType::Unknown,
                 _ => unreachable!("METADATA_NAMES and match arms must stay in sync"),
             })
     }
@@ -310,7 +318,9 @@ impl FileType {
             | FileType::Avro
             | FileType::Orc
             | FileType::Npy
-            | FileType::Npz => Some(ParserCategory::Structured),
+            | FileType::Npz
+            | FileType::Hdf5
+            | FileType::NetCdf => Some(ParserCategory::Structured),
             FileType::Toml | FileType::Yaml | FileType::Xml | FileType::Ini => {
                 Some(ParserCategory::Settings)
             }
@@ -386,6 +396,10 @@ pub struct ParseResult {
     pub npy_metadata: Option<crate::results::NpyMetadata>,
     /// `NumPy` `.npz` archive (ZIP of `.npy`) metadata
     pub npz_metadata: Option<crate::results::NpzMetadata>,
+    /// HDF5 (`.h5`, `.hdf5`) hierarchical metadata
+    pub hdf5_metadata: Option<crate::results::Hdf5Metadata>,
+    /// NetCDF (`.nc`, `.cdf`) metadata
+    pub netcdf_metadata: Option<crate::results::NetCdfMetadata>,
 }
 
 impl ParseResult {

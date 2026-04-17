@@ -1,10 +1,12 @@
-//! Structured formats: CSV, HTML, JSON, EPUB, PDF, columnar binaries (Parquet, Arrow IPC, Avro, ORC), and `NumPy` (NPY/NPZ).
+//! Structured formats: CSV, HTML, JSON, EPUB, PDF, columnar binaries (Parquet, Arrow IPC, Avro, ORC), `NumPy` (NPY/NPZ), HDF5, and NetCDF.
 
 mod columnar;
 mod csv;
 mod epub;
+mod hdf5;
 mod html;
 mod json;
+mod netcdf;
 mod numpy;
 mod pdf;
 mod table_sample_profile;
@@ -14,8 +16,10 @@ pub use csv::{
     delimiter_byte_for_reader, detect_delimiter_byte, extract_csv_metadata, extract_csv_templates,
 };
 pub use epub::{extract_epub_metadata, extract_epub_templates};
+pub use hdf5::{extract_hdf5_metadata, extract_hdf5_templates};
 pub use html::{extract_html_metadata, extract_html_templates};
 pub use json::{extract_json_metadata, extract_json_templates};
+pub use netcdf::{extract_netcdf_metadata, extract_netcdf_templates};
 pub use numpy::{
     extract_npy_metadata, extract_npy_templates, extract_npz_metadata, extract_npz_templates,
 };
@@ -144,6 +148,26 @@ pub fn process(
             crate::results::NpzMetadata,
             FileType::Npz,
             extract_npz_templates(mmap, stats, config)
+        ),
+        FileType::Hdf5 => crate::process_with_metadata!(
+            stats,
+            mmap,
+            config,
+            hdf5_metadata,
+            extract_hdf5_metadata(mmap, stats, config),
+            crate::results::Hdf5Metadata,
+            FileType::Hdf5,
+            extract_hdf5_templates(mmap, stats, config)
+        ),
+        FileType::NetCdf => crate::process_with_metadata!(
+            stats,
+            mmap,
+            config,
+            netcdf_metadata,
+            extract_netcdf_metadata(mmap, stats, config),
+            crate::results::NetCdfMetadata,
+            FileType::NetCdf,
+            extract_netcdf_templates(mmap, stats, config)
         ),
         _ => unreachable!("structured::process called with {:?}", stats.file_type),
     }
