@@ -34,6 +34,7 @@ pub fn extract_orc_metadata(
         config.max_tabular_sample_rows,
         file_bytes,
         column_count.max(1),
+        Some(row_count_total),
     );
     let mut sample_data: Vec<Vec<String>> = Vec::new();
     let reader = builder.with_batch_size(8192).build();

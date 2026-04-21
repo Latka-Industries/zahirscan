@@ -61,7 +61,7 @@ fn collect_global_attrs(file: &netcdf::File, out: &mut Vec<NetCdfAttributeEntry>
 }
 
 fn push_variable(
-    var: netcdf::Variable<'_>,
+    var_ref: &netcdf::Variable<'_>,
     path_prefix: &str,
     out: &mut Vec<NetCdfVariableSummary>,
     truncated: &mut bool,
@@ -71,20 +71,20 @@ fn push_variable(
         return;
     }
 
-    let base = var.name();
+    let base = var_ref.name();
     let name = if path_prefix.is_empty() {
         base
     } else {
         format!("{path_prefix}/{base}")
     };
 
-    let dims = var.dimensions();
+    let dims = var_ref.dimensions();
     let shape: Vec<usize> = dims.iter().map(netcdf::Dimension::len).collect();
     let dimension_names: Vec<String> = dims.iter().map(netcdf::Dimension::name).collect();
-    let vartype = format!("{:?}", var.vartype());
+    let vartype = format!("{:?}", var_ref.vartype());
 
     let mut attrs = Vec::new();
-    for a in var.attributes().take(MAX_ATTRS_PER_VAR) {
+    for a in var_ref.attributes().take(MAX_ATTRS_PER_VAR) {
         let aname = a.name().to_string();
         match a.value() {
             Ok(v) => attrs.push(NetCdfAttributeEntry {
@@ -124,7 +124,7 @@ fn walk_group(
             *truncated = true;
             return Ok(());
         }
-        push_variable(v, prefix, out, truncated);
+        push_variable(&v, prefix, out, truncated);
     }
 
     for child in g.groups() {
@@ -176,7 +176,7 @@ pub fn extract_netcdf_metadata(
             metadata_truncated = true;
             break;
         }
-        push_variable(v, "", &mut variables, &mut metadata_truncated);
+        push_variable(&v, "", &mut variables, &mut metadata_truncated);
     }
 
     // NetCDF-4 only: nested groups (root variables are already in `file.variables()`).

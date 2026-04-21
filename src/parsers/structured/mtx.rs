@@ -83,7 +83,7 @@ fn mtx_columnar_common(
     numeric_stats: Vec<Option<NumericStats>>,
 ) -> ColumnarCommonFields {
     let names: Vec<String> = (0..cols).map(|i| format!("col{i}")).collect();
-    let columns = merge_column_stats(MergeColumnStatsInput {
+    let columns = merge_column_stats(&MergeColumnStatsInput {
         column_count: cols,
         column_names: Some(names),
         column_types: Some(inf.column_types),

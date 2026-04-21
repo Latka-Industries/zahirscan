@@ -47,6 +47,15 @@ pub mod limits {
     /// Per decade above [`TABULAR_SAMPLE_BYTE_THRESHOLD`], subtract this fraction from 100% retention (e.g. 2% → 98%, 96%, …).
     pub const TABULAR_BYTE_SCALE_PCT_PER_DECADE: f64 = 0.02;
 
+    /// Average bytes per row (`file_bytes / row_count`) at or below this is treated as **skinny** rows: large
+    /// logical tables with small on-disk size skip harsh byte-decade shrink when other full-scan conditions hold.
+    pub const TABULAR_BPR_SKINNY_MAX_BYTES: u64 = 2048;
+    /// When row count is known, allow scanning **all** rows (subject to [`TABULAR_FULL_SCAN_MAX_ROWS`]) only if
+    /// the file is at most this many bytes (cheap full read for stats).
+    pub const TABULAR_FULL_SCAN_MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;
+    /// Max rows for the full-scan path (avoids multi-million-row tabular stats on pathological skinny files).
+    pub const TABULAR_FULL_SCAN_MAX_ROWS: usize = 500_000;
+
     /// Back-compat alias for [`TABULAR_SAMPLE_BYTE_THRESHOLD`].
     pub const CSV_SAMPLE_BYTE_THRESHOLD: u64 = TABULAR_SAMPLE_BYTE_THRESHOLD;
     /// Back-compat alias for [`TABULAR_BYTE_SCALE_MIN_RETAIN_FRAC`].

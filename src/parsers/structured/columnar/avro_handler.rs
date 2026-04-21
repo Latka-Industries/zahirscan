@@ -88,6 +88,7 @@ pub fn extract_avro_metadata(
         config.max_tabular_sample_rows,
         file_bytes,
         column_count.max(1),
+        None,
     );
     let mut sample_data: Vec<Vec<String>> = Vec::new();
     let mut row_count: usize = 0;

@@ -11,8 +11,10 @@ use crate::config::RuntimeConfig;
 use crate::parsers::{
     structured::{
         constants::limits::{
-            TABULAR_BYTE_SCALE_MIN_RETAIN_FRAC, TABULAR_BYTE_SCALE_PCT_PER_DECADE,
-            TABULAR_COLUMN_CHUNK, TABULAR_SAMPLE_BYTE_THRESHOLD,
+            TABULAR_BPR_SKINNY_MAX_BYTES, TABULAR_BYTE_SCALE_MIN_RETAIN_FRAC,
+            TABULAR_BYTE_SCALE_PCT_PER_DECADE, TABULAR_COLUMN_CHUNK,
+            TABULAR_FULL_SCAN_MAX_FILE_BYTES, TABULAR_FULL_SCAN_MAX_ROWS,
+            TABULAR_SAMPLE_BYTE_THRESHOLD,
         },
         table_sample_profile,
     },
@@ -55,14 +57,31 @@ pub(crate) fn effective_tabular_sample_rows(base: usize, column_count: usize) ->
     (base.saturating_mul(TABULAR_COL_SCALE_NUMERATOR) / cc.max(TABULAR_COL_SCALE_NUMERATOR)).max(1)
 }
 
-/// File-size decade scaling, then column-count scaling (CSV, Parquet, MTX string inference, `.npy`, etc.).
+/// File-size decade scaling (with optional **BPR** = `file_bytes / row_count` when rows are known), then
+/// column-count scaling. Skinny, small files may use **all** rows up to [`TABULAR_FULL_SCAN_MAX_ROWS`] instead
+/// of shrinking the base cap by byte decade alone (so e.g. a 5 MiB / 80 k-row CSV can scan every row).
 #[must_use]
 pub(crate) fn tabular_effective_sample_rows(
     base: usize,
     file_bytes: u64,
     column_count: usize,
+    row_count: Option<usize>,
 ) -> usize {
-    let after_file = effective_sample_rows_after_file_byte_scaling(base, file_bytes);
+    let after_file = match row_count {
+        None | Some(0) => effective_sample_rows_after_file_byte_scaling(base, file_bytes),
+        Some(rc) => {
+            let bpr = file_bytes / (rc as u64);
+            let skinny = bpr <= TABULAR_BPR_SKINNY_MAX_BYTES;
+            let small_file = file_bytes <= TABULAR_FULL_SCAN_MAX_FILE_BYTES;
+            if skinny && small_file && rc <= TABULAR_FULL_SCAN_MAX_ROWS {
+                rc
+            } else if skinny && small_file {
+                effective_sample_rows_after_file_byte_scaling(base, file_bytes).min(rc)
+            } else {
+                effective_sample_rows_after_file_byte_scaling(base, file_bytes)
+            }
+        }
+    };
     effective_tabular_sample_rows(after_file, column_count.max(1))
 }
 
@@ -244,7 +263,7 @@ pub(crate) fn columns_from_tabular_sample(
     ts: TabularSampleStats,
     physical_types: Option<Vec<String>>,
 ) -> Option<Vec<crate::results::ColumnStat>> {
-    merge_column_stats(MergeColumnStatsInput {
+    merge_column_stats(&MergeColumnStatsInput {
         column_count,
         column_names,
         column_types: ts.column_types,

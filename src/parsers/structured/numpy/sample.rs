@@ -96,6 +96,7 @@ pub(crate) fn min_file_bytes_for_column_stats(
         config.max_tabular_sample_rows,
         file_len_bytes,
         cols.max(1),
+        Some(rows),
     );
     let sample_rows = rows.min(cap);
     let payload_elems = contiguous_payload_prefix_elems(
@@ -281,6 +282,7 @@ pub fn column_common_from_npy_bytes(
         config.max_tabular_sample_rows,
         file_len,
         cols.max(1),
+        Some(rows),
     );
     let sample_rows = max_sample_rows_in_prefix(rows, cols, rank, fortran, elem_size, avail, cap);
     if sample_rows == 0 {

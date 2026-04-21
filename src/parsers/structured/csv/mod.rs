@@ -12,6 +12,8 @@
 //!
 //! Large-file sample shrink uses the same per-decade rule as other tabular formats (see
 //! [`crate::parsers::structured::columnar::utils::effective_sample_rows_after_file_byte_scaling`]).
+//! When row count is known, **bytes-per-row** (BPR) is applied so skinny, modest-sized files (many rows,
+//! small on-disk size) can use a full-table sample cap instead of shrinking purely by file-size decade.
 
 mod utils;
 
@@ -107,7 +109,7 @@ fn csv_scaled_sample_cap(
         .filter(|&c| c > 0)
         .unwrap_or(limits::TABULAR_COL_SCALE_NUMERATOR);
     let effective_sample =
-        columnar_utils::tabular_effective_sample_rows(base_sample, file_bytes, cc);
+        columnar_utils::tabular_effective_sample_rows(base_sample, file_bytes, cc, Some(row_count));
     effective_sample.max(1).min(row_count)
 }
 
@@ -234,7 +236,7 @@ pub fn extract_csv_metadata(
         );
 
     let columns = if column_count > 0 {
-        merge_column_stats(MergeColumnStatsInput {
+        merge_column_stats(&MergeColumnStatsInput {
             column_count,
             column_names: column_names.clone(),
             column_types,

@@ -49,7 +49,7 @@ pub struct MergeColumnStatsInput {
 
 /// Merge legacy parallel per-column vectors into a compact [`ColumnStat`] list.
 #[must_use]
-pub fn merge_column_stats(input: MergeColumnStatsInput) -> Option<Vec<ColumnStat>> {
+pub fn merge_column_stats(input: &MergeColumnStatsInput) -> Option<Vec<ColumnStat>> {
     let column_count = input.column_count;
     if column_count == 0 {
         return None;

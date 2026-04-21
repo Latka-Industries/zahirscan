@@ -39,6 +39,7 @@ pub fn extract_parquet_metadata(
         config.max_tabular_sample_rows,
         file_bytes,
         column_count.max(1),
+        Some(row_count_total),
     );
     let mut sample_data: Vec<Vec<String>> = Vec::new();
     let mut reader = builder.build().context("build Parquet reader")?;
