@@ -1,4 +1,4 @@
-//! NetCDF (`.nc`, `.cdf`) — global and variable metadata via [`netcdf`] (no full array decode).
+//! `NetCDF` (`.nc`, `.cdf`) — global and variable metadata via [`netcdf`] (no full array decode).
 
 use anyhow::Context;
 use log::debug;
@@ -79,8 +79,8 @@ fn push_variable(
     };
 
     let dims = var.dimensions();
-    let shape: Vec<usize> = dims.iter().map(|d| d.len()).collect();
-    let dimension_names: Vec<String> = dims.iter().map(|d| d.name()).collect();
+    let shape: Vec<usize> = dims.iter().map(netcdf::Dimension::len).collect();
+    let dimension_names: Vec<String> = dims.iter().map(netcdf::Dimension::name).collect();
     let vartype = format!("{:?}", var.vartype());
 
     let mut attrs = Vec::new();
@@ -139,12 +139,12 @@ fn walk_group(
     Ok(())
 }
 
-/// Extract NetCDF metadata (attributes, variable names, shapes, types). Uses [`ParseResult::file_path`];
+/// Extract `NetCDF` metadata (attributes, variable names, shapes, types). Uses [`ParseResult::file_path`];
 /// `mmap` is unused because `netcdf` opens by path.
 ///
 /// # Errors
 ///
-/// Returns an error when NetCDF helpers are missing, the file cannot be opened, or group walks fail.
+/// Returns an error when `NetCDF` helpers are missing, the file cannot be opened, or group walks fail.
 pub fn extract_netcdf_metadata(
     _mmap: &Mmap,
     stats: &ParseResult,
@@ -154,8 +154,8 @@ pub fn extract_netcdf_metadata(
 
     let path = stats.file_path.as_str();
     let file = netcdf::open(path).map_err(|e| {
-        debug!("NetCDF open failed for '{}': {}", path, e);
-        anyhow::anyhow!("{}", e)
+        debug!("NetCDF open failed for '{path}': {e}");
+        anyhow::anyhow!("{e}")
     })?;
 
     let netcdf4_model = Some(file.root().is_some());
@@ -209,5 +209,5 @@ pub fn extract_netcdf_metadata(
 
 crate::no_template_mining!(
     extract_netcdf_templates,
-    "NetCDF is binary scientific data; no text template mining."
+    "`NetCDF` is binary scientific data; no text template mining."
 );

@@ -90,7 +90,7 @@ pub fn calculate_template_entropy(
     }
 
     if placeholder_count > 0 {
-        total_entropy / placeholder_count as f64
+        total_entropy / f64::from(placeholder_count)
     } else {
         0.0
     }

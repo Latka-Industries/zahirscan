@@ -1,4 +1,4 @@
-//! NetCDF (`.nc`, `.cdf`) — global attributes and per-variable metadata (no array decode).
+//! `NetCDF` (`.nc`, `.cdf`) — global attributes and per-variable metadata (no array decode).
 
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +26,7 @@ pub struct NetCdfVariableSummary {
     pub attributes: Option<Vec<NetCdfAttributeEntry>>,
 }
 
-/// Metadata for a NetCDF file: globals, dimensions, variables (bounded).
+/// Metadata for a `NetCDF` file: globals, dimensions, variables (bounded).
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct NetCdfMetadata {
     pub byte_count: usize,

@@ -112,6 +112,7 @@ macro_rules! copy_metadata_fields {
         $to.npz_metadata = $from.npz_metadata.clone();
         $to.hdf5_metadata = $from.hdf5_metadata.clone();
         $to.netcdf_metadata = $from.netcdf_metadata.clone();
+        $to.mtx_metadata = $from.mtx_metadata.clone();
     };
 }
 
@@ -138,7 +139,7 @@ macro_rules! no_template_mining {
 pub enum ParserCategory {
     Media,      // Image | Video | Audio -> media::process
     Office,     // Docx | Xlsx | Pptx -> office::process
-    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | Arrow IPC | Avro | ORC | NPY | NPZ -> structured::process
+    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | Arrow IPC | Avro | ORC | NPY | NPZ | HDF5 | NetCDF | MTX -> structured::process
     Settings,   // Toml | Yaml | Xml | Ini -> settings::process
     Container,  // Zip | Archive -> container::process
     Sqlite,
@@ -203,11 +204,12 @@ pub enum FileType {
     Npz,
     Hdf5,
     NetCdf,
+    Mtx,
     #[default]
     Unknown,
 }
 
-const METADATA_NAMES: [&str; 31] = [
+const METADATA_NAMES: [&str; 32] = [
     "Log",
     "JSON",
     "Text",
@@ -238,6 +240,7 @@ const METADATA_NAMES: [&str; 31] = [
     "NPZ",
     "HDF5",
     "NetCDF",
+    "Matrix Market",
     "Unknown",
 ];
 
@@ -291,7 +294,8 @@ impl FileType {
                 27 => FileType::Npz,
                 28 => FileType::Hdf5,
                 29 => FileType::NetCdf,
-                30 => FileType::Unknown,
+                30 => FileType::Mtx,
+                31 => FileType::Unknown,
                 _ => unreachable!("METADATA_NAMES and match arms must stay in sync"),
             })
     }
@@ -320,7 +324,8 @@ impl FileType {
             | FileType::Npy
             | FileType::Npz
             | FileType::Hdf5
-            | FileType::NetCdf => Some(ParserCategory::Structured),
+            | FileType::NetCdf
+            | FileType::Mtx => Some(ParserCategory::Structured),
             FileType::Toml | FileType::Yaml | FileType::Xml | FileType::Ini => {
                 Some(ParserCategory::Settings)
             }
@@ -398,8 +403,10 @@ pub struct ParseResult {
     pub npz_metadata: Option<crate::results::NpzMetadata>,
     /// HDF5 (`.h5`, `.hdf5`) hierarchical metadata
     pub hdf5_metadata: Option<crate::results::Hdf5Metadata>,
-    /// NetCDF (`.nc`, `.cdf`) metadata
+    /// `NetCDF` (`.nc`, `.cdf`) metadata
     pub netcdf_metadata: Option<crate::results::NetCdfMetadata>,
+    /// Matrix Market (`.mtx`) metadata
+    pub mtx_metadata: Option<crate::results::MtxMetadata>,
 }
 
 impl ParseResult {

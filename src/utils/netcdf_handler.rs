@@ -1,10 +1,10 @@
-//! Runtime checks for NetCDF tooling (complements the `netcdf` crate’s link-time `libnetcdf`).
+//! Runtime checks for `NetCDF` tooling (complements the `netcdf` crate’s link-time `libnetcdf`).
 
 use std::process::Command;
 
 use anyhow::Result;
 
-/// Check that NetCDF development tooling is visible (similar to [`crate::utils::ffprobe_handler::check_ffprobe_available`]).
+/// Check that `NetCDF` development tooling is visible (similar to [`crate::utils::ffprobe_handler::check_ffprobe_available`]).
 ///
 /// Uses `nc-config --version`, then `pkg-config --modversion netcdf`, so builds that only have
 /// a linker-visible `libnetcdf` without those helpers may still open files at runtime.

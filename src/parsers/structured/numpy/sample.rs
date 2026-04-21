@@ -5,6 +5,7 @@
 
 use crate::config::RuntimeConfig;
 use crate::parsers::structured::columnar::utils as columnar_utils;
+use crate::parsers::structured::constants::StructuredEncoding;
 use crate::results::{ColumnarCommonFields, NpyLayoutSummary};
 
 use super::npy::numpy_descr_element_nbytes;
@@ -86,11 +87,17 @@ pub(crate) fn min_file_bytes_for_column_stats(
     elem_size: usize,
     rows: usize,
     cols: usize,
+    file_len_bytes: u64,
     config: &RuntimeConfig,
 ) -> Option<usize> {
     let data_offset = layout.data_offset?;
     let rank = layout.shape.as_ref()?.len();
-    let sample_rows = rows.min(config.max_csv_sample_rows);
+    let cap = columnar_utils::tabular_effective_sample_rows(
+        config.max_tabular_sample_rows,
+        file_len_bytes,
+        cols.max(1),
+    );
+    let sample_rows = rows.min(cap);
     let payload_elems = contiguous_payload_prefix_elems(
         rows,
         cols,
@@ -151,7 +158,7 @@ pub(crate) fn zip_member_target_read_len(
     let Some((rows, cols)) = table_shape(shape) else {
         return uncompressed_size.min(512 * 1024);
     };
-    min_file_bytes_for_column_stats(layout, elem, rows, cols, config)
+    min_file_bytes_for_column_stats(layout, elem, rows, cols, uncompressed_size as u64, config)
         .unwrap_or(512 * 1024)
         .min(uncompressed_size)
 }
@@ -269,15 +276,13 @@ pub fn column_common_from_npy_bytes(
     let avail = file_bytes.len().saturating_sub(data_offset);
     let rank = shape.len();
     let fortran = layout.fortran_order.unwrap_or(false);
-    let sample_rows = max_sample_rows_in_prefix(
-        rows,
-        cols,
-        rank,
-        fortran,
-        elem_size,
-        avail,
-        config.max_csv_sample_rows,
+    let file_len = file_bytes.len() as u64;
+    let cap = columnar_utils::tabular_effective_sample_rows(
+        config.max_tabular_sample_rows,
+        file_len,
+        cols.max(1),
     );
+    let sample_rows = max_sample_rows_in_prefix(rows, cols, rank, fortran, elem_size, avail, cap);
     if sample_rows == 0 {
         return shape_only_common(layout);
     }
@@ -311,17 +316,14 @@ pub fn column_common_from_npy_bytes(
 
     let names: Vec<String> = (0..cols).map(|i| format!("col{i}")).collect();
 
+    let columns = columnar_utils::columns_from_tabular_sample(cols, Some(names), ts, None);
+
     ColumnarCommonFields {
         row_count: rows,
         column_count: cols,
-        column_names: Some(names),
-        column_types: ts.column_types,
-        encoding: Some("numpy".to_string()),
-        null_percentages: ts.null_percentages,
-        unique_counts: ts.unique_counts,
-        numeric_stats: ts.numeric_stats,
-        date_stats: ts.date_stats,
-        boolean_stats: ts.boolean_stats,
+        stats_rows_sampled: Some(sample_data.len()),
+        encoding: Some(StructuredEncoding::NUMPY.to_string()),
+        columns,
     }
 }
 
@@ -338,7 +340,7 @@ fn shape_only_common(layout: &NpyLayoutSummary) -> ColumnarCommonFields {
     ColumnarCommonFields {
         row_count,
         column_count,
-        encoding: Some("numpy".to_string()),
+        encoding: Some(StructuredEncoding::NUMPY.to_string()),
         ..ColumnarCommonFields::default()
     }
 }

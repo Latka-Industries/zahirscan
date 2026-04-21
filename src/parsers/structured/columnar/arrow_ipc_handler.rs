@@ -7,7 +7,10 @@ use anyhow::{Context, Result};
 use arrow_ipc::reader::{FileReader, StreamReader};
 
 use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
+use crate::parsers::{
+    ParseResult,
+    structured::constants::{ArrowIpcContainerKind, StructuredEncoding},
+};
 use crate::results::{ArrowIpcMetadata, ColumnarCommonFields};
 
 use super::utils;
@@ -27,7 +30,6 @@ pub fn extract_arrow_ipc_metadata(
     stats: &ParseResult,
     config: &RuntimeConfig,
 ) -> Result<ArrowIpcMetadata> {
-    let max_sample = config.max_csv_sample_rows;
     let mut sample_data: Vec<Vec<String>> = Vec::new();
     let mut row_count_total: usize = 0;
     let column_count: usize;
@@ -41,10 +43,16 @@ pub fn extract_arrow_ipc_metadata(
         column_names = utils::schema_column_names(schema.as_ref());
         arrow_field_types = utils::schema_arrow_dtype_strings(schema.as_ref());
         column_count = column_names.len();
+        let file_bytes = mmap.len() as u64;
+        let max_sample = utils::tabular_effective_sample_rows(
+            config.max_tabular_sample_rows,
+            file_bytes,
+            column_count.max(1),
+        );
         container_kind = Some(if feather_hint(&stats.file_path, mmap) {
-            "feather".to_string()
+            ArrowIpcContainerKind::FEATHER.to_string()
         } else {
-            "ipc_file".to_string()
+            ArrowIpcContainerKind::IPC_FILE.to_string()
         });
 
         for batch in file_reader {
@@ -68,7 +76,13 @@ pub fn extract_arrow_ipc_metadata(
         column_names = utils::schema_column_names(schema.as_ref());
         arrow_field_types = utils::schema_arrow_dtype_strings(schema.as_ref());
         column_count = column_names.len();
-        container_kind = Some("ipc_stream".to_string());
+        let file_bytes = mmap.len() as u64;
+        let max_sample = utils::tabular_effective_sample_rows(
+            config.max_tabular_sample_rows,
+            file_bytes,
+            column_count.max(1),
+        );
+        container_kind = Some(ArrowIpcContainerKind::IPC_STREAM.to_string());
 
         for batch in stream {
             let batch = batch.context("decode IPC stream batch")?;
@@ -86,23 +100,25 @@ pub fn extract_arrow_ipc_metadata(
         }
     }
 
+    let stats_n = sample_data.len();
     let ts = utils::tabular_stats_from_sample(&sample_data, column_count, config);
+
+    let columns = utils::columns_from_tabular_sample(
+        column_count,
+        Some(column_names),
+        ts,
+        Some(arrow_field_types),
+    );
 
     Ok(ArrowIpcMetadata {
         common: ColumnarCommonFields {
             row_count: row_count_total,
             column_count,
-            column_names: Some(column_names),
-            column_types: ts.column_types,
-            encoding: Some("binary".to_string()),
-            null_percentages: ts.null_percentages,
-            unique_counts: ts.unique_counts,
-            numeric_stats: ts.numeric_stats,
-            date_stats: ts.date_stats,
-            boolean_stats: ts.boolean_stats,
+            stats_rows_sampled: Some(stats_n),
+            encoding: Some(StructuredEncoding::TABULAR_BINARY.to_string()),
+            columns,
         },
         container_kind,
-        arrow_field_types: Some(arrow_field_types),
     })
 }
 

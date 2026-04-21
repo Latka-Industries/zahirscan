@@ -5,7 +5,7 @@ use bytes::Bytes;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
 use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
+use crate::parsers::{ParseResult, structured::constants::StructuredEncoding};
 use crate::results::{ColumnarCommonFields, ParquetMetadata};
 
 use super::utils as columnar_utils;
@@ -33,8 +33,13 @@ pub fn extract_parquet_metadata(
     let column_names = columnar_utils::schema_column_names(schema_ref.as_ref());
     let arrow_field_types = columnar_utils::schema_arrow_dtype_strings(schema_ref.as_ref());
     let column_count = column_names.len();
+    let file_bytes = mmap.len() as u64;
 
-    let max_sample = config.max_csv_sample_rows;
+    let max_sample = columnar_utils::tabular_effective_sample_rows(
+        config.max_tabular_sample_rows,
+        file_bytes,
+        column_count.max(1),
+    );
     let mut sample_data: Vec<Vec<String>> = Vec::new();
     let mut reader = builder.build().context("build Parquet reader")?;
 
@@ -54,20 +59,21 @@ pub fn extract_parquet_metadata(
 
     let ts = columnar_utils::tabular_stats_from_sample(&sample_data, column_count, config);
 
+    let columns = columnar_utils::columns_from_tabular_sample(
+        column_count,
+        Some(column_names),
+        ts,
+        Some(arrow_field_types),
+    );
+
     Ok(ParquetMetadata {
         common: ColumnarCommonFields {
             row_count: row_count_total,
             column_count,
-            column_names: Some(column_names),
-            column_types: ts.column_types,
-            encoding: Some("binary".to_string()),
-            null_percentages: ts.null_percentages,
-            unique_counts: ts.unique_counts,
-            numeric_stats: ts.numeric_stats,
-            date_stats: ts.date_stats,
-            boolean_stats: ts.boolean_stats,
+            stats_rows_sampled: Some(sample_data.len()),
+            encoding: Some(StructuredEncoding::TABULAR_BINARY.to_string()),
+            columns,
         },
-        arrow_field_types: Some(arrow_field_types),
         num_row_groups,
     })
 }

@@ -8,37 +8,125 @@ use serde::{Deserialize, Serialize};
 use crate::results::MinimalFallback;
 use crate::results::{BooleanStats, DateStats, NumericStats};
 
+/// One column’s inferred profile and statistics (compact JSON: `columns` array).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ColumnStat {
+    pub i: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Inferred value kind from sampling (`number`, `string`, `date`, …).
+    pub t: String,
+    /// Physical / schema dtype when available (e.g. Arrow `Int32`, Avro field schema text).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pt: Option<String>,
+    /// Sample null rate where defined (CSV / Arrow-string pipeline). Omitted when not computed (e.g. MTX).
+    #[serde(rename = "null_pct", default, skip_serializing_if = "Option::is_none")]
+    pub null_pct: Option<f64>,
+    /// Distinct non-null **string** values in the sample (only meaningful when [`Self::t`] is `"string"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uniq: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num: Option<NumericStats>,
+    #[serde(rename = "bool", skip_serializing_if = "Option::is_none")]
+    pub bool_stats: Option<BooleanStats>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date: Option<DateStats>,
+}
+
+/// Parallel per-column vectors merged by [`merge_column_stats`].
+#[derive(Debug, Clone)]
+pub struct MergeColumnStatsInput {
+    pub column_count: usize,
+    pub column_names: Option<Vec<String>>,
+    pub column_types: Option<Vec<String>>,
+    pub null_percentages: Option<Vec<f64>>,
+    pub unique_counts: Option<Vec<usize>>,
+    pub numeric_stats: Option<Vec<Option<NumericStats>>>,
+    pub date_stats: Option<Vec<Option<DateStats>>>,
+    pub boolean_stats: Option<Vec<Option<BooleanStats>>>,
+    pub physical_types: Option<Vec<String>>,
+}
+
+/// Merge legacy parallel per-column vectors into a compact [`ColumnStat`] list.
+#[must_use]
+pub fn merge_column_stats(input: MergeColumnStatsInput) -> Option<Vec<ColumnStat>> {
+    let column_count = input.column_count;
+    if column_count == 0 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(column_count);
+    for j in 0..column_count {
+        let name = input.column_names.as_ref().and_then(|v| v.get(j).cloned());
+        let t = input
+            .column_types
+            .as_ref()
+            .and_then(|v| v.get(j))
+            .cloned()
+            .unwrap_or_else(|| "unknown".to_string());
+        let pt = input
+            .physical_types
+            .as_ref()
+            .and_then(|v| v.get(j).cloned());
+        let null_pct = input
+            .null_percentages
+            .as_ref()
+            .and_then(|v| v.get(j).copied());
+        let uniq = if t == "string" {
+            input.unique_counts.as_ref().and_then(|v| v.get(j).copied())
+        } else {
+            None
+        };
+        let num = input
+            .numeric_stats
+            .as_ref()
+            .and_then(|v| v.get(j))
+            .cloned()
+            .flatten();
+        let date = input
+            .date_stats
+            .as_ref()
+            .and_then(|v| v.get(j))
+            .cloned()
+            .flatten();
+        let bool_stats = input
+            .boolean_stats
+            .as_ref()
+            .and_then(|v| v.get(j))
+            .cloned()
+            .flatten();
+        out.push(ColumnStat {
+            i: j,
+            name,
+            t,
+            pt,
+            null_pct,
+            uniq,
+            num,
+            bool_stats,
+            date,
+        });
+    }
+    Some(out)
+}
+
 /// Shared table-oriented fields (used by [`CsvMetadata`] and columnar format metadata).
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ColumnarCommonFields {
     pub row_count: usize,
     pub column_count: usize,
+    /// Rows used for column stats (sample), when stats are sample-based. Total rows stay in `row_count`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub column_names: Option<Vec<String>>,
-    /// Inferred CSV-like types from sampled cell strings (`number`, `date`, …).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub column_types: Option<Vec<String>>,
+    pub stats_rows_sampled: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoding: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub null_percentages: Option<Vec<f64>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unique_counts: Option<Vec<usize>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub numeric_stats: Option<Vec<Option<NumericStats>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date_stats: Option<Vec<Option<DateStats>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub boolean_stats: Option<Vec<Option<BooleanStats>>>,
+    pub columns: Option<Vec<ColumnStat>>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ParquetMetadata {
     #[serde(flatten)]
     pub common: ColumnarCommonFields,
-    /// Physical Arrow / Parquet-style type names per field (e.g. `Int32`, `Utf8`).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub arrow_field_types: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_row_groups: Option<usize>,
 }
@@ -52,8 +140,6 @@ pub struct ArrowIpcMetadata {
     /// `ipc_file`, `ipc_stream`, or `feather` (when magic / path indicates Feather v2).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container_kind: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub arrow_field_types: Option<Vec<String>>,
 }
 
 crate::impl_minimal_fallback!(ArrowIpcMetadata, _);
@@ -62,8 +148,6 @@ crate::impl_minimal_fallback!(ArrowIpcMetadata, _);
 pub struct AvroMetadata {
     #[serde(flatten)]
     pub common: ColumnarCommonFields,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub avro_field_types: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema_canonical: Option<String>,
 }
@@ -74,8 +158,6 @@ crate::impl_minimal_fallback!(AvroMetadata, _);
 pub struct OrcMetadata {
     #[serde(flatten)]
     pub common: ColumnarCommonFields,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub arrow_field_types: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_stripes: Option<usize>,
 }

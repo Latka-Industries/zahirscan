@@ -58,6 +58,8 @@ impl Serialize for DateStats {
 /// Boolean column statistics
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct BooleanStats {
+    /// Serialized as `true_pct`; JSON key `true_percentage` is also accepted on deserialize.
+    #[serde(default, alias = "true_pct")]
     pub true_percentage: Option<f64>,
 }
 
@@ -67,7 +69,7 @@ impl Serialize for BooleanStats {
         S: Serializer,
     {
         let mut state = serializer.serialize_struct("BooleanStats", 1)?;
-        crate::serialize_optional!(state, self.true_percentage, "true_percentage");
+        crate::serialize_optional!(state, self.true_percentage, "true_pct");
         state.end()
     }
 }

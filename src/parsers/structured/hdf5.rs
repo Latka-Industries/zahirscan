@@ -40,7 +40,7 @@ fn walk_group(
 
     let members = group
         .members()
-        .map_err(|e| anyhow::anyhow!("{}", e))
+        .map_err(|e| anyhow::anyhow!("{e}"))
         .with_context(|| format!("list members of group {}", group.name()))?;
 
     for (name, _) in members {
@@ -51,14 +51,14 @@ fn walk_group(
 
         let obj_type = group
             .member_type(&name)
-            .map_err(|e| anyhow::anyhow!("{}", e))
+            .map_err(|e| anyhow::anyhow!("{e}"))
             .with_context(|| format!("member type for {}/{}", group.name(), name))?;
 
         match obj_type {
             ObjectType::Group => {
                 let child = group
                     .open_group(&name)
-                    .map_err(|e| anyhow::anyhow!("{}", e))
+                    .map_err(|e| anyhow::anyhow!("{e}"))
                     .with_context(|| format!("open group {name}"))?;
                 walk_group(
                     &child,
@@ -73,7 +73,7 @@ fn walk_group(
                 *datasets_seen += 1;
                 let ds = group
                     .open_dataset(&name)
-                    .map_err(|e| anyhow::anyhow!("{}", e))
+                    .map_err(|e| anyhow::anyhow!("{e}"))
                     .with_context(|| format!("open dataset {name}"))?;
 
                 let path = ds.name().to_string();
@@ -116,15 +116,15 @@ pub fn extract_hdf5_metadata(
 ) -> anyhow::Result<Hdf5Metadata> {
     let path = stats.file_path.as_str();
     let file = File::open(path).map_err(|e| {
-        debug!("HDF5 open failed for '{}': {}", path, e);
-        anyhow::anyhow!("{}", e)
+        debug!("HDF5 open failed for '{path}': {e}");
+        anyhow::anyhow!("{e}")
     })?;
 
     let superblock_version = Some(file.superblock().version);
 
     let root = file
         .root_group()
-        .map_err(|e| anyhow::anyhow!("{}", e))
+        .map_err(|e| anyhow::anyhow!("{e}"))
         .context("read HDF5 root group")?;
 
     let root_member_count = root.len().ok();
@@ -144,7 +144,7 @@ pub fn extract_hdf5_metadata(
         &mut walk_truncated,
         0,
     ) {
-        debug!("HDF5 walk error for '{}': {:#}", path, e);
+        debug!("HDF5 walk error for '{path}': {e:#}");
         return Ok(Hdf5Metadata {
             byte_count: stats.byte_count,
             superblock_version,

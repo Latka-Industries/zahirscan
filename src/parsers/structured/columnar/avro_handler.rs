@@ -7,7 +7,7 @@ use apache_avro::types::Value;
 use apache_avro::{Reader, Schema};
 
 use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
+use crate::parsers::{ParseResult, structured::constants::StructuredEncoding};
 use crate::results::{AvroMetadata, ColumnarCommonFields};
 
 use super::utils as columnar_utils;
@@ -82,8 +82,13 @@ pub fn extract_avro_metadata(
     let column_names_vec = avro_column_names(&writer_schema);
     let avro_field_types = avro_field_type_strings(&writer_schema);
     let column_count = column_names_vec.len();
+    let file_bytes = mmap.len() as u64;
 
-    let max_sample = config.max_csv_sample_rows;
+    let max_sample = columnar_utils::tabular_effective_sample_rows(
+        config.max_tabular_sample_rows,
+        file_bytes,
+        column_count.max(1),
+    );
     let mut sample_data: Vec<Vec<String>> = Vec::new();
     let mut row_count: usize = 0;
 
@@ -97,20 +102,21 @@ pub fn extract_avro_metadata(
 
     let ts = columnar_utils::tabular_stats_from_sample(&sample_data, column_count, config);
 
+    let columns = columnar_utils::columns_from_tabular_sample(
+        column_count,
+        Some(column_names_vec),
+        ts,
+        Some(avro_field_types),
+    );
+
     Ok(AvroMetadata {
         common: ColumnarCommonFields {
             row_count,
             column_count,
-            column_names: Some(column_names_vec),
-            column_types: ts.column_types,
-            encoding: Some("binary".to_string()),
-            null_percentages: ts.null_percentages,
-            unique_counts: ts.unique_counts,
-            numeric_stats: ts.numeric_stats,
-            date_stats: ts.date_stats,
-            boolean_stats: ts.boolean_stats,
+            stats_rows_sampled: Some(sample_data.len()),
+            encoding: Some(StructuredEncoding::TABULAR_BINARY.to_string()),
+            columns,
         },
-        avro_field_types: Some(avro_field_types),
         schema_canonical,
     })
 }

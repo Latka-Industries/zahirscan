@@ -15,7 +15,11 @@ use super::sample::{column_common_from_npy_bytes, zip_member_target_read_len};
 
 const MAX_NPZ_NPY_ENTRIES: usize = 128;
 /// Upper bound on uncompressed bytes read per inner `.npy` (header + sample prefix for stats).
-const MAX_NPZ_ENTRY_READ: usize = 64 * 1024 * 1024;
+///
+/// Slightly above 64 MiB on purpose: a member whose total uncompressed size is **64 MiB + header**
+/// (e.g. 128-byte header + exactly 64 MiB of array data = 67,108,992 bytes) would otherwise be cut
+/// at 64 MiB and lose the tail of the payload—dropping the last row of column stats.
+const MAX_NPZ_ENTRY_READ: usize = 64 * 1024 * 1024 + 256 * 1024;
 const INITIAL_NPZ_READ: usize = 512 * 1024;
 
 /// Read enough of a ZIP member to parse the header and (when applicable) the contiguous sample prefix.
