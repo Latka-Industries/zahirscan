@@ -59,7 +59,10 @@ cargo add zahirscan        # library
 cargo install zahirscan    # CLI
 ```
 
-`ffprobe` (FFmpeg) is optional and required for video/audio metadata.
+**Optional system tools / libraries**:
+
+- **`ffprobe`** (FFmpeg): needed for rich video/audio metadata
+- **`libnetcdf`** (NetCDF C): the `netcdf` crate links it at build time
 
 ## Usage
 
@@ -172,7 +175,7 @@ Full schema: [config.toml](config.toml).
 
 **Phase 1**: Format detection, stats (lines/bytes/tokens), mmap per path, content-type classification. Runs in parallel over paths (Rayon).
 
-**Path batching**: When there are more paths than the batch size (from the process fd limit), each chunk runs Phase 1 then Phase 2; the chunk and its mmaps are dropped before the next chunk—avoids “too many open files” on huge scans (e.g. 900k+ paths).
+**Path batching**: When there are more paths than the batch size (from the process fd limit), each chunk runs Phase 1 then Phase 2; the chunk and its mmaps are dropped before the next chunk.
 
 **Phase 2**: Metadata extraction per format, template mining, writing footprint (exact-pattern then shape fallback for text/markdown). One Rayon pool; chunk sizing and `with_min_len` batching follow Phase 1 stats—tunable fields are under **Configuration** → adaptive batching.
 
