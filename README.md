@@ -28,9 +28,9 @@ A high-performance Rust CLI that uses probabilistic template mining to extract s
 
 - **Template mining**: Repeated patterns in logs/text → templates with placeholders
 - **Memory-mapped I/O**: `memmap2`; single open per path
-- **Adaptive parallelization**: Phase 2 chunk sizes and worker usage tuned from Phase 1 stats (file count, bytes, variance); Rayon parallel iteration with adaptive batching when task count exceeds `workers × threshold_multiplier`
-- **Path batching**: For large path sets, the pipeline runs in batches (batch size from process fd limit) so mmaps are dropped between batches—avoids “too many open files” on huge scans (e.g. 900k+ paths)
-- **Streamable output**: `OutputSink::Collect` (default), `OutputSink::StreamOnly` (callback per file, no collection), or `OutputSink::Channel` (send on channel); works with path batching
+- **Adaptive parallelization**: Phase 2 chunk sizes and Rayon batching follow Phase 1 stats; see **Architecture** and **Configuration** → adaptive batching
+- **Path batching**: Large path lists run in fd-limit-sized batches so mmaps stay bounded; see **Architecture**
+- **Streamable output**: `OutputSink::Collect` (default), `OutputSink::StreamOnly` (callback per file, no collection), or `OutputSink::Channel` (send on channel); compatible with batched scans
 - **Size reduction**: Typically 80–95% smaller than raw while preserving structure and metadata
 
 ### Metadata extraction by format
@@ -89,7 +89,7 @@ Options:
 
 **Output formats:**
 
-- **Mode 1 (Templates)**: Minimal JSON with template patterns & schema, writing footprint (for text/markdown), media metadata (for images/videos/audio), code metadata (for code/script files), log metadata (for log files), JSON metadata (for JSON files), document metadata (for DOCX/XLSX/PPTX), and tabular/columnar metadata (for Parquet, Arrow IPC/Feather, Avro, ORC, CSV family, NumPy, HDF5, NetCDF, MTX, etc.)
+- **Mode 1 (Templates)**: Minimal JSON with templates, writing footprint (text/markdown), and per-format metadata where applicable—see **Supported formats** (media, code, logs, JSON, documents, tabular/columnar, archives, …)
 - **Mode 2 (Full)**: Mode 1 output plus:
   - File statistics (size, line count, processing time)
   - Size comparison (before/after)
@@ -98,7 +98,7 @@ Options:
 
 ZahirScan can be used as a Rust library to extract schemas (templates and metadata) from files programmatically.
 
-#### Basic: collect all outputs\*\*
+#### Basic: collect all outputs
 
 ```rust
 use zahirscan::{extract_zahir, OutputMode, OutputSink};
@@ -157,10 +157,9 @@ let result = extract_zahir_from_stream(&rx, OutputMode::Full, None, None, &Outpu
 
 Full schema: [config.toml](config.toml).
 
-**Adaptive batching and parallelization:**
+**Adaptive batching and parallelization** (see **Architecture** for how Phase 1 / Phase 2 interact with batches):
 
-- **Path batching**: If the number of paths exceeds the batch size (derived from the process fd limit), the pipeline runs in batches; mmaps are dropped between batches so open file count stays bounded.
-- **Phase 2 adaptive chunking**: Chunk sizes and “chunks per file” are derived from Phase 1 stats (file count, mean bytes, variance); targets a neat multiple of `max_workers` for load balancing.
+- **Phase 2 adaptive chunking**: Chunk sizes and “chunks per file” come from Phase 1 stats (file count, mean bytes, variance); targets a neat multiple of `max_workers` for load balancing.
 - **Phase 2 parallel batching**: When task count exceeds `workers × threshold_multiplier`, Rayon uses `with_min_len(batch_size)` to avoid thread-pool saturation; otherwise full parallelism.
 - `max_workers = 0` uses a sensible default (e.g. num_cpus - 1). No manual tuning is required for typical workloads.
 
@@ -173,9 +172,9 @@ Full schema: [config.toml](config.toml).
 
 **Phase 1**: Format detection, stats (lines/bytes/tokens), mmap per path, content-type classification. Runs in parallel over paths (Rayon).
 
-**Path batching**: When path count exceeds the batch size (from the process fd limit), the pipeline runs Phase 1 + Phase 2 per chunk of paths, then drops the chunk (and mmaps) before the next chunk.
+**Path batching**: When there are more paths than the batch size (from the process fd limit), each chunk runs Phase 1 then Phase 2; the chunk and its mmaps are dropped before the next chunk—avoids “too many open files” on huge scans (e.g. 900k+ paths).
 
-**Phase 2**: Metadata extraction per format, template mining, writing footprint (exact-pattern then shape fallback for text/markdown). Single Rayon pool; adaptive chunk sizing from Phase 1 stats and adaptive parallel batching (min chunk length) when task count is large.
+**Phase 2**: Metadata extraction per format, template mining, writing footprint (exact-pattern then shape fallback for text/markdown). One Rayon pool; chunk sizing and `with_min_len` batching follow Phase 1 stats—tunable fields are under **Configuration** → adaptive batching.
 
 ## Security
 

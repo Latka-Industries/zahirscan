@@ -36,24 +36,13 @@ pub fn extract_orc_metadata(
         column_count.max(1),
         Some(row_count_total),
     );
-    let mut sample_data: Vec<Vec<String>> = Vec::new();
     let reader = builder.with_batch_size(8192).build();
-
-    for batch in reader {
-        let batch = batch
-            .map_err(|e| anyhow::anyhow!(e))
-            .context("read ORC batch")?;
-        if sample_data.len() >= max_sample {
-            break;
-        }
-        let rows = columnar_utils::record_batch_all_rows_as_strings(&batch, config)?;
-        for row in rows {
-            if sample_data.len() >= max_sample {
-                break;
-            }
-            sample_data.push(row);
-        }
-    }
+    let sample_data = columnar_utils::record_batches_to_string_sample(
+        reader,
+        max_sample,
+        config,
+        "read ORC batch",
+    )?;
 
     let ts = columnar_utils::tabular_stats_from_sample(&sample_data, column_count, config);
 

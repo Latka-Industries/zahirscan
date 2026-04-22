@@ -1,6 +1,6 @@
 //! Shared helpers for Arrow record batches and CSV-like column statistics.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use arrow_array::Array;
 use arrow_array::RecordBatch;
 use arrow_cast::display::array_value_to_string;
@@ -122,6 +122,33 @@ pub(crate) fn record_batch_all_rows_as_strings(
         }
         Ok(rows)
     }
+}
+
+/// Drain up to `max_sample` rows from Arrow record batches into string rows (shared by Parquet, ORC, Arrow IPC).
+pub(crate) fn record_batches_to_string_sample<E>(
+    batches: impl Iterator<Item = Result<RecordBatch, E>>,
+    max_sample: usize,
+    config: &RuntimeConfig,
+    decode_ctx: &'static str,
+) -> Result<Vec<Vec<String>>>
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    let mut sample_data = Vec::new();
+    for batch in batches {
+        let batch = batch.context(decode_ctx)?;
+        if sample_data.len() >= max_sample {
+            break;
+        }
+        let rows = record_batch_all_rows_as_strings(&batch, config)?;
+        for row in rows {
+            if sample_data.len() >= max_sample {
+                break;
+            }
+            sample_data.push(row);
+        }
+    }
+    Ok(sample_data)
 }
 
 #[must_use]

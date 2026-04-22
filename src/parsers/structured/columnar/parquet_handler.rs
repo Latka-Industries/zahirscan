@@ -41,22 +41,13 @@ pub fn extract_parquet_metadata(
         column_count.max(1),
         Some(row_count_total),
     );
-    let mut sample_data: Vec<Vec<String>> = Vec::new();
     let mut reader = builder.build().context("build Parquet reader")?;
-
-    for batch in reader.by_ref() {
-        let batch = batch.context("read Parquet batch")?;
-        if sample_data.len() >= max_sample {
-            break;
-        }
-        let rows = columnar_utils::record_batch_all_rows_as_strings(&batch, config)?;
-        for row in rows {
-            if sample_data.len() >= max_sample {
-                break;
-            }
-            sample_data.push(row);
-        }
-    }
+    let sample_data = columnar_utils::record_batches_to_string_sample(
+        reader.by_ref(),
+        max_sample,
+        config,
+        "read Parquet batch",
+    )?;
 
     let ts = columnar_utils::tabular_stats_from_sample(&sample_data, column_count, config);
 

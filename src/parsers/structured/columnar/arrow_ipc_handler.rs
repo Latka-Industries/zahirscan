@@ -36,29 +36,6 @@ fn ipc_sum_row_counts(
     Ok(n)
 }
 
-fn ipc_collect_sample_up_to(
-    batches: impl Iterator<Item = std::result::Result<RecordBatch, ArrowError>>,
-    max_sample: usize,
-    config: &RuntimeConfig,
-    decode_ctx: &'static str,
-) -> Result<Vec<Vec<String>>> {
-    let mut sample_data = Vec::new();
-    for batch in batches {
-        let batch = batch.context(decode_ctx)?;
-        if sample_data.len() >= max_sample {
-            break;
-        }
-        let rows = utils::record_batch_all_rows_as_strings(&batch, config)?;
-        for row in rows {
-            if sample_data.len() >= max_sample {
-                break;
-            }
-            sample_data.push(row);
-        }
-    }
-    Ok(sample_data)
-}
-
 fn ipc_column_layout(schema: &Schema) -> (Vec<String>, Vec<String>, usize) {
     let column_names = utils::schema_column_names(schema);
     let arrow_field_types = utils::schema_arrow_dtype_strings(schema);
@@ -89,7 +66,7 @@ fn ipc_reopen_file_and_sample(
     let cursor = Cursor::new(mmap);
     let reader =
         FileReader::try_new(cursor, None).context("re-open Arrow IPC file reader for sampling")?;
-    ipc_collect_sample_up_to(reader, max_sample, config, decode_ctx)
+    utils::record_batches_to_string_sample(reader, max_sample, config, decode_ctx)
 }
 
 fn ipc_reopen_stream_and_sample(
@@ -101,7 +78,7 @@ fn ipc_reopen_stream_and_sample(
     let cursor = Cursor::new(mmap);
     let reader = StreamReader::try_new(cursor, None)
         .context("re-open Arrow IPC stream reader for sampling")?;
-    ipc_collect_sample_up_to(reader, max_sample, config, decode_ctx)
+    utils::record_batches_to_string_sample(reader, max_sample, config, decode_ctx)
 }
 
 /// Read Arrow IPC file, Feather v2, or IPC streaming format.
@@ -114,47 +91,58 @@ pub fn extract_arrow_ipc_metadata(
     stats: &ParseResult,
     config: &RuntimeConfig,
 ) -> Result<ArrowIpcMetadata> {
-    let sample_data: Vec<Vec<String>>;
-    let row_count_total: usize;
-    let column_count: usize;
-    let column_names: Vec<String>;
-    let arrow_field_types: Vec<String>;
-    let container_kind: Option<String>;
-
-    let cursor = Cursor::new(mmap);
-    if let Ok(file_reader) = FileReader::try_new(cursor, None) {
+    let (
+        sample_data,
+        row_count_total,
+        column_names,
+        arrow_field_types,
+        column_count,
+        container_kind,
+    ) = if let Ok(file_reader) = FileReader::try_new(Cursor::new(mmap), None) {
         let schema = file_reader.schema();
-        let (names, types, cols) = ipc_column_layout(schema.as_ref());
-        column_names = names;
-        arrow_field_types = types;
-        column_count = cols;
+        let (column_names, arrow_field_types, column_count) = ipc_column_layout(schema.as_ref());
         let file_bytes = mmap.len() as u64;
-        container_kind = Some(if feather_hint(&stats.file_path, mmap) {
+        let container_kind = Some(if feather_hint(&stats.file_path, mmap) {
             ArrowIpcContainerKind::FEATHER.to_string()
         } else {
             ArrowIpcContainerKind::IPC_FILE.to_string()
         });
 
-        row_count_total = ipc_sum_row_counts(file_reader, "decode IPC file batch (count)")?;
+        let row_count_total = ipc_sum_row_counts(file_reader, "decode IPC file batch (count)")?;
         let max_sample = ipc_bpr_max_sample(row_count_total, file_bytes, column_count, config);
-        sample_data =
+        let sample_data =
             ipc_reopen_file_and_sample(mmap, max_sample, config, "decode IPC file batch")?;
-    } else {
-        let cursor = Cursor::new(mmap);
-        let stream = StreamReader::try_new(cursor, None).context("open Arrow IPC stream reader")?;
-        let schema = stream.schema();
-        let (names, types, cols) = ipc_column_layout(schema.as_ref());
-        column_names = names;
-        arrow_field_types = types;
-        column_count = cols;
-        let file_bytes = mmap.len() as u64;
-        container_kind = Some(ArrowIpcContainerKind::IPC_STREAM.to_string());
 
-        row_count_total = ipc_sum_row_counts(stream, "decode IPC stream batch (count)")?;
+        Ok::<_, anyhow::Error>((
+            sample_data,
+            row_count_total,
+            column_names,
+            arrow_field_types,
+            column_count,
+            container_kind,
+        ))
+    } else {
+        let stream = StreamReader::try_new(Cursor::new(mmap), None)
+            .context("open Arrow IPC stream reader")?;
+        let schema = stream.schema();
+        let (column_names, arrow_field_types, column_count) = ipc_column_layout(schema.as_ref());
+        let file_bytes = mmap.len() as u64;
+        let container_kind = Some(ArrowIpcContainerKind::IPC_STREAM.to_string());
+
+        let row_count_total = ipc_sum_row_counts(stream, "decode IPC stream batch (count)")?;
         let max_sample = ipc_bpr_max_sample(row_count_total, file_bytes, column_count, config);
-        sample_data =
+        let sample_data =
             ipc_reopen_stream_and_sample(mmap, max_sample, config, "decode IPC stream batch")?;
-    }
+
+        Ok::<_, anyhow::Error>((
+            sample_data,
+            row_count_total,
+            column_names,
+            arrow_field_types,
+            column_count,
+            container_kind,
+        ))
+    }?;
 
     let stats_n = sample_data.len();
     let ts = utils::tabular_stats_from_sample(&sample_data, column_count, config);
