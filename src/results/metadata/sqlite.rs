@@ -26,11 +26,11 @@ pub struct ColumnInfo {
     pub null_percentage: Option<f64>,
     /// Number of unique values
     pub unique_count: Option<usize>,
-    /// Numeric statistics (for INTEGER/REAL columns)
+    /// Numeric statistics (INTEGER/REAL). Omitted when the column is classified as boolean-only (see `boolean_stats`).
     pub numeric_stats: Option<NumericStats>,
     /// Date statistics (for TEXT columns that contain dates)
     pub date_stats: Option<DateStats>,
-    /// Boolean statistics (for INTEGER columns used as booleans)
+    /// Boolean statistics (INTEGER whose non-empty values all look like booleans, e.g. 0/1). Mutually exclusive with `numeric_stats`.
     pub boolean_stats: Option<BooleanStats>,
     /// Text statistics (for TEXT columns: min/max/avg length)
     pub text_stats: Option<TextStats>,
