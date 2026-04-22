@@ -124,6 +124,8 @@ pub struct Output {
     pub netcdf_metadata: Option<super::metadata::NetCdfMetadata>,
     /// Matrix Market `.mtx` metadata (Mode 2 only)
     pub mtx_metadata: Option<super::metadata::MtxMetadata>,
+    /// MATLAB `.mat` metadata (Mode 2 only)
+    pub mat_metadata: Option<super::metadata::MatMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -143,8 +145,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 38 fields: 1 required (templates) + 37 optional fields
-        let mut state = serializer.serialize_struct("Output", 38)?;
+        // Maximum 39 fields: 1 required (templates) + 38 optional fields
+        let mut state = serializer.serialize_struct("Output", 39)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -187,6 +189,7 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.hdf5_metadata, "hdf5_metadata");
         crate::serialize_optional!(state, self.netcdf_metadata, "netcdf_metadata");
         crate::serialize_optional!(state, self.mtx_metadata, "mtx_metadata");
+        crate::serialize_optional!(state, self.mat_metadata, "mat_metadata");
 
         state.end()
     }

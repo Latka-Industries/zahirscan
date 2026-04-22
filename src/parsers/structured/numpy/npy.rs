@@ -7,7 +7,8 @@ use std::sync::LazyLock;
 
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
-use crate::results::{NpyLayoutSummary, NpyMetadata};
+use crate::parsers::structured::tensor3d::tensor3d_plane_stats_for_npy_bytes;
+use crate::results::{ArrayLayoutSummary, NpyMetadata};
 
 const NPY_MAGIC: &[u8; 6] = b"\x93NUMPY";
 const MAX_HEADER_REGION: usize = 512 * 1024;
@@ -82,7 +83,14 @@ fn shape_num_elements(shape: &[usize]) -> usize {
 }
 
 /// Parse the `.npy` header from a prefix of bytes; `logical_len` is the full on-disk size of this array (file or zip entry).
-pub fn parse_npy_prefix(bytes: &[u8], logical_len: usize) -> Result<NpyLayoutSummary> {
+///
+/// # Errors
+///
+/// Returns [`anyhow::Error`] when the buffer is too short, magic is wrong, the version is not
+/// supported (only 1.0 and 2.0), the declared header length exceeds [`MAX_HEADER_REGION`], the
+/// prefix does not contain the full header dict, or the header cannot be read as Latin-1 (same
+/// slice bounds as the length checks above).
+pub fn parse_npy_prefix(bytes: &[u8], logical_len: usize) -> Result<ArrayLayoutSummary> {
     if bytes.len() < 10 {
         bail!("NPY too short for header prefix");
     }
@@ -93,7 +101,7 @@ pub fn parse_npy_prefix(bytes: &[u8], logical_len: usize) -> Result<NpyLayoutSum
     let minor = bytes[7];
     let (header_region, data_offset) = match (major, minor) {
         (1, 0) => {
-            let hlen = u16::from_le_bytes(bytes[8..10].try_into().unwrap()) as usize;
+            let hlen = u16::from_le_bytes([bytes[8], bytes[9]]) as usize;
             if hlen > MAX_HEADER_REGION {
                 bail!("NPY v1 header length {hlen} exceeds cap");
             }
@@ -110,7 +118,9 @@ pub fn parse_npy_prefix(bytes: &[u8], logical_len: usize) -> Result<NpyLayoutSum
             if bytes.len() < 12 {
                 bail!("NPY v2 too short for header length");
             }
-            let hlen = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
+            let hlen = u32::from_le_bytes([
+                bytes[8], bytes[9], bytes[10], bytes[11],
+            ]) as usize;
             if hlen > MAX_HEADER_REGION {
                 bail!("NPY v2 header length {hlen} exceeds cap");
             }
@@ -160,9 +170,9 @@ pub fn parse_npy_prefix(bytes: &[u8], logical_len: usize) -> Result<NpyLayoutSum
         _ => None,
     };
 
-    Ok(NpyLayoutSummary {
+    Ok(ArrayLayoutSummary {
         format_version,
-        descr,
+        dtype: descr,
         shape,
         fortran_order,
         header_region_bytes: Some(header_region),
@@ -185,10 +195,12 @@ pub fn extract_npy_metadata(
     let bytes: &[u8] = mmap.as_ref();
     let layout = parse_npy_prefix(bytes, stats.byte_count).context("parse NPY")?;
     let common = super::sample::column_common_from_npy_bytes(bytes, &layout, config);
+    let tensor3d = tensor3d_plane_stats_for_npy_bytes(bytes, &layout);
     Ok(NpyMetadata {
         byte_count: stats.byte_count,
         layout,
         common,
+        tensor3d,
     })
 }
 

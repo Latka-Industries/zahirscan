@@ -1,4 +1,4 @@
-//! Structured formats: CSV, HTML, JSON, EPUB, PDF, columnar binaries (Parquet, Arrow IPC, Avro, ORC), `NumPy` (NPY/NPZ), HDF5, `NetCDF`, and Matrix Market (`.mtx`).
+//! Structured formats: CSV, HTML, JSON, EPUB, PDF, columnar binaries (Parquet, Arrow IPC, Avro, ORC), `NumPy` (NPY/NPZ), MATLAB (`.mat`), HDF5, `NetCDF`, and Matrix Market (`.mtx`).
 
 pub mod constants;
 
@@ -8,11 +8,13 @@ mod epub;
 mod hdf5;
 mod html;
 mod json;
+mod mat;
 mod mtx;
 mod netcdf;
 mod numpy;
 mod pdf;
 mod table_sample_profile;
+pub mod tensor3d;
 
 pub use columnar::*;
 pub use csv::{
@@ -22,11 +24,10 @@ pub use epub::{extract_epub_metadata, extract_epub_templates};
 pub use hdf5::{extract_hdf5_metadata, extract_hdf5_templates};
 pub use html::{extract_html_metadata, extract_html_templates};
 pub use json::{extract_json_metadata, extract_json_templates};
+pub use mat::{extract_mat_metadata, extract_mat_templates};
 pub use mtx::{extract_mtx_metadata, extract_mtx_templates};
 pub use netcdf::{extract_netcdf_metadata, extract_netcdf_templates};
-pub use numpy::{
-    extract_npy_metadata, extract_npy_templates, extract_npz_metadata, extract_npz_templates,
-};
+pub use numpy::*;
 pub use pdf::{extract_pdf_metadata, extract_pdf_templates};
 pub use table_sample_profile::*;
 
@@ -62,6 +63,7 @@ pub fn process(
         FileType::Hdf5 => structured_hdf5(stats, mmap, config),
         FileType::NetCdf => structured_netcdf(stats, mmap, config),
         FileType::Mtx => structured_mtx(stats, mmap, config),
+        FileType::Mat => structured_mat(stats, mmap, config),
         _ => unreachable!("structured::process called with {:?}", stats.file_type),
     }
 }
@@ -294,5 +296,22 @@ fn structured_mtx(
         crate::results::MtxMetadata,
         FileType::Mtx,
         extract_mtx_templates(mmap, stats, config)
+    )
+}
+
+fn structured_mat(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &RuntimeConfig,
+) -> Result<MiningResult> {
+    crate::process_with_metadata!(
+        stats,
+        mmap,
+        config,
+        mat_metadata,
+        extract_mat_metadata(mmap, stats, config),
+        crate::results::MatMetadata,
+        FileType::Mat,
+        extract_mat_templates(mmap, stats, config)
     )
 }

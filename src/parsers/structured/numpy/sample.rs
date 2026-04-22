@@ -6,7 +6,8 @@
 use crate::config::RuntimeConfig;
 use crate::parsers::structured::columnar::utils as columnar_utils;
 use crate::parsers::structured::constants::StructuredEncoding;
-use crate::results::{ColumnarCommonFields, NpyLayoutSummary};
+use crate::results::ArrayLayoutSummary;
+use crate::results::ColumnarCommonFields;
 
 use super::npy::numpy_descr_element_nbytes;
 
@@ -37,15 +38,6 @@ pub fn numpy_descr_skips_tabular_stats(descr: &str) -> bool {
         return true;
     }
     false
-}
-
-fn table_shape(shape: &[usize]) -> Option<(usize, usize)> {
-    match shape.len() {
-        0 => Some((1, 1)),
-        1 => Some((shape[0], 1)),
-        2 => Some((shape[0], shape[1])),
-        _ => None,
-    }
 }
 
 fn elem_offset_2d(row: usize, col: usize, rows: usize, cols: usize, fortran_order: bool) -> usize {
@@ -81,9 +73,25 @@ fn contiguous_payload_prefix_elems(
     }
 }
 
+/// Byte-per-row / row-aware cap on sample rows (matches CSV-like tabular scaling).
+#[must_use]
+pub fn tabular_sample_rows_for_dense_array(
+    file_len_bytes: u64,
+    column_count: usize,
+    row_count: usize,
+    config: &RuntimeConfig,
+) -> usize {
+    columnar_utils::tabular_effective_sample_rows(
+        config.max_tabular_sample_rows,
+        file_len_bytes,
+        column_count.max(1),
+        Some(row_count),
+    )
+}
+
 /// Minimum `file_bytes.len()` so `data_offset + payload` covers sampling (not necessarily the full array).
 pub(crate) fn min_file_bytes_for_column_stats(
-    layout: &NpyLayoutSummary,
+    layout: &ArrayLayoutSummary,
     elem_size: usize,
     rows: usize,
     cols: usize,
@@ -92,12 +100,7 @@ pub(crate) fn min_file_bytes_for_column_stats(
 ) -> Option<usize> {
     let data_offset = layout.data_offset?;
     let rank = layout.shape.as_ref()?.len();
-    let cap = columnar_utils::tabular_effective_sample_rows(
-        config.max_tabular_sample_rows,
-        file_len_bytes,
-        cols.max(1),
-        Some(rows),
-    );
+    let cap = tabular_sample_rows_for_dense_array(file_len_bytes, cols.max(1), rows, config);
     let sample_rows = rows.min(cap);
     let payload_elems = contiguous_payload_prefix_elems(
         rows,
@@ -140,11 +143,11 @@ fn max_sample_rows_in_prefix(
 
 /// Bytes to read from a ZIP member so standalone `.npy` parity is possible (header + sample prefix, capped).
 pub(crate) fn zip_member_target_read_len(
-    layout: &NpyLayoutSummary,
+    layout: &ArrayLayoutSummary,
     uncompressed_size: usize,
     config: &RuntimeConfig,
 ) -> usize {
-    let Some(descr) = layout.descr.as_deref() else {
+    let Some(descr) = layout.dtype.as_deref() else {
         return uncompressed_size.min(512 * 1024);
     };
     if numpy_descr_skips_tabular_stats(descr) {
@@ -153,10 +156,7 @@ pub(crate) fn zip_member_target_read_len(
     let Some(elem) = numpy_descr_element_nbytes(descr) else {
         return uncompressed_size.min(512 * 1024);
     };
-    let Some(shape) = layout.shape.as_ref() else {
-        return uncompressed_size.min(512 * 1024);
-    };
-    let Some((rows, cols)) = table_shape(shape) else {
+    let Some((rows, cols)) = layout.table_dims() else {
         return uncompressed_size.min(512 * 1024);
     };
     min_file_bytes_for_column_stats(layout, elem, rows, cols, uncompressed_size as u64, config)
@@ -245,10 +245,10 @@ fn decode_cell(descr: &str, chunk: &[u8]) -> Option<String> {
 #[must_use]
 pub fn column_common_from_npy_bytes(
     file_bytes: &[u8],
-    layout: &NpyLayoutSummary,
+    layout: &ArrayLayoutSummary,
     config: &RuntimeConfig,
 ) -> ColumnarCommonFields {
-    let Some(descr) = layout.descr.as_deref() else {
+    let Some(descr) = layout.dtype.as_deref() else {
         return ColumnarCommonFields::default();
     };
     if numpy_descr_skips_tabular_stats(descr) {
@@ -263,7 +263,7 @@ pub fn column_common_from_npy_bytes(
     let Some(data_offset) = layout.data_offset else {
         return ColumnarCommonFields::default();
     };
-    let Some((rows, cols)) = table_shape(shape) else {
+    let Some((rows, cols)) = layout.table_dims() else {
         return shape_only_common(layout);
     };
     if rows == 0 || cols == 0 {
@@ -278,12 +278,7 @@ pub fn column_common_from_npy_bytes(
     let rank = shape.len();
     let fortran = layout.fortran_order.unwrap_or(false);
     let file_len = file_bytes.len() as u64;
-    let cap = columnar_utils::tabular_effective_sample_rows(
-        config.max_tabular_sample_rows,
-        file_len,
-        cols.max(1),
-        Some(rows),
-    );
+    let cap = tabular_sample_rows_for_dense_array(file_len, cols.max(1), rows, config);
     let sample_rows = max_sample_rows_in_prefix(rows, cols, rank, fortran, elem_size, avail, cap);
     if sample_rows == 0 {
         return shape_only_common(layout);
@@ -329,15 +324,9 @@ pub fn column_common_from_npy_bytes(
     }
 }
 
-fn shape_only_common(layout: &NpyLayoutSummary) -> ColumnarCommonFields {
-    let Some(shape) = layout.shape.as_ref() else {
+fn shape_only_common(layout: &ArrayLayoutSummary) -> ColumnarCommonFields {
+    let Some((row_count, column_count)) = layout.shape_row_col_counts() else {
         return ColumnarCommonFields::default();
-    };
-    let (row_count, column_count) = if let Some((r, c)) = table_shape(shape) {
-        (r, c)
-    } else {
-        let n: usize = shape.iter().product();
-        (n, 0)
     };
     ColumnarCommonFields {
         row_count,

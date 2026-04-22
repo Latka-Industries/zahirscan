@@ -13,3 +13,4 @@ mod placeholder_formatting;
 mod serialization;
 mod should_ignore_path;
 mod sqlite_metadata;
+mod tensor3d;

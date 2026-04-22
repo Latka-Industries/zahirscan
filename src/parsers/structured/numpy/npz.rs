@@ -8,7 +8,8 @@ use zip::ZipArchive;
 
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
-use crate::results::{ColumnarCommonFields, NpyLayoutSummary, NpzMetadata, NpzNpyEntrySummary};
+use crate::parsers::structured::tensor3d::tensor3d_plane_stats_for_npy_bytes;
+use crate::results::{ArrayLayoutSummary, ColumnarCommonFields, NpzMetadata, NpzNpyEntrySummary};
 
 use super::npy::parse_npy_prefix;
 use super::sample::{column_common_from_npy_bytes, zip_member_target_read_len};
@@ -98,8 +99,9 @@ pub fn extract_npz_metadata(
                 npy_entries.push(NpzNpyEntrySummary {
                     name,
                     uncompressed_size: Some(uncompressed_u64),
-                    layout: NpyLayoutSummary::default(),
+                    layout: ArrayLayoutSummary::default(),
                     common: ColumnarCommonFields::default(),
+                    tensor3d: None,
                     entry_parse_error: Some(format!("{e:#}")),
                 });
                 continue;
@@ -109,11 +111,13 @@ pub fn extract_npz_metadata(
         match parse_npy_prefix(&buf, uncompressed_size) {
             Ok(layout) => {
                 let common = column_common_from_npy_bytes(&buf, &layout, config);
+                let tensor3d = tensor3d_plane_stats_for_npy_bytes(&buf, &layout);
                 npy_entries.push(NpzNpyEntrySummary {
                     name,
                     uncompressed_size: Some(uncompressed_u64),
                     layout,
                     common,
+                    tensor3d,
                     entry_parse_error: None,
                 });
             }
@@ -121,8 +125,9 @@ pub fn extract_npz_metadata(
                 npy_entries.push(NpzNpyEntrySummary {
                     name,
                     uncompressed_size: Some(uncompressed_u64),
-                    layout: NpyLayoutSummary::default(),
+                    layout: ArrayLayoutSummary::default(),
                     common: ColumnarCommonFields::default(),
+                    tensor3d: None,
                     entry_parse_error: Some(format!("{e:#}")),
                 });
             }

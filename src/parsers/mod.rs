@@ -113,6 +113,7 @@ macro_rules! copy_metadata_fields {
         $to.hdf5_metadata = $from.hdf5_metadata.clone();
         $to.netcdf_metadata = $from.netcdf_metadata.clone();
         $to.mtx_metadata = $from.mtx_metadata.clone();
+        $to.mat_metadata = $from.mat_metadata.clone();
     };
 }
 
@@ -205,11 +206,12 @@ pub enum FileType {
     Hdf5,
     NetCdf,
     Mtx,
+    Mat,
     #[default]
     Unknown,
 }
 
-const METADATA_NAMES: [&str; 32] = [
+const METADATA_NAMES: [&str; 33] = [
     "Log",
     "JSON",
     "Text",
@@ -241,6 +243,7 @@ const METADATA_NAMES: [&str; 32] = [
     "HDF5",
     "NetCDF",
     "Matrix Market",
+    "MATLAB MAT",
     "Unknown",
 ];
 
@@ -295,7 +298,8 @@ impl FileType {
                 28 => FileType::Hdf5,
                 29 => FileType::NetCdf,
                 30 => FileType::Mtx,
-                31 => FileType::Unknown,
+                31 => FileType::Mat,
+                32 => FileType::Unknown,
                 _ => unreachable!("METADATA_NAMES and match arms must stay in sync"),
             })
     }
@@ -325,7 +329,8 @@ impl FileType {
             | FileType::Npz
             | FileType::Hdf5
             | FileType::NetCdf
-            | FileType::Mtx => Some(ParserCategory::Structured),
+            | FileType::Mtx
+            | FileType::Mat => Some(ParserCategory::Structured),
             FileType::Toml | FileType::Yaml | FileType::Xml | FileType::Ini => {
                 Some(ParserCategory::Settings)
             }
@@ -407,6 +412,8 @@ pub struct ParseResult {
     pub netcdf_metadata: Option<crate::results::NetCdfMetadata>,
     /// Matrix Market (`.mtx`) metadata
     pub mtx_metadata: Option<crate::results::MtxMetadata>,
+    /// MATLAB `.mat` metadata
+    pub mat_metadata: Option<crate::results::MatMetadata>,
 }
 
 impl ParseResult {

@@ -6,6 +6,7 @@ pub struct StructuredEncoding;
 impl StructuredEncoding {
     pub const TABULAR_BINARY: &'static str = "binary";
     pub const NUMPY: &'static str = "numpy";
+    pub const MATLAB: &'static str = "matlab";
     pub const MATRIX_MARKET: &'static str = "matrix-market";
 }
 
@@ -66,4 +67,11 @@ pub mod limits {
     pub const MAX_MTX_INFERENCE_STRING_CELLS: usize = 256_000;
     /// Max `rows × cols` for full logical sparse materialization in MTX numeric stats.
     pub const MAX_MTX_TABULAR_CELLS: usize = 8_000_000;
+
+    /// Max 2D planes (along the contiguous stack axis) reported for 3D tensor summary stats.
+    pub const TENSOR3D_MAX_PLANES: usize = 32;
+    /// Max linear element visits across the whole 3D tensor (after subsampling stride).
+    pub const TENSOR3D_MAX_LINEAR_SAMPLES: usize = 2_000_000;
+    /// Max samples taken within one plane (each plane is strided to stay within this).
+    pub const TENSOR3D_MAX_PLANE_LINEAR_SAMPLES: usize = 200_000;
 }

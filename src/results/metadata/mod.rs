@@ -20,9 +20,10 @@ pub use settings::{IniMetadata, TomlMetadata, XmlMetadata, YamlMetadata};
 pub use sqlite::{ColumnInfo, ForeignKeyInfo, IndexInfo, SqliteMetadata, TableInfo};
 pub use stats::{BlobStats, BooleanStats, DateStats, NumericStats, TextStats};
 pub use structured::{
-    ArrowIpcMetadata, AvroMetadata, ColumnStat, ColumnarCommonFields, CsvMetadata, EpubMetadata,
-    Hdf5DatasetSummary, Hdf5Metadata, HtmlMetadata, JsonMetadata, MergeColumnStatsInput,
-    MtxMetadata, NetCdfAttributeEntry, NetCdfMetadata, NetCdfVariableSummary, NpyLayoutSummary,
-    NpyMetadata, NpzMetadata, NpzNpyEntrySummary, OrcMetadata, ParquetMetadata, PdfMetadata,
-    merge_column_stats,
+    ArrayLayoutSummary, ArrowIpcMetadata, AvroMetadata, ColumnStat, ColumnarCommonFields,
+    CsvMetadata, EpubMetadata, Hdf5DatasetSummary, Hdf5Metadata, HtmlMetadata, JsonMetadata,
+    MatArrayEntrySummary, MatMetadata, MergeColumnStatsInput, MtxMetadata, NetCdfAttributeEntry,
+    NetCdfMetadata, NetCdfVariableSummary, NpyLayoutSummary, NpyMetadata, NpzMetadata,
+    NpzNpyEntrySummary, OrcMetadata, ParquetMetadata, PdfMetadata, Tensor3DPlaneStatEntry,
+    Tensor3DPlaneStats, merge_column_stats,
 };

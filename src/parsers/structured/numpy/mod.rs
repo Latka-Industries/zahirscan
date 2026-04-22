@@ -4,5 +4,6 @@ mod npy;
 mod npz;
 mod sample;
 
-pub use npy::{extract_npy_metadata, extract_npy_templates};
-pub use npz::{extract_npz_metadata, extract_npz_templates};
+pub use npy::*;
+pub use npz::*;
+pub use sample::*;
