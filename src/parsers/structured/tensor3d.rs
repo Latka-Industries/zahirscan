@@ -7,9 +7,13 @@ use rayon::prelude::*;
 
 use super::numpy::{numpy_descr_element_nbytes, numpy_descr_skips_tabular_stats};
 use crate::parsers::structured::constants::limits::{
-    TENSOR3D_MAX_LINEAR_SAMPLES, TENSOR3D_MAX_PLANE_LINEAR_SAMPLES, TENSOR3D_MAX_PLANES,
+    TENSOR3D_MAX_LINEAR_SAMPLES, TENSOR3D_MAX_PLANE_LINEAR_SAMPLES,
 };
-use crate::results::{ArrayLayoutSummary, Tensor3DPlaneStatEntry, Tensor3DPlaneStats};
+use crate::results::{
+    ArrayLayoutSummary, Tensor3DGlobalStats, Tensor3DPlaneStatEntry, Tensor3DPlaneStats,
+};
+
+pub use super::constants::tensor3d_max_reported_planes;
 
 /// Memory-contiguous stack axis for a full dense buffer: C order → 0, Fortran / MATLAB → 2.
 /// Used when all three dimensions are equal (tie-break for I/O).
@@ -63,66 +67,86 @@ fn is_little_endian_descr(descr: &str) -> bool {
     !descr.trim_start().starts_with('>')
 }
 
-/// NPY `descr` → f64; `None` for NaN floats or short buffers.
-fn npy_f64_at(descr: &str, data: &[u8]) -> Option<f64> {
+/// One f64 (or non-finite / missing) from an NPY element window or a MATLAB cell.
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum F64Sample {
+    Fin(f64),
+    Nan,
+    Inf,
+    /// Short buffer, unknown `descr`, or (MATLAB) out of range / non-numeric.
+    Missing,
+}
+
+/// NPY `descr` at one element window: finite, NaN, ±∞ (float only), or missing.
+fn npy_f64_classify(descr: &str, data: &[u8]) -> F64Sample {
     let le = is_little_endian_descr(descr);
     let t = descr.trim();
     let rest = t
-        .trim_start_matches(|c| "<>|=".contains(c))
+        .trim_start_matches(|c: char| "<>|=".contains(c))
         .trim_start_matches('|');
 
     macro_rules! r_i {
         ($ty:ty, $n:expr) => {{
-            (|| -> Option<f64> {
-                if data.len() < $n {
-                    return None;
-                }
-                let a: [u8; $n] = data[..$n].try_into().ok()?;
-                let v = if le {
+            if data.len() < $n {
+                F64Sample::Missing
+            } else if let Ok(a) = <[u8; $n]>::try_from(&data[..$n]) {
+                let v: $ty = if le {
                     <$ty>::from_le_bytes(a)
                 } else {
                     <$ty>::from_be_bytes(a)
                 };
-                Some(v as f64)
-            })()
+                F64Sample::Fin(v as f64)
+            } else {
+                F64Sample::Missing
+            }
         }};
     }
 
     if rest.starts_with('?') {
         if data.is_empty() {
-            return None;
+            return F64Sample::Missing;
         }
-        return Some(if data[0] == 0 { 0.0 } else { 1.0 });
+        return F64Sample::Fin(if data[0] == 0 { 0.0 } else { 1.0 });
     }
     if rest.starts_with("f4") {
         if data.len() < 4 {
-            return None;
+            return F64Sample::Missing;
         }
-        let a: [u8; 4] = data[..4].try_into().ok()?;
-        let v = if le {
-            f32::from_le_bytes(a)
-        } else {
-            f32::from_be_bytes(a)
-        };
-        if v.is_nan() {
-            return None;
+        if let Ok(a) = <[u8; 4]>::try_from(&data[..4]) {
+            let v = if le {
+                f32::from_le_bytes(a)
+            } else {
+                f32::from_be_bytes(a)
+            };
+            return if v.is_nan() {
+                F64Sample::Nan
+            } else if v.is_infinite() {
+                F64Sample::Inf
+            } else {
+                F64Sample::Fin(f64::from(v))
+            };
         }
-        return Some(f64::from(v));
+        return F64Sample::Missing;
     }
     if rest.starts_with("f8") {
         if data.len() < 8 {
-            return None;
+            return F64Sample::Missing;
         }
-        let a: [u8; 8] = data[..8].try_into().ok()?;
-        let v = if le {
-            f64::from_le_bytes(a)
-        } else {
-            f64::from_be_bytes(a)
-        };
-        if v.is_nan() {
-            return None;
+        if let Ok(a) = <[u8; 8]>::try_from(&data[..8]) {
+            let v = if le {
+                f64::from_le_bytes(a)
+            } else {
+                f64::from_be_bytes(a)
+            };
+            return if v.is_nan() {
+                F64Sample::Nan
+            } else if v.is_infinite() {
+                F64Sample::Inf
+            } else {
+                F64Sample::Fin(v)
+            };
         }
-        return Some(v);
+        return F64Sample::Missing;
     }
     match rest {
         r if r.starts_with("i1") => r_i!(i8, 1),
@@ -135,8 +159,61 @@ fn npy_f64_at(descr: &str, data: &[u8]) -> Option<f64> {
         r if r.starts_with("u4") => r_i!(u32, 4),
         r if r.starts_with("i8") => r_i!(i64, 8),
         r if r.starts_with("u8") => r_i!(u64, 8),
+        _ => F64Sample::Missing,
+    }
+}
+
+/// NPY `descr` → f64; `None` for NaN, ±∞, and short buffers.
+fn npy_f64_at(descr: &str, data: &[u8]) -> Option<f64> {
+    match npy_f64_classify(descr, data) {
+        F64Sample::Fin(x) => Some(x),
         _ => None,
     }
+}
+
+fn mat_f64_classify(v: &MatlabType, idx: usize) -> F64Sample {
+    match v {
+        MatlabType::F32(x) => x.get(idx).map_or(F64Sample::Missing, |&u| {
+            let t = f64::from(u);
+            if t.is_nan() {
+                F64Sample::Nan
+            } else if t.is_infinite() {
+                F64Sample::Inf
+            } else {
+                F64Sample::Fin(t)
+            }
+        }),
+        MatlabType::F64(x) => x.get(idx).map_or(F64Sample::Missing, |&u| {
+            if u.is_nan() {
+                F64Sample::Nan
+            } else if u.is_infinite() {
+                F64Sample::Inf
+            } else {
+                F64Sample::Fin(u)
+            }
+        }),
+        _ => f64_at_mat(v, idx).map_or(F64Sample::Missing, F64Sample::Fin),
+    }
+}
+
+fn mat_strided_stats_global_f64(value: &MatlabType, to_len: usize) -> Option<Tensor3DGlobalStats> {
+    if to_len == 0 {
+        return None;
+    }
+    let stride = to_len.div_ceil(TENSOR3D_MAX_LINEAR_SAMPLES);
+    let stride = stride.max(1);
+    let mut w = Welford::default();
+    let mut n_nan: usize = 0;
+    let mut n_inf: usize = 0;
+    for linear in (0..to_len).step_by(stride) {
+        match mat_f64_classify(value, linear) {
+            F64Sample::Fin(x) => w.update(x),
+            F64Sample::Nan => n_nan += 1,
+            F64Sample::Inf => n_inf += 1,
+            F64Sample::Missing => {}
+        }
+    }
+    w.into_global(n_nan, n_inf)
 }
 
 struct Welford {
@@ -148,8 +225,9 @@ struct Welford {
     first: bool,
 }
 
-impl Welford {
-    fn new() -> Self {
+impl Default for Welford {
+    /// Empty aggregate (no updates yet). `first: true` is required before the first `update`.
+    fn default() -> Self {
         Self {
             n: 0,
             min: 0.0,
@@ -159,9 +237,11 @@ impl Welford {
             first: true,
         }
     }
+}
 
+impl Welford {
     fn update(&mut self, x: f64) {
-        if x.is_nan() {
+        if x.is_nan() || x.is_infinite() {
             return;
         }
         self.n += 1;
@@ -200,6 +280,38 @@ impl Welford {
             stdev,
         })
     }
+
+    fn into_global(self, n_nan: usize, n_inf: usize) -> Option<Tensor3DGlobalStats> {
+        if self.n == 0 && n_nan == 0 && n_inf == 0 {
+            return None;
+        }
+        let n = self.n as usize;
+        if self.n > 0 {
+            let stdev = if self.n > 1 {
+                Some((self.m2 / self.n as f64).sqrt())
+            } else {
+                None
+            };
+            return Some(Tensor3DGlobalStats {
+                n,
+                n_nan,
+                n_inf,
+                min: self.min,
+                max: self.max,
+                mean: self.mean,
+                stdev,
+            });
+        }
+        Some(Tensor3DGlobalStats {
+            n: 0,
+            n_nan,
+            n_inf,
+            min: 0.0,
+            max: 0.0,
+            mean: 0.0,
+            stdev: None,
+        })
+    }
 }
 
 /// Column-major: first dim fastest (MATLAB / NPY F).
@@ -227,6 +339,38 @@ fn plane_index(coord: (usize, usize, usize), along: u8) -> usize {
         1 => coord.1,
         _ => coord.2,
     }
+}
+
+/// Strided linear min/max/mean/stdev over `to_visit` elements in memory order (C or F).
+fn npy_strided_stats_global_f64(
+    file_bytes: &[u8],
+    data_offset: usize,
+    to_visit: usize,
+    elem_size: usize,
+    descr: &str,
+) -> Option<Tensor3DGlobalStats> {
+    if to_visit == 0 {
+        return None;
+    }
+    let stride = to_visit.div_ceil(TENSOR3D_MAX_LINEAR_SAMPLES);
+    let stride = stride.max(1);
+    let mut w = Welford::default();
+    let mut n_nan: usize = 0;
+    let mut n_inf: usize = 0;
+    for linear in (0..to_visit).step_by(stride) {
+        let off = data_offset + linear * elem_size;
+        let end = off + elem_size;
+        if end > file_bytes.len() {
+            break;
+        }
+        match npy_f64_classify(descr, &file_bytes[off..end]) {
+            F64Sample::Fin(x) => w.update(x),
+            F64Sample::Nan => n_nan += 1,
+            F64Sample::Inf => n_inf += 1,
+            F64Sample::Missing => {}
+        }
+    }
+    w.into_global(n_nan, n_inf)
 }
 
 /// Rank-3 NPY view + dtype when the payload is only partially available (strided linear scan).
@@ -276,7 +420,8 @@ fn tensor3d_npy_strided(ctx: &NpyStridedInput<'_>) -> Option<Tensor3DPlaneStats>
         return None;
     }
     let n_along = dim_at(d0, d1, d2, along);
-    let pick = evenly_spaced_indices(n_along, TENSOR3D_MAX_PLANES);
+    let max_planes = tensor3d_max_reported_planes(n_along);
+    let pick = evenly_spaced_indices(n_along, max_planes);
     if pick.is_empty() {
         return None;
     }
@@ -285,7 +430,10 @@ fn tensor3d_npy_strided(ctx: &NpyStridedInput<'_>) -> Option<Tensor3DPlaneStats>
     let stride = to_visit.div_ceil(TENSOR3D_MAX_LINEAR_SAMPLES);
     let stride = stride.max(1);
 
-    let mut map: HashMap<usize, Welford> = pick.iter().map(|&p| (p, Welford::new())).collect();
+    let mut map: HashMap<usize, Welford> = pick.iter().map(|&p| (p, Welford::default())).collect();
+    let mut global = Welford::default();
+    let mut n_nan: usize = 0;
+    let mut n_inf: usize = 0;
     for linear in (0..to_visit).step_by(stride) {
         let (a0, a1, a2) = if fortran {
             unravel_col_maj_3d(linear, d0, d1)
@@ -293,18 +441,23 @@ fn tensor3d_npy_strided(ctx: &NpyStridedInput<'_>) -> Option<Tensor3DPlaneStats>
             unravel_c_3d(linear, d0, d1, d2)
         };
         let p = plane_index((a0, a1, a2), along);
-        if !set.contains(&p) {
-            continue;
-        }
         let off = data_offset + linear * elem_size;
         let end = off + elem_size;
         if end > file_bytes.len() {
             break;
         }
-        if let Some(x) = npy_f64_at(descr, &file_bytes[off..end])
-            && let Some(w) = map.get_mut(&p)
-        {
-            w.update(x);
+        match npy_f64_classify(descr, &file_bytes[off..end]) {
+            F64Sample::Fin(x) => {
+                global.update(x);
+                if set.contains(&p)
+                    && let Some(ww) = map.get_mut(&p)
+                {
+                    ww.update(x);
+                }
+            }
+            F64Sample::Nan => n_nan += 1,
+            F64Sample::Inf => n_inf += 1,
+            F64Sample::Missing => {}
         }
     }
 
@@ -316,9 +469,11 @@ fn tensor3d_npy_strided(ctx: &NpyStridedInput<'_>) -> Option<Tensor3DPlaneStats>
         return None;
     }
     let elements_sampled: usize = planes.iter().map(|e| e.n).sum();
+    let global = global.into_global(n_nan, n_inf);
     Some(Tensor3DPlaneStats {
         along_axis: along,
         elements_sampled,
+        global,
         planes,
     })
 }
@@ -362,7 +517,7 @@ fn welford_byte_slice_f64(
     let n = data.len() / elem_size;
     let step = n.div_ceil(cap);
     let step = step.max(1);
-    let mut w = Welford::new();
+    let mut w = Welford::default();
     for j in (0..n).step_by(step) {
         let s = j * elem_size;
         if let Some(x) = npy_f64_at(descr, &data[s..s + elem_size]) {
@@ -385,7 +540,8 @@ fn npy_contiguous_path(ctx: &NpyContiguousInput<'_>) -> Option<Tensor3DPlaneStat
         descr,
     } = ctx;
     let n_along = dim_at(d0, d1, d2, along);
-    let pick = evenly_spaced_indices(n_along, TENSOR3D_MAX_PLANES);
+    let max_planes = tensor3d_max_reported_planes(n_along);
+    let pick = evenly_spaced_indices(n_along, max_planes);
     if pick.is_empty() {
         return None;
     }
@@ -444,9 +600,12 @@ fn npy_contiguous_path(ctx: &NpyContiguousInput<'_>) -> Option<Tensor3DPlaneStat
     }
     planes.sort_by_key(|e| e.plane);
     let elements_sampled: usize = planes.iter().map(|e| e.n).sum();
+    let total = d0 * d1 * d2;
+    let global = npy_strided_stats_global_f64(file_bytes, data_offset, total, elem_size, descr);
     Some(Tensor3DPlaneStats {
         along_axis: along,
         elements_sampled,
+        global,
         planes,
     })
 }
@@ -569,7 +728,7 @@ fn welford_mat_slice(
     }
     let step = len.div_ceil(cap);
     let step = step.max(1);
-    let mut w = Welford::new();
+    let mut w = Welford::default();
     for j in (0..len).step_by(step) {
         if let Some(x) = f64_at_mat(v, start + j) {
             w.update(x);
@@ -599,7 +758,8 @@ pub fn tensor3d_plane_stats_for_mat_colmaj(
     let along = stack_axis_preferred(d0, d1, d2, fortran);
     let along_contig = contiguous_3d_stack_axis(fortran);
     let n_along = dim_at(d0, d1, d2, along);
-    let pick = evenly_spaced_indices(n_along, TENSOR3D_MAX_PLANES);
+    let max_planes = tensor3d_max_reported_planes(n_along);
+    let pick = evenly_spaced_indices(n_along, max_planes);
     if pick.is_empty() {
         return None;
     }
@@ -654,9 +814,11 @@ pub fn tensor3d_plane_stats_for_mat_colmaj(
     }
     planes.sort_by_key(|e| e.plane);
     let elements_sampled: usize = planes.iter().map(|e| e.n).sum();
+    let global = mat_strided_stats_global_f64(value, to_len);
     Some(Tensor3DPlaneStats {
         along_axis: along,
         elements_sampled,
+        global,
         planes,
     })
 }
@@ -677,7 +839,7 @@ fn welford_mat_colmaj_strided(
     let to_visit = to_len;
     let stride = to_visit.div_ceil(TENSOR3D_MAX_LINEAR_SAMPLES);
     let stride = stride.max(1);
-    let mut w = Welford::new();
+    let mut w = Welford::default();
     for linear in (0..to_visit).step_by(stride) {
         let (a0, a1, a2) = unravel_col_maj_3d(linear, d0, d1);
         if plane_index((a0, a1, a2), along) == plane

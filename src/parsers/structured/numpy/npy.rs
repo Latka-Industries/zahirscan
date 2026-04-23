@@ -118,9 +118,7 @@ pub fn parse_npy_prefix(bytes: &[u8], logical_len: usize) -> Result<ArrayLayoutS
             if bytes.len() < 12 {
                 bail!("NPY v2 too short for header length");
             }
-            let hlen = u32::from_le_bytes([
-                bytes[8], bytes[9], bytes[10], bytes[11],
-            ]) as usize;
+            let hlen = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as usize;
             if hlen > MAX_HEADER_REGION {
                 bail!("NPY v2 header length {hlen} exceeds cap");
             }

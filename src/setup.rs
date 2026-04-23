@@ -2,7 +2,7 @@
 
 use anyhow::Context;
 use colored::Colorize;
-use env_logger;
+use env_logger::Env;
 use log::{debug, warn};
 use std::fs;
 use std::io::Write;
@@ -28,35 +28,40 @@ pub enum OutputSink {
 }
 
 /// Build logger based on development mode.
-/// If `dev_mode` is true, set log level to Debug.
+/// If `dev_mode` is true, default to `debug`; otherwise `info`. When `RUST_LOG` is unset, `onnx-ir` is
+/// capped at `warn` so `INFO` lines from `onnx_ir` (e.g. per-file "Finished parsing") are hidden.
+/// Override with `RUST_LOG` (e.g. `RUST_LOG=debug,onnx_ir=info` to see them again).
 pub fn build_logger(dev_mode: bool) {
-    if dev_mode {
-        env_logger::Builder::from_default_env()
-            .filter_level(log::LevelFilter::Debug)
-            .init();
-        debug!("Debug mode enabled");
+    let default_filter = if dev_mode {
+        "debug,onnx_ir=warn"
     } else {
-        env_logger::Builder::from_default_env()
-            .filter_level(log::LevelFilter::Info)
-            .format(|buf, record| {
-                let level_str = record.level().to_string();
-                let level_display = match record.level() {
-                    log::Level::Error => level_str.red().to_string(),
-                    log::Level::Warn => level_str.yellow().to_string(),
-                    _ => level_str,
-                };
-                writeln!(
-                    buf,
-                    "{}{} {} {}{} {}",
-                    "[".bright_green().bold(),
-                    PKG_NAME.bright_green().bold(),
-                    level_display,
-                    record.target().white(),
-                    "]".bright_green().bold(),
-                    record.args()
-                )
-            })
-            .init();
+        "info,onnx_ir=warn"
+    };
+    let env = Env::default().default_filter_or(default_filter);
+    let mut builder = env_logger::Builder::from_env(env);
+    if !dev_mode {
+        builder.format(|buf, record| {
+            let level_str = record.level().to_string();
+            let level_display = match record.level() {
+                log::Level::Error => level_str.red().to_string(),
+                log::Level::Warn => level_str.yellow().to_string(),
+                _ => level_str,
+            };
+            writeln!(
+                buf,
+                "{}{} {} {}{} {}",
+                "[".bright_green().bold(),
+                PKG_NAME.bright_green().bold(),
+                level_display,
+                record.target().white(),
+                "]".bright_green().bold(),
+                record.args()
+            )
+        });
+    }
+    builder.init();
+    if dev_mode {
+        debug!("Debug mode enabled");
     }
 }
 

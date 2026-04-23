@@ -8,6 +8,8 @@ impl StructuredEncoding {
     pub const NUMPY: &'static str = "numpy";
     pub const MATLAB: &'static str = "matlab";
     pub const MATRIX_MARKET: &'static str = "matrix-market";
+    /// Serialized label for ONNX (`.onnx`) graph reports when shared with other structured types.
+    pub const ONNX: &'static str = "onnx";
 }
 
 /// [`crate::results::CsvMetadata::encoding`]-style hints for delimiter-separated text.
@@ -68,10 +70,24 @@ pub mod limits {
     /// Max `rows × cols` for full logical sparse materialization in MTX numeric stats.
     pub const MAX_MTX_TABULAR_CELLS: usize = 8_000_000;
 
-    /// Max 2D planes (along the contiguous stack axis) reported for 3D tensor summary stats.
+    /// Base cap on 3D tensor **plane** summary rows; [`super::tensor3d_max_reported_planes`] may
+    /// increase this for large `n_along` (capped at [`TENSOR3D_MAX_REPORTED_PLANES_LOG_CAP`]).
     pub const TENSOR3D_MAX_PLANES: usize = 32;
+    /// Upper bound for [`super::tensor3d_max_reported_planes`].
+    pub const TENSOR3D_MAX_REPORTED_PLANES_LOG_CAP: usize = 64;
     /// Max linear element visits across the whole 3D tensor (after subsampling stride).
     pub const TENSOR3D_MAX_LINEAR_SAMPLES: usize = 2_000_000;
     /// Max samples taken within one plane (each plane is strided to stay within this).
     pub const TENSOR3D_MAX_PLANE_LINEAR_SAMPLES: usize = 200_000;
+}
+
+/// `n_along` = array extent along the chosen 3D stack axis.
+/// Returns `32` for `n_along` ≤ 10^3, then +3 for each order of 10 (10^4 → 35, 10^5 → 38, …), capped.
+#[must_use]
+pub fn tensor3d_max_reported_planes(n_along: usize) -> usize {
+    if n_along == 0 {
+        return 0;
+    }
+    let d = n_along.ilog10().saturating_sub(3);
+    (limits::TENSOR3D_MAX_PLANES + d as usize * 3).min(limits::TENSOR3D_MAX_REPORTED_PLANES_LOG_CAP)
 }

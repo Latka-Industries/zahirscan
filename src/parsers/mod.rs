@@ -114,6 +114,7 @@ macro_rules! copy_metadata_fields {
         $to.netcdf_metadata = $from.netcdf_metadata.clone();
         $to.mtx_metadata = $from.mtx_metadata.clone();
         $to.mat_metadata = $from.mat_metadata.clone();
+        $to.onnx_metadata = $from.onnx_metadata.clone();
     };
 }
 
@@ -140,7 +141,7 @@ macro_rules! no_template_mining {
 pub enum ParserCategory {
     Media,      // Image | Video | Audio -> media::process
     Office,     // Docx | Xlsx | Pptx -> office::process
-    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | Arrow IPC | Avro | ORC | NPY | NPZ | HDF5 | NetCDF | MTX -> structured::process
+    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | Arrow IPC | Avro | ORC | NPY | NPZ | HDF5 | NetCDF | MTX | Mat | ONNX -> structured::process
     Settings,   // Toml | Yaml | Xml | Ini -> settings::process
     Container,  // Zip | Archive -> container::process
     Sqlite,
@@ -207,11 +208,12 @@ pub enum FileType {
     NetCdf,
     Mtx,
     Mat,
+    Onnx,
     #[default]
     Unknown,
 }
 
-const METADATA_NAMES: [&str; 33] = [
+const METADATA_NAMES: [&str; 34] = [
     "Log",
     "JSON",
     "Text",
@@ -244,6 +246,7 @@ const METADATA_NAMES: [&str; 33] = [
     "NetCDF",
     "Matrix Market",
     "MATLAB MAT",
+    "ONNX",
     "Unknown",
 ];
 
@@ -299,7 +302,8 @@ impl FileType {
                 29 => FileType::NetCdf,
                 30 => FileType::Mtx,
                 31 => FileType::Mat,
-                32 => FileType::Unknown,
+                32 => FileType::Onnx,
+                33 => FileType::Unknown,
                 _ => unreachable!("METADATA_NAMES and match arms must stay in sync"),
             })
     }
@@ -330,7 +334,8 @@ impl FileType {
             | FileType::Hdf5
             | FileType::NetCdf
             | FileType::Mtx
-            | FileType::Mat => Some(ParserCategory::Structured),
+            | FileType::Mat
+            | FileType::Onnx => Some(ParserCategory::Structured),
             FileType::Toml | FileType::Yaml | FileType::Xml | FileType::Ini => {
                 Some(ParserCategory::Settings)
             }
@@ -414,6 +419,8 @@ pub struct ParseResult {
     pub mtx_metadata: Option<crate::results::MtxMetadata>,
     /// MATLAB `.mat` metadata
     pub mat_metadata: Option<crate::results::MatMetadata>,
+    /// ONNX (`.onnx`) graph summary metadata
+    pub onnx_metadata: Option<crate::results::OnnxMetadata>,
 }
 
 impl ParseResult {

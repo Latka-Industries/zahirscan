@@ -1,4 +1,6 @@
-use zahirscan::parsers::structured::tensor3d::{stack_axis_preferred, unravel_c_3d};
+use zahirscan::parsers::structured::tensor3d::{
+    stack_axis_preferred, tensor3d_max_reported_planes, unravel_c_3d,
+};
 
 #[test]
 fn unravel_c_matches_linear() {
@@ -19,4 +21,14 @@ fn stack_axis_smallest_dim_tie_lowest_index() {
 fn stack_axis_equal_dims_uses_contiguous_fallback() {
     assert_eq!(stack_axis_preferred(4, 4, 4, false), 0);
     assert_eq!(stack_axis_preferred(4, 4, 4, true), 2);
+}
+
+#[test]
+fn reported_planes_scales_by_decade_above_1e3() {
+    assert_eq!(tensor3d_max_reported_planes(0), 0);
+    assert_eq!(tensor3d_max_reported_planes(1_000), 32);
+    assert_eq!(tensor3d_max_reported_planes(10_000), 35);
+    assert_eq!(tensor3d_max_reported_planes(100_000), 38);
+    assert_eq!(tensor3d_max_reported_planes(1_000_000), 41);
+    assert_eq!(tensor3d_max_reported_planes(1_000_000_000_000_000_000), 64);
 }

@@ -4,7 +4,7 @@ use zahirscan::FileType;
 use zahirscan::utils::filetypes::detect_file_type;
 
 /// Every `FileType` variant in `repr(u8)` order (must match `parsers/mod.rs`).
-fn all_file_types() -> [FileType; 33] {
+fn all_file_types() -> [FileType; 34] {
     [
         FileType::Log,
         FileType::Json,
@@ -38,6 +38,7 @@ fn all_file_types() -> [FileType; 33] {
         FileType::NetCdf,
         FileType::Mtx,
         FileType::Mat,
+        FileType::Onnx,
         FileType::Unknown,
     ]
 }
@@ -73,8 +74,9 @@ fn file_type_discriminant_range_matches_variant_count() {
     assert_eq!(FileType::NetCdf as u8, 29);
     assert_eq!(FileType::Mtx as u8, 30);
     assert_eq!(FileType::Mat as u8, 31);
-    assert_eq!(FileType::Unknown as u8, 32);
-    assert_eq!(all_file_types().len(), 33);
+    assert_eq!(FileType::Onnx as u8, 32);
+    assert_eq!(FileType::Unknown as u8, 33);
+    assert_eq!(all_file_types().len(), 34);
 }
 
 #[test]
@@ -92,4 +94,5 @@ fn detect_file_type_columnar_extensions() {
     assert_eq!(detect_file_type("k.cdf"), FileType::NetCdf);
     assert_eq!(detect_file_type("m.mtx"), FileType::Mtx);
     assert_eq!(detect_file_type("vars.mat"), FileType::Mat);
+    assert_eq!(detect_file_type("m.onnx"), FileType::Onnx);
 }
