@@ -14,7 +14,7 @@ pub struct Tensor3DPlaneStatEntry {
     /// Index of this plane along the chosen axis (0-based).
     pub plane: usize,
     /// Values included in the estimate (after subsampling).
-    pub n: usize,
+    pub n_pos: usize,
     pub min: f64,
     pub max: f64,
     pub mean: f64,
@@ -29,7 +29,7 @@ pub struct Tensor3DPlaneStatEntry {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Tensor3DGlobalStats {
     /// Count of strided positions that decoded to a finite value (Welford input).
-    pub n: usize,
+    pub n_pos: usize,
     /// `NaN` in the strided set (NPY f4/f8 and MATLAB f32/f64; always `0` for integer dtypes here).
     #[serde(default, skip_serializing_if = "is_zero_usize")]
     pub n_nan: usize,

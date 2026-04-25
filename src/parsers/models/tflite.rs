@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use flatbuffers::Vector;
 use memmap2::Mmap;
 use tract_tflite::tflite;
 
@@ -63,10 +62,10 @@ pub fn extract_tflite_metadata(
             let sg = sgs.get(i);
             out.push(TfliteSubgraphSummary {
                 index: i,
-                input_tensor_indices: sg.inputs().as_ref().map(Vector::len),
-                output_tensor_indices: sg.outputs().as_ref().map(Vector::len),
-                tensor_count: sg.tensors().as_ref().map(Vector::len),
-                operator_count: sg.operators().as_ref().map(Vector::len),
+                input_tensor_indices: sg.inputs().as_ref().map(|v| v.len()),
+                output_tensor_indices: sg.outputs().as_ref().map(|v| v.len()),
+                tensor_count: sg.tensors().as_ref().map(|v| v.len()),
+                operator_count: sg.operators().as_ref().map(|v| v.len()),
                 name: sg.name().map(std::string::ToString::to_string),
             });
         }

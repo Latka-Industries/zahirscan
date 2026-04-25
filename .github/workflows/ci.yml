@@ -46,7 +46,19 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: bash -el {0}
         run: |
-          conda install -y -c conda-forge netcdf ffmpeg pkg-config
+          conda install -y -c conda-forge libnetcdf ffmpeg pkg-config
+
+      - name: Configure netcdf-rs build (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash -el {0}
+        run: |
+          {
+            echo "NETCDF_DIR=${CONDA_PREFIX}/Library"
+            echo "PKG_CONFIG_PATH=${CONDA_PREFIX}/Library/lib/pkgconfig"
+            echo "RUSTFLAGS=-L native=${CONDA_PREFIX}/Library/lib"
+            echo "INCLUDE=${CONDA_PREFIX}/Library/include"
+            echo "LIB=${CONDA_PREFIX}/Library/lib"
+          } >> "${GITHUB_ENV}"
 
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
@@ -137,7 +149,19 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: bash -el {0}
         run: |
-          conda install -y -c conda-forge netcdf pkg-config
+          conda install -y -c conda-forge libnetcdf pkg-config
+
+      - name: Configure netcdf-rs build (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash -el {0}
+        run: |
+          {
+            echo "NETCDF_DIR=${CONDA_PREFIX}/Library"
+            echo "PKG_CONFIG_PATH=${CONDA_PREFIX}/Library/lib/pkgconfig"
+            echo "RUSTFLAGS=-L native=${CONDA_PREFIX}/Library/lib"
+            echo "INCLUDE=${CONDA_PREFIX}/Library/include"
+            echo "LIB=${CONDA_PREFIX}/Library/lib"
+          } >> "${GITHUB_ENV}"
 
       - name: Build
         run: cargo build --release

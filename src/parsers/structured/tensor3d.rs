@@ -217,7 +217,7 @@ fn mat_strided_stats_global_f64(value: &MatlabType, to_len: usize) -> Option<Ten
 }
 
 struct Welford {
-    n: u64,
+    n_pos: u64,
     min: f64,
     max: f64,
     mean: f64,
@@ -229,7 +229,7 @@ impl Default for Welford {
     /// Empty aggregate (no updates yet). `first: true` is required before the first `update`.
     fn default() -> Self {
         Self {
-            n: 0,
+            n_pos: 0,
             min: 0.0,
             max: 0.0,
             mean: 0.0,
@@ -244,7 +244,7 @@ impl Welford {
         if x.is_nan() || x.is_infinite() {
             return;
         }
-        self.n += 1;
+        self.n_pos += 1;
         if self.first {
             self.min = x;
             self.max = x;
@@ -256,24 +256,24 @@ impl Welford {
         self.min = self.min.min(x);
         self.max = self.max.max(x);
         let d = x - self.mean;
-        self.mean += d / self.n as f64;
+        self.mean += d / self.n_pos as f64;
         let d2 = x - self.mean;
         self.m2 += d * d2;
     }
 
     fn into_entry(self, plane: usize) -> Option<Tensor3DPlaneStatEntry> {
-        if self.n == 0 {
+        if self.n_pos == 0 {
             return None;
         }
-        let n = self.n as usize;
-        let stdev = if self.n > 1 {
-            Some((self.m2 / self.n as f64).sqrt())
+        let n_pos = self.n_pos as usize;
+        let stdev = if self.n_pos > 1 {
+            Some((self.m2 / self.n_pos as f64).sqrt())
         } else {
             None
         };
         Some(Tensor3DPlaneStatEntry {
             plane,
-            n,
+            n_pos,
             min: self.min,
             max: self.max,
             mean: self.mean,
@@ -282,18 +282,18 @@ impl Welford {
     }
 
     fn into_global(self, n_nan: usize, n_inf: usize) -> Option<Tensor3DGlobalStats> {
-        if self.n == 0 && n_nan == 0 && n_inf == 0 {
+        if self.n_pos == 0 && n_nan == 0 && n_inf == 0 {
             return None;
         }
-        let n = self.n as usize;
-        if self.n > 0 {
-            let stdev = if self.n > 1 {
-                Some((self.m2 / self.n as f64).sqrt())
+        let n_pos = self.n_pos as usize;
+        if self.n_pos > 0 {
+            let stdev = if self.n_pos > 1 {
+                Some((self.m2 / self.n_pos as f64).sqrt())
             } else {
                 None
             };
             return Some(Tensor3DGlobalStats {
-                n,
+                n_pos,
                 n_nan,
                 n_inf,
                 min: self.min,
@@ -303,7 +303,7 @@ impl Welford {
             });
         }
         Some(Tensor3DGlobalStats {
-            n: 0,
+            n_pos: 0,
             n_nan,
             n_inf,
             min: 0.0,
@@ -468,7 +468,7 @@ fn tensor3d_npy_strided(ctx: &NpyStridedInput<'_>) -> Option<Tensor3DPlaneStats>
     if planes.is_empty() {
         return None;
     }
-    let elements_sampled: usize = planes.iter().map(|e| e.n).sum();
+    let elements_sampled: usize = planes.iter().map(|e| e.n_pos).sum();
     let global = global.into_global(n_nan, n_inf);
     Some(Tensor3DPlaneStats {
         along_axis: along,
@@ -599,7 +599,7 @@ fn npy_contiguous_path(ctx: &NpyContiguousInput<'_>) -> Option<Tensor3DPlaneStat
         return None;
     }
     planes.sort_by_key(|e| e.plane);
-    let elements_sampled: usize = planes.iter().map(|e| e.n).sum();
+    let elements_sampled: usize = planes.iter().map(|e| e.n_pos).sum();
     let total = d0 * d1 * d2;
     let global = npy_strided_stats_global_f64(file_bytes, data_offset, total, elem_size, descr);
     Some(Tensor3DPlaneStats {
@@ -813,7 +813,7 @@ pub fn tensor3d_plane_stats_for_mat_colmaj(
         return None;
     }
     planes.sort_by_key(|e| e.plane);
-    let elements_sampled: usize = planes.iter().map(|e| e.n).sum();
+    let elements_sampled: usize = planes.iter().map(|e| e.n_pos).sum();
     let global = mat_strided_stats_global_f64(value, to_len);
     Some(Tensor3DPlaneStats {
         along_axis: along,
@@ -848,5 +848,9 @@ fn welford_mat_colmaj_strided(
             w.update(x);
         }
     }
-    if w.n == 0 { None } else { w.into_entry(plane) }
+    if w.n_pos == 0 {
+        None
+    } else {
+        w.into_entry(plane)
+    }
 }
