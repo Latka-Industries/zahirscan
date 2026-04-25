@@ -1,30 +1,24 @@
 //! Media metadata structures (images, videos, audio, documents, etc.)
 
-pub mod code;
-pub mod container;
-pub mod logging;
-pub mod media;
-pub mod office;
-pub mod settings;
-pub mod sqlite;
-pub mod stats;
-pub mod structured;
+mod code;
+mod container;
+mod logging;
+mod media;
+mod models;
+mod office;
+mod settings;
+mod sqlite;
+mod stats;
+mod structured;
 
 // Re-export all metadata types for convenience
 pub use code::CodeMetadata;
 pub use container::{ArchiveEntry, ArchiveMetadata, ZipEntry, ZipMetadata};
 pub use logging::LogMetadata;
 pub use media::{AudioMetadata, ImageMetadata, VideoMetadata};
+pub use models::*;
 pub use office::{DocumentMetadata, PptxMetadata};
-pub use settings::{IniMetadata, TomlMetadata, XmlMetadata, YamlMetadata};
+pub use settings::*;
 pub use sqlite::{ColumnInfo, ForeignKeyInfo, IndexInfo, SqliteMetadata, TableInfo};
 pub use stats::{BlobStats, BooleanStats, DateStats, NumericStats, TextStats};
-pub use structured::{
-    ArrayLayoutSummary, ArrowIpcMetadata, AvroMetadata, ColumnStat, ColumnarCommonFields,
-    CsvMetadata, EpubMetadata, Hdf5DatasetSummary, Hdf5Metadata, HtmlMetadata, JsonMetadata,
-    MatArrayEntrySummary, MatMetadata, MergeColumnStatsInput, MtxMetadata, NetCdfAttributeEntry,
-    NetCdfMetadata, NetCdfVariableSummary, NpyLayoutSummary, NpyMetadata, NpzMetadata,
-    NpzNpyEntrySummary, OnnxMetadata, OnnxOpTypeCount, OnnxOpsetEntry, OnnxStringPair,
-    OnnxValueSummary, OrcMetadata, ParquetMetadata, PdfMetadata, Tensor3DGlobalStats,
-    Tensor3DPlaneStatEntry, Tensor3DPlaneStats, merge_column_stats,
-};
+pub use structured::*;

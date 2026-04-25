@@ -1,6 +1,7 @@
 //! ONNX (`.onnx`) — wire `ModelProto` via [`oxionnx_proto::parse_model`], typed I/O via [`onnx_ir::OnnxGraphBuilder`]. No `protoc` build step. IR pass uses the file path.
 
 use std::collections::HashMap;
+use std::string::ToString;
 
 use anyhow::Result;
 use memmap2::Mmap;
@@ -36,9 +37,9 @@ fn truncate_doc(s: &str) -> String {
     format!("{}…", &s[..end])
 }
 
-fn op_type_histogram(nodes: &[NodeProto]) -> Option<Vec<OnnxOpTypeCount>> {
+fn op_type_histogram(nodes: &[NodeProto]) -> Vec<OnnxOpTypeCount> {
     if nodes.is_empty() {
-        return Some(Vec::new());
+        return Vec::new();
     }
     let mut m: HashMap<String, usize> = HashMap::new();
     for n in nodes {
@@ -59,7 +60,7 @@ fn op_type_histogram(nodes: &[NodeProto]) -> Option<Vec<OnnxOpTypeCount>> {
             .then_with(|| a.op_type.cmp(&b.op_type))
     });
     v.truncate(MAX_OP_TYPE_STATS);
-    Some(v)
+    v
 }
 
 /// Fill fields from a parsed [`ModelProto`]. Does not set IR or `byte_count`.
@@ -131,10 +132,14 @@ fn apply_oxionnx_model(out: &mut OnnxMetadata, m: &ModelProto) {
         out.external_initializer_count = Some(ext_init);
     }
 
-    out.op_type_counts = op_type_histogram(&g.nodes);
+    out.op_type_counts = Some(op_type_histogram(&g.nodes));
 }
 
 /// Parse wire model + IR: merge when each layer succeeds.
+///
+/// # Errors
+///
+/// Infallible: always returns `Ok`; wire and IR issues are reported in the metadata fields.
 pub fn extract_onnx_metadata(
     mmap: &Mmap,
     stats: &ParseResult,
@@ -203,7 +208,7 @@ fn argtype_summary(ty: &ArgType) -> String {
                 || "?".to_string(),
                 |s| {
                     s.iter()
-                        .map(|x| x.to_string())
+                        .map(ToString::to_string)
                         .collect::<Vec<_>>()
                         .join("×")
                 },

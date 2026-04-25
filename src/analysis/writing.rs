@@ -416,7 +416,7 @@ pub fn analyze_svo_structure(
     };
 
     let mut pivot_vec: Vec<(String, usize)> = pivot_words.into_iter().collect();
-    pivot_vec.sort_by(|a, b| b.1.cmp(&a.1));
+    pivot_vec.sort_by_key(|item| std::cmp::Reverse(item.1));
     let common_pivots: Vec<String> = pivot_vec
         .into_iter()
         .take(config.max_common_pivots)

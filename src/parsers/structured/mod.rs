@@ -1,4 +1,4 @@
-//! Structured formats: CSV, HTML, JSON, EPUB, PDF, columnar binaries (Parquet, Arrow IPC, Avro, ORC), `NumPy` (NPY/NPZ), MATLAB (`.mat`), HDF5, `NetCDF`, Matrix Market (`.mtx`), and ONNX (`.onnx`).
+//! Structured formats: CSV, HTML, JSON, EPUB, PDF, columnar binaries (Parquet, Arrow IPC, Avro, ORC), `NumPy` (NPY/NPZ), MATLAB (`.mat`), HDF5, `NetCDF`, and Matrix Market (`.mtx`).
 
 pub mod constants;
 
@@ -12,7 +12,6 @@ mod mat;
 mod mtx;
 mod netcdf;
 mod numpy;
-mod onnx;
 mod pdf;
 mod table_sample_profile;
 pub mod tensor3d;
@@ -29,7 +28,6 @@ pub use mat::{extract_mat_metadata, extract_mat_templates};
 pub use mtx::{extract_mtx_metadata, extract_mtx_templates};
 pub use netcdf::{extract_netcdf_metadata, extract_netcdf_templates};
 pub use numpy::*;
-pub use onnx::{extract_onnx_metadata, extract_onnx_templates};
 pub use pdf::{extract_pdf_metadata, extract_pdf_templates};
 pub use table_sample_profile::*;
 
@@ -66,7 +64,6 @@ pub fn process(
         FileType::NetCdf => structured_netcdf(stats, mmap, config),
         FileType::Mtx => structured_mtx(stats, mmap, config),
         FileType::Mat => structured_mat(stats, mmap, config),
-        FileType::Onnx => structured_onnx(stats, mmap, config),
         _ => unreachable!("structured::process called with {:?}", stats.file_type),
     }
 }
@@ -316,22 +313,5 @@ fn structured_mat(
         crate::results::MatMetadata,
         FileType::Mat,
         extract_mat_templates(mmap, stats, config)
-    )
-}
-
-fn structured_onnx(
-    stats: &mut ParseResult,
-    mmap: &Mmap,
-    config: &RuntimeConfig,
-) -> Result<MiningResult> {
-    crate::process_with_metadata!(
-        stats,
-        mmap,
-        config,
-        onnx_metadata,
-        extract_onnx_metadata(mmap, stats, config),
-        crate::results::OnnxMetadata,
-        FileType::Onnx,
-        extract_onnx_templates(mmap, stats, config)
     )
 }

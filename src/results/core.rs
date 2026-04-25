@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
 
 use crate::engine::chunking::ProcessingTask;
-
 #[allow(clippy::wildcard_imports)]
-use super::metadata::*;
+use crate::metadata::*;
+
 use super::writing::{CompressionStats, WritingFootprint};
 
 /// Output mode for results
@@ -128,6 +128,12 @@ pub struct Output {
     pub mat_metadata: Option<super::metadata::MatMetadata>,
     /// ONNX (`.onnx`) metadata (Mode 2 only)
     pub onnx_metadata: Option<super::metadata::OnnxMetadata>,
+    /// GGUF (`.gguf`) metadata (Mode 2 only)
+    pub gguf_metadata: Option<super::metadata::GgufMetadata>,
+    /// TensorFlow Lite (`.tflite`) metadata (Mode 2 only)
+    pub tflite_metadata: Option<super::metadata::TfliteMetadata>,
+    /// Safetensors (`.safetensors`) metadata (Mode 2 only)
+    pub safetensors_metadata: Option<super::metadata::SafetensorsMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -147,8 +153,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 40 fields: 1 required (templates) + 39 optional fields
-        let mut state = serializer.serialize_struct("Output", 40)?;
+        // Maximum 43 fields: 1 required (templates) + 42 optional fields
+        let mut state = serializer.serialize_struct("Output", 43)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -163,36 +169,12 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.is_binary, "is_binary");
         crate::serialize_optional!(state, self.compression, "compression");
         crate::serialize_optional!(state, self.writing_footprint, "writing_footprint");
-        crate::serialize_optional!(state, self.image_metadata, "image_metadata");
-        crate::serialize_optional!(state, self.video_metadata, "video_metadata");
-        crate::serialize_optional!(state, self.audio_metadata, "audio_metadata");
-        crate::serialize_optional!(state, self.csv_metadata, "csv_metadata");
-        crate::serialize_optional!(state, self.pdf_metadata, "pdf_metadata");
-        crate::serialize_optional!(state, self.docx_metadata, "docx_metadata");
-        crate::serialize_optional!(state, self.sqlite_metadata, "sqlite_metadata");
-        crate::serialize_optional!(state, self.toml_metadata, "toml_metadata");
-        crate::serialize_optional!(state, self.zip_metadata, "zip_metadata");
-        crate::serialize_optional!(state, self.xml_metadata, "xml_metadata");
-        crate::serialize_optional!(state, self.html_metadata, "html_metadata");
-        crate::serialize_optional!(state, self.yaml_metadata, "yaml_metadata");
-        crate::serialize_optional!(state, self.ini_metadata, "ini_metadata");
-        crate::serialize_optional!(state, self.pptx_metadata, "pptx_metadata");
-        crate::serialize_optional!(state, self.epub_metadata, "epub_metadata");
-        crate::serialize_optional!(state, self.archive_metadata, "archive_metadata");
-        crate::serialize_optional!(state, self.code_metadata, "code_metadata");
-        crate::serialize_optional!(state, self.log_metadata, "log_metadata");
-        crate::serialize_optional!(state, self.json_metadata, "json_metadata");
-        crate::serialize_optional!(state, self.parquet_metadata, "parquet_metadata");
-        crate::serialize_optional!(state, self.arrow_ipc_metadata, "arrow_ipc_metadata");
-        crate::serialize_optional!(state, self.avro_metadata, "avro_metadata");
-        crate::serialize_optional!(state, self.orc_metadata, "orc_metadata");
-        crate::serialize_optional!(state, self.npy_metadata, "npy_metadata");
-        crate::serialize_optional!(state, self.npz_metadata, "npz_metadata");
-        crate::serialize_optional!(state, self.hdf5_metadata, "hdf5_metadata");
-        crate::serialize_optional!(state, self.netcdf_metadata, "netcdf_metadata");
-        crate::serialize_optional!(state, self.mtx_metadata, "mtx_metadata");
-        crate::serialize_optional!(state, self.mat_metadata, "mat_metadata");
-        crate::serialize_optional!(state, self.onnx_metadata, "onnx_metadata");
+        macro_rules! serialize_metadata_field {
+            ($state:expr, $output:expr, $field:ident, $parse_ty:path, $output_ty:path, $serialized_name:literal) => {
+                crate::serialize_optional!($state, $output.$field, $serialized_name);
+            };
+        }
+        crate::for_each_metadata_field!(serialize_metadata_field, state, self);
 
         state.end()
     }

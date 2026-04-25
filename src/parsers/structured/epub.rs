@@ -308,10 +308,8 @@ fn parse_spine_order_from_opf(xml: &str) -> Vec<String> {
                     order.push(idref);
                 }
             }
-            Ok(Event::End(ref e)) => {
-                if end_local_name_eq(e, EpubElements::SPINE) {
-                    in_spine = false;
-                }
+            Ok(Event::End(ref e)) if end_local_name_eq(e, EpubElements::SPINE) => {
+                in_spine = false;
             }
             Ok(Event::Eof) | Err(_) => break,
             _ => {}

@@ -39,7 +39,7 @@ pub fn dominant_delimiter_char(content: &str) -> Option<char> {
         })
         .collect();
 
-    delimiter_counts.sort_by(|a, b| b.1.cmp(&a.1));
+    delimiter_counts.sort_by_key(|item| std::cmp::Reverse(item.1));
 
     match delimiter_counts.first() {
         Some((delim, count)) if *count > 0 => Some(*delim),
@@ -118,7 +118,7 @@ pub fn detect_quote_character(content: &str, field_separator: char) -> Option<St
         .collect();
 
     // Sort by score (descending) and pick the most likely
-    quote_scores.sort_by(|a, b| b.1.cmp(&a.1));
+    quote_scores.sort_by_key(|item| std::cmp::Reverse(item.1));
 
     match quote_scores.first() {
         Some((quote, score)) if *score > 0 => {

@@ -39,6 +39,9 @@ const FILE_EXTENSION_MAP: &[(&str, FileType)] = file_extension_map! {
     Mtx: "mtx";
     Mat: "mat";
     Onnx: "onnx";
+    Gguf: "gguf";
+    Tflite: "tflite";
+    Safetensors: "safetensors";
     Html: "html", "htm";
     Docx: "docx";
     Xlsx: "xlsx";

@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+// Serde calls this with `&usize`; signature must match `fn(&T) -> bool`.
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn is_zero_usize(n: &usize) -> bool {
     *n == 0
 }

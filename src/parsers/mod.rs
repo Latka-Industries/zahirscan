@@ -6,6 +6,7 @@ mod column_stats;
 pub mod container;
 pub mod media;
 mod media_helpers;
+pub mod models;
 mod office;
 pub mod settings;
 pub mod sqlite;
@@ -83,38 +84,16 @@ macro_rules! ok_anyhow {
 /// Usage: `copy_metadata_fields!(from_stats, to_output)`
 /// This ensures all metadata fields are copied without having to manually list them.
 #[macro_export]
+macro_rules! copy_one_metadata_field {
+    ($from:expr, $to:expr, $field:ident, $parse_ty:path, $output_ty:path, $serialized_name:literal) => {
+        $to.$field = $from.$field.clone();
+    };
+}
+
+#[macro_export]
 macro_rules! copy_metadata_fields {
     ($from:expr, $to:expr) => {
-        $to.image_metadata = $from.image_metadata.clone();
-        $to.video_metadata = $from.video_metadata.clone();
-        $to.audio_metadata = $from.audio_metadata.clone();
-        $to.csv_metadata = $from.csv_metadata.clone();
-        $to.pdf_metadata = $from.pdf_metadata.clone();
-        $to.docx_metadata = $from.docx_metadata.clone();
-        $to.sqlite_metadata = $from.sqlite_metadata.clone();
-        $to.toml_metadata = $from.toml_metadata.clone();
-        $to.zip_metadata = $from.zip_metadata.clone();
-        $to.xml_metadata = $from.xml_metadata.clone();
-        $to.html_metadata = $from.html_metadata.clone();
-        $to.yaml_metadata = $from.yaml_metadata.clone();
-        $to.ini_metadata = $from.ini_metadata.clone();
-        $to.pptx_metadata = $from.pptx_metadata.clone();
-        $to.epub_metadata = $from.epub_metadata.clone();
-        $to.archive_metadata = $from.archive_metadata.clone();
-        $to.code_metadata = $from.code_metadata.clone();
-        $to.log_metadata = $from.log_metadata.clone();
-        $to.json_metadata = $from.json_metadata.clone();
-        $to.parquet_metadata = $from.parquet_metadata.clone();
-        $to.arrow_ipc_metadata = $from.arrow_ipc_metadata.clone();
-        $to.avro_metadata = $from.avro_metadata.clone();
-        $to.orc_metadata = $from.orc_metadata.clone();
-        $to.npy_metadata = $from.npy_metadata.clone();
-        $to.npz_metadata = $from.npz_metadata.clone();
-        $to.hdf5_metadata = $from.hdf5_metadata.clone();
-        $to.netcdf_metadata = $from.netcdf_metadata.clone();
-        $to.mtx_metadata = $from.mtx_metadata.clone();
-        $to.mat_metadata = $from.mat_metadata.clone();
-        $to.onnx_metadata = $from.onnx_metadata.clone();
+        $crate::for_each_metadata_field!(copy_one_metadata_field, $from, $to);
     };
 }
 
@@ -141,7 +120,8 @@ macro_rules! no_template_mining {
 pub enum ParserCategory {
     Media,      // Image | Video | Audio -> media::process
     Office,     // Docx | Xlsx | Pptx -> office::process
-    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | Arrow IPC | Avro | ORC | NPY | NPZ | HDF5 | NetCDF | MTX | Mat | ONNX -> structured::process
+    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | Arrow IPC | Avro | ORC | NPY | NPZ | HDF5 | NetCDF | MTX | Mat -> structured::process
+    Models,     // Onnx | Gguf | Tflite | Safetensors -> models::process
     Settings,   // Toml | Yaml | Xml | Ini -> settings::process
     Container,  // Zip | Archive -> container::process
     Sqlite,
@@ -164,6 +144,7 @@ impl ParserCategory {
             ParserCategory::Media => media::process(stats, mmap, config),
             ParserCategory::Office => office::process(stats, mmap, config),
             ParserCategory::Structured => structured::process(stats, mmap, config),
+            ParserCategory::Models => models::process(stats, mmap, config),
             ParserCategory::Settings => settings::process(stats, mmap, config),
             ParserCategory::Container => container::process(stats, mmap, config),
             ParserCategory::Sqlite => sqlite::process(stats, mmap, config),
@@ -209,11 +190,14 @@ pub enum FileType {
     Mtx,
     Mat,
     Onnx,
+    Gguf,
+    Tflite,
+    Safetensors,
     #[default]
     Unknown,
 }
 
-const METADATA_NAMES: [&str; 34] = [
+const METADATA_NAMES: [&str; 37] = [
     "Log",
     "JSON",
     "Text",
@@ -247,6 +231,9 @@ const METADATA_NAMES: [&str; 34] = [
     "Matrix Market",
     "MATLAB MAT",
     "ONNX",
+    "GGUF",
+    "TFLite",
+    "Safetensors",
     "Unknown",
 ];
 
@@ -303,7 +290,10 @@ impl FileType {
                 30 => FileType::Mtx,
                 31 => FileType::Mat,
                 32 => FileType::Onnx,
-                33 => FileType::Unknown,
+                33 => FileType::Gguf,
+                34 => FileType::Tflite,
+                35 => FileType::Safetensors,
+                36 => FileType::Unknown,
                 _ => unreachable!("METADATA_NAMES and match arms must stay in sync"),
             })
     }
@@ -334,8 +324,10 @@ impl FileType {
             | FileType::Hdf5
             | FileType::NetCdf
             | FileType::Mtx
-            | FileType::Mat
-            | FileType::Onnx => Some(ParserCategory::Structured),
+            | FileType::Mat => Some(ParserCategory::Structured),
+            FileType::Onnx | FileType::Gguf | FileType::Tflite | FileType::Safetensors => {
+                Some(ParserCategory::Models)
+            }
             FileType::Toml | FileType::Yaml | FileType::Xml | FileType::Ini => {
                 Some(ParserCategory::Settings)
             }
@@ -421,6 +413,12 @@ pub struct ParseResult {
     pub mat_metadata: Option<crate::results::MatMetadata>,
     /// ONNX (`.onnx`) graph summary metadata
     pub onnx_metadata: Option<crate::results::OnnxMetadata>,
+    /// GGUF (`.gguf`) key/value and tensor table metadata
+    pub gguf_metadata: Option<crate::results::GgufMetadata>,
+    /// TensorFlow Lite (`.tflite`) `FlatBuffer` summary metadata
+    pub tflite_metadata: Option<crate::results::TfliteMetadata>,
+    /// Safetensors (`.safetensors`) index summary metadata
+    pub safetensors_metadata: Option<crate::results::SafetensorsMetadata>,
 }
 
 impl ParseResult {

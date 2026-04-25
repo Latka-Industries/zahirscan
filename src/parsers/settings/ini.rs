@@ -5,10 +5,8 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 
 use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::parsers::structured::infer_value_type_match;
-use crate::results::IniMetadata;
-use crate::results::metadata::settings::ini::IniTypeInfo;
+use crate::parsers::{ParseResult, structured::infer_value_type_match};
+use crate::results::{IniMetadata, IniTypeInfo};
 
 /// INI syntax markers/delimiters
 struct IniSyntax {
@@ -78,12 +76,7 @@ fn parse_ini_sections_map(
     let mut multiline_key = String::new();
     let mut multiline_value = String::new();
 
-    let mut lines = s.lines();
-    loop {
-        let Some(line) = lines.next() else {
-            break;
-        };
-
+    for line in s.lines() {
         if in_multiline {
             let trimmed = line.trim();
             if trimmed.is_empty() {

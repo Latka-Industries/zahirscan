@@ -78,6 +78,7 @@ pub use config::DEFAULT_CONFIG_TOML;
 pub mod analysis;
 pub mod config;
 pub mod engine;
+mod metadata_fields;
 pub mod parsers;
 pub mod results;
 pub mod setup;

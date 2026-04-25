@@ -10,7 +10,6 @@ pub mod matlab;
 pub mod mtx;
 pub mod netcdf;
 pub mod numpy;
-pub mod onnx;
 pub mod pdf;
 pub mod tensor3d;
 
@@ -27,6 +26,5 @@ pub use matlab::{MatArrayEntrySummary, MatMetadata};
 pub use mtx::MtxMetadata;
 pub use netcdf::{NetCdfAttributeEntry, NetCdfMetadata, NetCdfVariableSummary};
 pub use numpy::{NpyMetadata, NpzMetadata, NpzNpyEntrySummary};
-pub use onnx::{OnnxMetadata, OnnxOpTypeCount, OnnxOpsetEntry, OnnxStringPair, OnnxValueSummary};
 pub use pdf::PdfMetadata;
 pub use tensor3d::{Tensor3DGlobalStats, Tensor3DPlaneStatEntry, Tensor3DPlaneStats};

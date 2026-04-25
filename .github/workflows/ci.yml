@@ -34,8 +34,19 @@ jobs:
 
       - name: Install system deps (Windows)
         if: matrix.os == 'windows-latest'
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          activate-environment: ci
+          python-version: "3.11"
+          channels: conda-forge
+          channel-priority: strict
+
+      - name: Install system deps (Windows via conda)
+        if: matrix.os == 'windows-latest'
+        shell: bash -el {0}
         run: |
-          choco install ffmpeg netcdf -y
+          conda install -y -c conda-forge netcdf ffmpeg pkg-config
 
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
@@ -114,8 +125,19 @@ jobs:
 
       - name: Install system deps (Windows)
         if: matrix.os == 'windows-latest'
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          activate-environment: ci
+          python-version: "3.11"
+          channels: conda-forge
+          channel-priority: strict
+
+      - name: Install system deps (Windows via conda)
+        if: matrix.os == 'windows-latest'
+        shell: bash -el {0}
         run: |
-          choco install netcdf -y
+          conda install -y -c conda-forge netcdf pkg-config
 
       - name: Build
         run: cargo build --release

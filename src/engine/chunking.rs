@@ -67,11 +67,7 @@ pub fn calculate_adaptive_chunking(
     // Calculate statistics from Phase 1
     let byte_counts: Vec<usize> = tasks.iter().map(|t| t.stats.byte_count).collect();
     let total_bytes: usize = byte_counts.iter().sum();
-    let mean_bytes = if num_files > 0 {
-        total_bytes / num_files
-    } else {
-        0
-    };
+    let mean_bytes = total_bytes.checked_div(num_files).unwrap_or(0);
 
     // Calculate standard deviation of file sizes
     let variance: f64 = if num_files > 0 {
@@ -134,11 +130,7 @@ pub fn calculate_adaptive_chunking(
 
     // Calculate target chunks and bytes per chunk for debug output
     let target_chunks = chunks_per_worker_multiplier * max_workers;
-    let bytes_per_chunk = if target_chunks > 0 {
-        mean_bytes / target_chunks
-    } else {
-        0
-    };
+    let bytes_per_chunk = mean_bytes.checked_div(target_chunks).unwrap_or(0);
 
     debug!(
         "Adaptive chunking: {} files, mean={}, cv={:.2}, multiplier={}, target_chunks={}, bytes_per_chunk={}",

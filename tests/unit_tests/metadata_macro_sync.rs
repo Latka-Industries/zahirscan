@@ -12,10 +12,11 @@ use zahirscan::config::RuntimeConfig;
 use zahirscan::parsers::ParseResult;
 use zahirscan::results::{
     ArchiveMetadata, ArrowIpcMetadata, AudioMetadata, AvroMetadata, CodeMetadata, CsvMetadata,
-    DocumentMetadata, EpubMetadata, Hdf5Metadata, HtmlMetadata, ImageMetadata, IniMetadata,
-    MatMetadata, MtxMetadata, NetCdfMetadata, OnnxMetadata, OrcMetadata, ParquetMetadata,
-    PdfMetadata, PptxMetadata, SqliteMetadata, TomlMetadata, VideoMetadata, XmlMetadata,
-    YamlMetadata, ZipMetadata, create_minimal_fallback,
+    DocumentMetadata, EpubMetadata, GgufMetadata, Hdf5Metadata, HtmlMetadata, ImageMetadata,
+    IniMetadata, MatMetadata, MtxMetadata, NetCdfMetadata, OnnxMetadata, OrcMetadata,
+    ParquetMetadata, PdfMetadata, PptxMetadata, SafetensorsMetadata, SqliteMetadata,
+    TfliteMetadata, TomlMetadata, VideoMetadata, XmlMetadata, YamlMetadata, ZipMetadata,
+    create_minimal_fallback,
 };
 use zahirscan::{FileType, OutputMode};
 
@@ -55,6 +56,9 @@ fn parse_result_with_all_metadata() -> ParseResult {
         mtx_metadata: Some(MtxMetadata::default()),
         mat_metadata: Some(MatMetadata::default()),
         onnx_metadata: Some(OnnxMetadata::default()),
+        gguf_metadata: Some(GgufMetadata::default()),
+        tflite_metadata: Some(TfliteMetadata::default()),
+        safetensors_metadata: Some(create_minimal_fallback::<SafetensorsMetadata>(0)),
         ..Default::default()
     };
     stats.mining_result = Some(zahirscan::results::MiningResult {
@@ -130,5 +134,17 @@ fn test_all_metadata_copied_to_output() {
     assert!(
         output.onnx_metadata.is_some(),
         "onnx_metadata not copied (add to copy_metadata_fields!)"
+    );
+    assert!(
+        output.gguf_metadata.is_some(),
+        "gguf_metadata not copied (add to copy_metadata_fields!)"
+    );
+    assert!(
+        output.tflite_metadata.is_some(),
+        "tflite_metadata not copied (add to copy_metadata_fields!)"
+    );
+    assert!(
+        output.safetensors_metadata.is_some(),
+        "safetensors_metadata not copied (add to copy_metadata_fields!)"
     );
 }

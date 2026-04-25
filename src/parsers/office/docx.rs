@@ -149,10 +149,8 @@ fn extract_text_from_document_xml(xml: &str) -> (String, usize, usize, usize, us
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
-                if e.name().as_ref() == b"w:t" {
-                    in_text_element = true;
-                }
+            Ok(Event::Start(ref e) | Event::Empty(ref e)) if e.name().as_ref() == b"w:t" => {
+                in_text_element = true;
             }
             Ok(Event::Text(e)) => {
                 if in_text_element && let Ok(utf8_str) = std::str::from_utf8(e.as_ref()) {
