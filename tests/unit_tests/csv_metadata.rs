@@ -30,8 +30,8 @@ fn test_basic_csv_metadata() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    assert_eq!(metadata.common.row_count, 3);
-    assert_eq!(metadata.common.column_count, 3);
+    assert_eq!(metadata.common.row_count, Some(3));
+    assert_eq!(metadata.common.column_count, Some(3));
     assert_eq!(metadata.delimiter, Some(",".to_string()));
     assert_eq!(metadata.has_header, Some(true));
     assert_eq!(metadata.common.encoding, Some("UTF-8".to_string()));
@@ -56,8 +56,8 @@ fn test_csv_without_header() {
     // When has_headers(true) is used but headers fail, it still tries to read first row as header
     // So we get 2 data rows (Jane and Bob), not 3
     // The actual behavior depends on CSV reader configuration
-    assert!(metadata.common.row_count >= 2);
-    assert_eq!(metadata.common.column_count, 3);
+    assert!(metadata.common.row_count.is_some_and(|n| n >= 2));
+    assert_eq!(metadata.common.column_count, Some(3));
     // has_header might be false or the reader might have tried to read headers
     assert!(metadata.has_header.is_some());
     // Column names might be None if header detection failed
@@ -91,7 +91,7 @@ fn test_csv_delimiter_detection_tab() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
     assert_eq!(metadata.delimiter, Some("\\t".to_string()));
-    assert_eq!(metadata.common.column_count, 3);
+    assert_eq!(metadata.common.column_count, Some(3));
 }
 
 /// `.tsv` path forces tab delimiter even if comma appears in sniffed sample (extension hint).
@@ -105,8 +105,8 @@ fn test_tsv_path_uses_tab_reader() {
     };
     let metadata = extract_csv_metadata(content, &stats, &RuntimeConfig::default()).unwrap();
     assert_eq!(metadata.delimiter, Some("\\t".to_string()));
-    assert_eq!(metadata.common.column_count, 3);
-    assert_eq!(metadata.common.row_count, 1);
+    assert_eq!(metadata.common.column_count, Some(3));
+    assert_eq!(metadata.common.row_count, Some(1));
 }
 
 /// `.psv` path uses pipe as field separator.
@@ -120,7 +120,7 @@ fn test_psv_path_uses_pipe_reader() {
     };
     let metadata = extract_csv_metadata(content, &stats, &RuntimeConfig::default()).unwrap();
     assert_eq!(metadata.delimiter, Some("|".to_string()));
-    assert_eq!(metadata.common.column_count, 3);
+    assert_eq!(metadata.common.column_count, Some(3));
 }
 
 #[test]
@@ -267,8 +267,8 @@ fn test_csv_empty_file() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    assert_eq!(metadata.common.row_count, 0);
-    assert_eq!(metadata.common.column_count, 0);
+    assert_eq!(metadata.common.row_count, Some(0));
+    assert_eq!(metadata.common.column_count, Some(0));
 }
 
 #[test]
@@ -279,8 +279,8 @@ fn test_csv_single_row() {
 
     let metadata = extract_csv_metadata(csv_content, &stats, &config).unwrap();
 
-    assert_eq!(metadata.common.row_count, 1);
-    assert_eq!(metadata.common.column_count, 2);
+    assert_eq!(metadata.common.row_count, Some(1));
+    assert_eq!(metadata.common.column_count, Some(2));
 }
 
 #[test]

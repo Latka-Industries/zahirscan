@@ -60,8 +60,8 @@ pub fn extract_parquet_metadata(
 
     Ok(ParquetMetadata {
         common: ColumnarCommonFields {
-            row_count: row_count_total,
-            column_count,
+            row_count: Some(row_count_total),
+            column_count: Some(column_count),
             stats_rows_sampled: Some(sample_data.len()),
             encoding: Some(StructuredEncoding::TABULAR_BINARY.to_string()),
             columns,

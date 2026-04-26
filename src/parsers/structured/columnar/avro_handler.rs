@@ -112,8 +112,8 @@ pub fn extract_avro_metadata(
 
     Ok(AvroMetadata {
         common: ColumnarCommonFields {
-            row_count,
-            column_count,
+            row_count: Some(row_count),
+            column_count: Some(column_count),
             stats_rows_sampled: Some(sample_data.len()),
             encoding: Some(StructuredEncoding::TABULAR_BINARY.to_string()),
             columns,

@@ -253,8 +253,8 @@ pub fn extract_csv_metadata(
 
     Ok(CsvMetadata {
         common: ColumnarCommonFields {
-            row_count,
-            column_count,
+            row_count: Some(row_count),
+            column_count: Some(column_count),
             stats_rows_sampled: Some(stats_rows_sampled),
             encoding: Some(encoding),
             columns,

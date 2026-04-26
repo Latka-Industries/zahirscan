@@ -156,8 +156,8 @@ pub fn extract_arrow_ipc_metadata(
 
     Ok(ArrowIpcMetadata {
         common: ColumnarCommonFields {
-            row_count: row_count_total,
-            column_count,
+            row_count: Some(row_count_total),
+            column_count: Some(column_count),
             stats_rows_sampled: Some(stats_n),
             encoding: Some(StructuredEncoding::TABULAR_BINARY.to_string()),
             columns,

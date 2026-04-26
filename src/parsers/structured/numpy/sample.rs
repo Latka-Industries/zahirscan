@@ -316,22 +316,26 @@ pub fn column_common_from_npy_bytes(
     let columns = columnar_utils::columns_from_tabular_sample(cols, Some(names), ts, None);
 
     ColumnarCommonFields {
-        row_count: rows,
-        column_count: cols,
+        // `layout.shape` on the parent metadata carries dimensions; avoid duplicating as row/column.
         stats_rows_sampled: Some(sample_data.len()),
         encoding: Some(StructuredEncoding::NUMPY.to_string()),
         columns,
+        ..ColumnarCommonFields::default()
     }
 }
 
 fn shape_only_common(layout: &ArrayLayoutSummary) -> ColumnarCommonFields {
-    let Some((row_count, column_count)) = layout.shape_row_col_counts() else {
+    if layout.shape_row_col_counts().is_none() {
         return ColumnarCommonFields::default();
-    };
+    }
     ColumnarCommonFields {
-        row_count,
-        column_count,
+        // `layout.shape` carries dimensions; do not duplicate as row/column counts.
         encoding: Some(StructuredEncoding::NUMPY.to_string()),
         ..ColumnarCommonFields::default()
     }
+}
+
+/// Expose shape-only common fields (used by `Zarr` when dtype cannot be tabular-sampled).
+pub(crate) fn column_shape_only_from_layout(layout: &ArrayLayoutSummary) -> ColumnarCommonFields {
+    shape_only_common(layout)
 }

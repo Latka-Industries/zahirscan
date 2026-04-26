@@ -80,10 +80,10 @@ fn skip_id3v2_prefix(file_ref: &mut File) -> Option<()> {
     let mut header = [0u8; 10];
     file_ref.read_exact(&mut header).ok()?;
     if &header[0..3] == b"ID3" {
-        let size = ((header[6] as u32) << 21)
-            | ((header[7] as u32) << 14)
-            | ((header[8] as u32) << 7)
-            | (header[9] as u32);
+        let size = (u32::from(header[6]) << 21)
+            | (u32::from(header[7]) << 14)
+            | (u32::from(header[8]) << 7)
+            | u32::from(header[9]);
         let id3_size = 10 + u64::from(size);
         file_ref.seek(SeekFrom::Start(id3_size)).ok()?;
     } else {

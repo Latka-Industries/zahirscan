@@ -2,7 +2,7 @@
 
 /// Iterate over every metadata field with:
 /// - field identifier
-/// - ParseResult field type
+/// - `ParseResult` field type
 /// - Output field type
 /// - serialized JSON key
 #[macro_export]
@@ -41,5 +41,6 @@ macro_rules! for_each_metadata_field {
         $callback!($($args,)* gguf_metadata, $crate::results::GgufMetadata, super::metadata::GgufMetadata, "gguf_metadata");
         $callback!($($args,)* tflite_metadata, $crate::results::TfliteMetadata, super::metadata::TfliteMetadata, "tflite_metadata");
         $callback!($($args,)* safetensors_metadata, $crate::results::SafetensorsMetadata, super::metadata::SafetensorsMetadata, "safetensors_metadata");
+        $callback!($($args,)* zarr_metadata, $crate::results::ZarrMetadata, super::metadata::ZarrMetadata, "zarr_metadata");
     };
 }

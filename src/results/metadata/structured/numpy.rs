@@ -13,7 +13,7 @@ pub struct NpyMetadata {
     pub byte_count: usize,
     #[serde(flatten)]
     pub layout: ArrayLayoutSummary,
-    /// Row/column counts and CSV-like stats when dtype is not object/structured and rank ≤ 2.
+    /// CSV-like column stats when dtype is not object/structured and rank ≤ 2. Array dimensions are in [`ArrayLayoutSummary::shape`], not duplicated as `row_count` / `column_count` on [`ColumnarCommonFields`].
     #[serde(flatten)]
     pub common: ColumnarCommonFields,
     /// Rank-3 only: min / max / mean / stdev per 2D plane (capped; see parser limits).

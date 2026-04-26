@@ -95,8 +95,8 @@ fn mtx_columnar_common(
         physical_types: None,
     });
     ColumnarCommonFields {
-        row_count: rows,
-        column_count: cols,
+        row_count: Some(rows),
+        column_count: Some(cols),
         // Same as `row_count`: MTX numeric stats use the full logical height (no row subsampling).
         // Kept for parity with other columnar types that report a true sample size.
         stats_rows_sampled: Some(rows),
@@ -234,8 +234,8 @@ fn full_numeric_sparse_logical_coo<T: Copy>(
 
 fn mtx_shape_only_common(rows: usize, cols: usize) -> ColumnarCommonFields {
     ColumnarCommonFields {
-        row_count: rows,
-        column_count: cols,
+        row_count: Some(rows),
+        column_count: Some(cols),
         encoding: Some(StructuredEncoding::MATRIX_MARKET.to_string()),
         ..ColumnarCommonFields::default()
     }

@@ -62,7 +62,7 @@ pub fn extract_bit_depth(jpeg_data_ref: &[u8]) -> Option<u32> {
         if is_sof && seg_len >= 3 && i < jpeg_data_ref.len() {
             // Precision is the first byte of the SOF segment
             let precision = jpeg_data_ref[i];
-            return Some(precision as u32);
+            return Some(u32::from(precision));
         }
 
         if seg_len < 2 || i + (seg_len - 2) > jpeg_data_ref.len() {

@@ -112,9 +112,12 @@ pub fn merge_column_stats(input: &MergeColumnStatsInput) -> Option<Vec<ColumnSta
 /// Shared table-oriented fields (used by [`CsvMetadata`] and columnar format metadata).
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ColumnarCommonFields {
-    pub row_count: usize,
-    pub column_count: usize,
-    /// Rows used for column stats (sample), when stats are sample-based. Total rows stay in `row_count`.
+    /// Omitted in JSON when `None` (e.g. non-tabular `.mat` `struct` / `cell` top-level).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column_count: Option<usize>,
+    /// Rows used for column stats (sample), when stats are sample-based. Total row count for tabular formats is in `row_count` when set; for `ArrayLayoutSummary` + flattened common, use `shape` instead.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stats_rows_sampled: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]

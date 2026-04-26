@@ -1,14 +1,16 @@
 //! `NumPy` `.npz` (ZIP of `.npy` members) — list entries and parse each `.npy` header + column stats.
+//!
+//! ZIP member bodies are read sequentially (one [`ZipArchive`]), then parse + stats run in parallel.
 
 use std::io::{self, Cursor, Read};
 
 use anyhow::{Context, Result};
 use memmap2::Mmap;
+use rayon::prelude::*;
 use zip::ZipArchive;
 
 use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::parsers::structured::tensor3d::tensor3d_plane_stats_for_npy_bytes;
+use crate::parsers::{ParseResult, structured::tensor3d::tensor3d_plane_stats_for_npy_bytes};
 use crate::results::{ArrayLayoutSummary, ColumnarCommonFields, NpzMetadata, NpzNpyEntrySummary};
 
 use super::npy::parse_npy_prefix;
@@ -22,6 +24,56 @@ const MAX_NPZ_NPY_ENTRIES: usize = 128;
 /// at 64 MiB and lose the tail of the payload—dropping the last row of column stats.
 const MAX_NPZ_ENTRY_READ: usize = 64 * 1024 * 1024 + 256 * 1024;
 const INITIAL_NPZ_READ: usize = 512 * 1024;
+
+/// One `.npy` member read from the archive (serial phase); parse/stats use this in parallel.
+struct NpzEntryRead {
+    name: String,
+    uncompressed_size: u64,
+    bytes: Result<Vec<u8>, String>,
+}
+
+fn npy_entry_from_read(entry: &NpzEntryRead, config: &RuntimeConfig) -> NpzNpyEntrySummary {
+    let name = entry.name.clone();
+    let uncompressed_u64 = entry.uncompressed_size;
+    let uncompressed_size = entry.uncompressed_size as usize;
+
+    let buf = match &entry.bytes {
+        Err(e) => {
+            return NpzNpyEntrySummary {
+                name,
+                uncompressed_size: Some(uncompressed_u64),
+                layout: ArrayLayoutSummary::default(),
+                common: ColumnarCommonFields::default(),
+                tensor3d: None,
+                entry_parse_error: Some(e.clone()),
+            };
+        }
+        Ok(b) => b,
+    };
+
+    match parse_npy_prefix(buf, uncompressed_size) {
+        Ok(layout) => {
+            let common = column_common_from_npy_bytes(buf, &layout, config);
+            let tensor3d = tensor3d_plane_stats_for_npy_bytes(buf, &layout);
+            NpzNpyEntrySummary {
+                name,
+                uncompressed_size: Some(uncompressed_u64),
+                layout,
+                common,
+                tensor3d,
+                entry_parse_error: None,
+            }
+        }
+        Err(e) => NpzNpyEntrySummary {
+            name,
+            uncompressed_size: Some(uncompressed_u64),
+            layout: ArrayLayoutSummary::default(),
+            common: ColumnarCommonFields::default(),
+            tensor3d: None,
+            entry_parse_error: Some(format!("{e:#}")),
+        },
+    }
+}
 
 /// Read enough of a ZIP member to parse the header and (when applicable) the contiguous sample prefix.
 fn read_npy_zip_member<R: Read + ?Sized>(
@@ -72,11 +124,11 @@ pub fn extract_npz_metadata(
     let mut archive = ZipArchive::new(cursor).context("open NPZ as ZIP")?;
     let zip_entry_count = archive.len();
 
-    let mut npy_entries = Vec::new();
+    let mut raw_entries: Vec<NpzEntryRead> = Vec::new();
     let mut npy_entries_scanned = 0usize;
 
     for i in 0..archive.len() {
-        if npy_entries.len() >= MAX_NPZ_NPY_ENTRIES {
+        if raw_entries.len() >= MAX_NPZ_NPY_ENTRIES {
             break;
         }
 
@@ -93,46 +145,19 @@ pub fn extract_npz_metadata(
         let uncompressed_size = zf.size() as usize;
         let uncompressed_u64 = zf.size();
 
-        let buf = match read_npy_zip_member(&mut zf, uncompressed_size, config) {
-            Ok(b) => b,
-            Err(e) => {
-                npy_entries.push(NpzNpyEntrySummary {
-                    name,
-                    uncompressed_size: Some(uncompressed_u64),
-                    layout: ArrayLayoutSummary::default(),
-                    common: ColumnarCommonFields::default(),
-                    tensor3d: None,
-                    entry_parse_error: Some(format!("{e:#}")),
-                });
-                continue;
-            }
-        };
-
-        match parse_npy_prefix(&buf, uncompressed_size) {
-            Ok(layout) => {
-                let common = column_common_from_npy_bytes(&buf, &layout, config);
-                let tensor3d = tensor3d_plane_stats_for_npy_bytes(&buf, &layout);
-                npy_entries.push(NpzNpyEntrySummary {
-                    name,
-                    uncompressed_size: Some(uncompressed_u64),
-                    layout,
-                    common,
-                    tensor3d,
-                    entry_parse_error: None,
-                });
-            }
-            Err(e) => {
-                npy_entries.push(NpzNpyEntrySummary {
-                    name,
-                    uncompressed_size: Some(uncompressed_u64),
-                    layout: ArrayLayoutSummary::default(),
-                    common: ColumnarCommonFields::default(),
-                    tensor3d: None,
-                    entry_parse_error: Some(format!("{e:#}")),
-                });
-            }
-        }
+        let bytes =
+            read_npy_zip_member(&mut zf, uncompressed_size, config).map_err(|e| format!("{e:#}"));
+        raw_entries.push(NpzEntryRead {
+            name,
+            uncompressed_size: uncompressed_u64,
+            bytes,
+        });
     }
+
+    let npy_entries: Vec<NpzNpyEntrySummary> = raw_entries
+        .par_iter()
+        .map(|e| npy_entry_from_read(e, config))
+        .collect();
 
     Ok(NpzMetadata {
         byte_count: stats.byte_count,

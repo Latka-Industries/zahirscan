@@ -1,4 +1,6 @@
-//! Structured formats: CSV, HTML, JSON, EPUB, PDF, columnar binaries (Parquet, Arrow IPC, Avro, ORC), `NumPy` (NPY/NPZ), MATLAB (`.mat`), HDF5, `NetCDF`, and Matrix Market (`.mtx`).
+//! Structured formats: CSV, HTML, JSON, EPUB, PDF, columnar binaries
+//! (Parquet, Arrow IPC, Avro, ORC), `NumPy` (NPY/NPZ), MATLAB (`.mat`),
+//! HDF5, `NetCDF`, Matrix Market (`.mtx`), and Zarr.
 
 pub mod constants;
 
@@ -15,6 +17,7 @@ mod numpy;
 mod pdf;
 mod table_sample_profile;
 pub mod tensor3d;
+mod zarr;
 
 pub use columnar::*;
 pub use csv::{
@@ -30,6 +33,7 @@ pub use netcdf::{extract_netcdf_metadata, extract_netcdf_templates};
 pub use numpy::*;
 pub use pdf::{extract_pdf_metadata, extract_pdf_templates};
 pub use table_sample_profile::*;
+pub use zarr::extract_zarr_metadata;
 
 use anyhow::Result;
 use memmap2::Mmap;
@@ -64,6 +68,7 @@ pub fn process(
         FileType::NetCdf => structured_netcdf(stats, mmap, config),
         FileType::Mtx => structured_mtx(stats, mmap, config),
         FileType::Mat => structured_mat(stats, mmap, config),
+        FileType::Zarr => structured_zarr(stats, mmap, config),
         _ => unreachable!("structured::process called with {:?}", stats.file_type),
     }
 }
@@ -245,6 +250,23 @@ fn structured_npz(
         crate::results::NpzMetadata,
         FileType::Npz,
         extract_npz_templates(mmap, stats, config)
+    )
+}
+
+fn structured_zarr(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &RuntimeConfig,
+) -> Result<MiningResult> {
+    crate::process_with_metadata!(
+        stats,
+        mmap,
+        config,
+        zarr_metadata,
+        zarr::extract_zarr_metadata(&stats.file_path, stats, config),
+        crate::results::ZarrMetadata,
+        FileType::Zarr,
+        zarr::extract_zarr_templates(mmap, stats, config)
     )
 }
 

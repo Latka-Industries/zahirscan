@@ -60,6 +60,9 @@ pub fn extract_tflite_metadata(
         let mut out: Vec<TfliteSubgraphSummary> = Vec::new();
         for i in 0..sgs.len().min(MAX_SUBGRAPH_REPORT) {
             let sg = sgs.get(i);
+            // `as_ref()` yields `&flatbuffers::vector::Vector<…>`; clippy’s `map(Vector::len)` wants
+            // `flatbuffers::Vector::len` — a different function item, so keep the closure.
+            #[allow(clippy::redundant_closure_for_method_calls)]
             out.push(TfliteSubgraphSummary {
                 index: i,
                 input_tensor_indices: sg.inputs().as_ref().map(|v| v.len()),

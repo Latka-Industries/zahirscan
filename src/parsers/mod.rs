@@ -1,5 +1,6 @@
-//! Probabilistic template mining and parsing
-//! Main handler that routes to log or text parsers
+//! Top-level parser orchestration for all supported file families.
+//! Routes each detected file type to the corresponding parser module
+//! (text/log, settings, structured data, media, archives, code, models, etc.).
 
 pub mod code;
 mod column_stats;
@@ -15,11 +16,12 @@ pub mod text;
 pub mod traits;
 pub use media_helpers::{BitrateMode, CompressionMode};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use memmap2::Mmap;
 use serde_json;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
+use std::path::Path;
 
 use crate::config::RuntimeConfig;
 use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
@@ -120,7 +122,7 @@ macro_rules! no_template_mining {
 pub enum ParserCategory {
     Media,      // Image | Video | Audio -> media::process
     Office,     // Docx | Xlsx | Pptx -> office::process
-    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | Arrow IPC | Avro | ORC | NPY | NPZ | HDF5 | NetCDF | MTX | Mat -> structured::process
+    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | Arrow IPC | Avro | ORC | NPY | NPZ | HDF5 | NetCDF | MTX | Mat | Zarr -> structured::process
     Models,     // Onnx | Gguf | Tflite | Safetensors -> models::process
     Settings,   // Toml | Yaml | Xml | Ini -> settings::process
     Container,  // Zip | Archive -> container::process
@@ -193,11 +195,12 @@ pub enum FileType {
     Gguf,
     Tflite,
     Safetensors,
+    Zarr,
     #[default]
     Unknown,
 }
 
-const METADATA_NAMES: [&str; 37] = [
+const METADATA_NAMES: [&str; 38] = [
     "Log",
     "JSON",
     "Text",
@@ -234,6 +237,7 @@ const METADATA_NAMES: [&str; 37] = [
     "GGUF",
     "TFLite",
     "Safetensors",
+    "Zarr",
     "Unknown",
 ];
 
@@ -293,7 +297,8 @@ impl FileType {
                 33 => FileType::Gguf,
                 34 => FileType::Tflite,
                 35 => FileType::Safetensors,
-                36 => FileType::Unknown,
+                36 => FileType::Zarr,
+                37 => FileType::Unknown,
                 _ => unreachable!("METADATA_NAMES and match arms must stay in sync"),
             })
     }
@@ -324,7 +329,8 @@ impl FileType {
             | FileType::Hdf5
             | FileType::NetCdf
             | FileType::Mtx
-            | FileType::Mat => Some(ParserCategory::Structured),
+            | FileType::Mat
+            | FileType::Zarr => Some(ParserCategory::Structured),
             FileType::Onnx | FileType::Gguf | FileType::Tflite | FileType::Safetensors => {
                 Some(ParserCategory::Models)
             }
@@ -419,6 +425,8 @@ pub struct ParseResult {
     pub tflite_metadata: Option<crate::results::TfliteMetadata>,
     /// Safetensors (`.safetensors`) index summary metadata
     pub safetensors_metadata: Option<crate::results::SafetensorsMetadata>,
+    /// `Zarr` directory store (`.zarr/`) metadata
+    pub zarr_metadata: Option<crate::results::ZarrMetadata>,
 }
 
 impl ParseResult {
@@ -552,6 +560,13 @@ pub(crate) fn open_mmap(path: &str) -> Result<Mmap> {
     Ok(mmap)
 }
 
+/// Zero-length `mmap` for types that have no single-file payload (e.g. a `Zarr` directory).
+fn open_empty_mmap() -> Result<Mmap> {
+    let f = tempfile::tempfile()?;
+    let mmap = unsafe { Mmap::map(&f)? };
+    Ok(mmap)
+}
+
 /// Phase 1: Initial file scan (fast pass to gather file metadata).
 /// Returns stats only; use [`initial_file_scan_with_mmap`] when the mmap should be reused (e.g. Phase 2).
 ///
@@ -565,7 +580,29 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
 
 /// Phase 1 scan that returns the mmap so Phase 2 can reuse it (avoids double open per path).
 pub(crate) fn initial_file_scan_with_mmap(path: &str) -> Result<(ParseResult, Mmap)> {
+    let p = Path::new(path);
     let file_type = utils::filetypes::detect_file_type(path);
+
+    if file_type == FileType::Zarr {
+        if !p.is_dir() {
+            anyhow::bail!("Zarr path must be a directory: {path}");
+        }
+        let byte_count = utils::zarr_paths::total_file_bytes_under(p)
+            .with_context(|| format!("read Zarr store directory: {path}"))?;
+        let mmap = open_empty_mmap()?;
+        let stats = ParseResult {
+            file_path: path.to_string(),
+            file_type,
+            line_count: 0,
+            byte_count,
+            token_count: 0,
+            duration: std::time::Duration::ZERO,
+            is_binary: true,
+            ..Default::default()
+        };
+        return Ok((stats, mmap));
+    }
+
     let mmap = open_mmap(path)?;
     let byte_count = mmap.len();
 

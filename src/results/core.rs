@@ -134,6 +134,8 @@ pub struct Output {
     pub tflite_metadata: Option<super::metadata::TfliteMetadata>,
     /// Safetensors (`.safetensors`) metadata (Mode 2 only)
     pub safetensors_metadata: Option<super::metadata::SafetensorsMetadata>,
+    /// `Zarr` store (`.zarr/`) metadata (Mode 2 only)
+    pub zarr_metadata: Option<super::metadata::ZarrMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -153,8 +155,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 43 fields: 1 required (templates) + 42 optional fields
-        let mut state = serializer.serialize_struct("Output", 43)?;
+        // Maximum 44 fields: 1 required (templates) + 43 optional fields
+        let mut state = serializer.serialize_struct("Output", 44)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;

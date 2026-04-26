@@ -14,6 +14,7 @@ use crate::results::Phase1Result;
 use crate::utils::path_string_helper::{
     determine_output_path, print_progress_handler, should_ignore_path,
 };
+use crate::utils::zarr_paths::is_zarr_store_root_path;
 
 /// Log Phase 1 processing metrics
 pub fn log_phase1_metrics(
@@ -37,9 +38,12 @@ pub fn log_phase1_metrics(
     );
 }
 
-/// Filter input paths for Phase 1: skip directories and paths that match ignore patterns
+/// Filter input paths for Phase 1: skip directories (except `Zarr` store roots) and ignore patterns
 fn phase1_path_filter(p: &str, config: &RuntimeConfig) -> bool {
     if Path::new(p).is_dir() {
+        if is_zarr_store_root_path(p) {
+            return !should_ignore_path(p, config);
+        }
         debug!("Skipping directory: {p}");
         false
     } else if should_ignore_path(p, config) {
