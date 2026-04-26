@@ -201,7 +201,7 @@ pub fn extract_color_type(tiff_data_ref: &[u8]) -> String {
                     entry_offset + 10
                 };
                 match read_u16_safe(tiff_data_ref, read_offset, is_little_endian) {
-                    Some(v) => v as u32,
+                    Some(v) => u32::from(v),
                     None => continue,
                 }
             } else if entry_type == TIFF_TYPE_LONG {
@@ -217,7 +217,7 @@ pub fn extract_color_type(tiff_data_ref: &[u8]) -> String {
                     // Try reading as SHORT from bytes 8-9
                     let value =
                         match read_u16_safe(tiff_data_ref, entry_offset + 8, is_little_endian) {
-                            Some(v) => v as u32,
+                            Some(v) => u32::from(v),
                             None => continue,
                         };
                     return match value {

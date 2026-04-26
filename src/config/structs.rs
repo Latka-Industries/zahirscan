@@ -162,7 +162,13 @@ impl Default for PivotConfig {
 #[serde(default, deny_unknown_fields)]
 pub(crate) struct FileTypeSpecificConfig {
     pub markdown_preview_length: u64,
-    pub max_csv_sample_rows: u64,
+    /// Parquet / Arrow / Avro / ORC / `.npy` only — max rows sampled for tabular inference (not CSV; use `max_csv_scan_rows`).
+    #[serde(alias = "max_csv_sample_rows")]
+    pub max_tabular_sample_rows: u64,
+    /// CSV only: base max rows for type inference + stats (scaled down for large files / many columns).
+    pub max_csv_scan_rows: u64,
+    /// CSV only: cap distinct non-null strings per column for unique counts.
+    pub max_csv_max_distinct_per_column: u64,
     /// Max decompressed bytes per ZIP member when reading OOXML / EPUB (0 = unlimited).
     pub max_zip_entry_uncompressed_bytes: u64,
 }
@@ -171,7 +177,9 @@ impl Default for FileTypeSpecificConfig {
     fn default() -> Self {
         Self {
             markdown_preview_length: 100,
-            max_csv_sample_rows: 200,
+            max_tabular_sample_rows: 10_000,
+            max_csv_scan_rows: 10_000,
+            max_csv_max_distinct_per_column: 500_000,
             max_zip_entry_uncompressed_bytes: 52_428_800, // 50 MiB
         }
     }

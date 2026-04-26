@@ -131,8 +131,12 @@ fn compressed_tar_metadata_no_decompress(
             // Gzip trailer: last 8 bytes = CRC32 (4) + ISIZE (4, LE). ISIZE = uncompressed size mod 2^32.
             if content.len() >= 8 {
                 let i = content.len() - 4;
-                u32::from_le_bytes([content[i], content[i + 1], content[i + 2], content[i + 3]])
-                    as u64
+                u64::from(u32::from_le_bytes([
+                    content[i],
+                    content[i + 1],
+                    content[i + 2],
+                    content[i + 3],
+                ]))
             } else {
                 0
             }

@@ -17,6 +17,7 @@ use super::helpers::{clamp_f64, deep_merge_toml, u64_to_usize, u64_to_usize_min}
 use super::structs::TomlConfig;
 
 /// User-facing toggles from TOML `[filter]` / CLI (redaction, media skip, progress, hidden files).
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuntimeFlags {
     /// Whether to redact file paths in output (show only filename as ***/filename.ext)
@@ -93,8 +94,12 @@ pub struct RuntimeConfig {
     pub max_common_pivots: usize,
     /// Maximum length of paragraph text preview in examples (characters)
     pub markdown_preview_length: usize,
-    /// Maximum number of rows to sample for CSV type inference
-    pub max_csv_sample_rows: usize,
+    /// Parquet / Arrow / Avro / ORC / `.npy` only — max rows sampled for tabular stats (not CSV; use `max_csv_scan_rows`).
+    pub max_tabular_sample_rows: usize,
+    /// CSV only: base max rows for inference + stats (scaled down for large files / many columns).
+    pub max_csv_scan_rows: usize,
+    /// CSV only: cap distinct strings per column when counting uniques.
+    pub max_csv_max_distinct_per_column: usize,
     /// Max decompressed size (bytes) per ZIP entry when reading OOXML / EPUB (`0` = unlimited).
     pub max_zip_entry_uncompressed_bytes: usize,
     /// Small file threshold (bytes) - files below this use multiplier=1
@@ -183,7 +188,12 @@ impl RuntimeConfig {
             max_pivot_variation: u64_to_usize_min(mining.pivot.max_pivot_variation, 1),
             max_common_pivots: u64_to_usize_min(mining.pivot.max_common_pivots, 1),
             markdown_preview_length: u64_to_usize_min(mining.file_types.markdown_preview_length, 1),
-            max_csv_sample_rows: u64_to_usize_min(mining.file_types.max_csv_sample_rows, 1),
+            max_tabular_sample_rows: u64_to_usize_min(mining.file_types.max_tabular_sample_rows, 1),
+            max_csv_scan_rows: u64_to_usize_min(mining.file_types.max_csv_scan_rows, 1),
+            max_csv_max_distinct_per_column: u64_to_usize_min(
+                mining.file_types.max_csv_max_distinct_per_column,
+                1,
+            ),
             max_zip_entry_uncompressed_bytes: u64_to_usize(
                 mining.file_types.max_zip_entry_uncompressed_bytes,
             ),
@@ -345,7 +355,9 @@ impl RuntimeConfig {
         self.max_pivot_variation = other.max_pivot_variation;
         self.max_common_pivots = other.max_common_pivots;
         self.markdown_preview_length = other.markdown_preview_length;
-        self.max_csv_sample_rows = other.max_csv_sample_rows;
+        self.max_tabular_sample_rows = other.max_tabular_sample_rows;
+        self.max_csv_scan_rows = other.max_csv_scan_rows;
+        self.max_csv_max_distinct_per_column = other.max_csv_max_distinct_per_column;
         self.max_zip_entry_uncompressed_bytes = other.max_zip_entry_uncompressed_bytes;
         self.small_file_threshold_bytes = other.small_file_threshold_bytes;
         self.large_file_threshold_bytes = other.large_file_threshold_bytes;
@@ -425,6 +437,13 @@ impl RuntimeConfig {
                 self.max_zip_entry_uncompressed_bytes
             ));
         }
+        validate_min!(
+            self,
+            max_csv_max_distinct_per_column,
+            1,
+            "max_csv_max_distinct_per_column"
+        );
+        validate_min!(self, max_csv_scan_rows, 1, "max_csv_scan_rows");
         Ok(())
     }
 }

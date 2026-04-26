@@ -90,7 +90,7 @@ pub fn calculate_template_entropy(
     }
 
     if placeholder_count > 0 {
-        total_entropy / placeholder_count as f64
+        total_entropy / f64::from(placeholder_count)
     } else {
         0.0
     }
@@ -307,7 +307,7 @@ pub fn calculate_writing_footprint(
         }
     }
     let avg_entropy = if entropy_count > 0 {
-        total_entropy / entropy_count as f64
+        total_entropy / f64::from(entropy_count)
     } else {
         0.0
     };
@@ -416,7 +416,7 @@ pub fn analyze_svo_structure(
     };
 
     let mut pivot_vec: Vec<(String, usize)> = pivot_words.into_iter().collect();
-    pivot_vec.sort_by(|a, b| b.1.cmp(&a.1));
+    pivot_vec.sort_by_key(|item| std::cmp::Reverse(item.1));
     let common_pivots: Vec<String> = pivot_vec
         .into_iter()
         .take(config.max_common_pivots)

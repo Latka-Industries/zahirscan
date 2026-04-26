@@ -29,8 +29,10 @@ macro_rules! cached_static {
 
 pub mod ffprobe_handler;
 pub mod filetypes;
+pub mod netcdf_handler;
 pub mod path_string_helper;
 pub mod typecheck;
+pub mod zarr_paths;
 pub mod zip_read;
 
 use anyhow::anyhow;

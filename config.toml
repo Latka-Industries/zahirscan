@@ -89,9 +89,13 @@ max_common_pivots = 10
 # File-type specific parsing settings
 # Maximum length of paragraph text preview in examples (characters)
 markdown_preview_length = 100
-# Maximum number of rows to sample for data type inference (200 rows is usually sufficient)
-max_csv_sample_rows = 200
-# Max decompressed bytes per ZIP member (DOCX/PPTX/XLSX/EPUB). 0 = no limit. Mitigates zip bombs.
+# Parquet / Arrow / Avro / ORC / .npy — base max rows for tabular sample (same default as CSV; column scaling applies)
+max_tabular_sample_rows = 10000
+# CSV only: base max rows for type inference + stats (scaled down for large files / many columns)
+max_csv_scan_rows = 10000
+# CSV only: cap distinct non-null strings per column for unique counts (memory bound)
+max_csv_max_distinct_per_column = 500000
+# Max decompressed bytes per ZIP member (DOCX/PPTX/XLSX/EPUB). 0 = no limit
 max_zip_entry_uncompressed_bytes = 52428800
 
 # File filtering: skip files before Phase 1

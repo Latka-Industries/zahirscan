@@ -49,7 +49,7 @@ pub fn extract_bit_depth(bmp_data_ref: &[u8]) -> Option<u32> {
     }
 
     let bit_depth = u16::from_le_bytes([bmp_data_ref[28], bmp_data_ref[29]]);
-    Some(bit_depth as u32)
+    Some(u32::from(bit_depth))
 }
 
 /// Extract color type from BMP data

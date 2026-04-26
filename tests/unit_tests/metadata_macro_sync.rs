@@ -11,9 +11,12 @@
 use zahirscan::config::RuntimeConfig;
 use zahirscan::parsers::ParseResult;
 use zahirscan::results::{
-    ArchiveMetadata, AudioMetadata, CodeMetadata, CsvMetadata, DocumentMetadata, EpubMetadata,
-    HtmlMetadata, ImageMetadata, IniMetadata, PdfMetadata, PptxMetadata, SqliteMetadata,
-    TomlMetadata, VideoMetadata, XmlMetadata, YamlMetadata, ZipMetadata, create_minimal_fallback,
+    ArchiveMetadata, ArrowIpcMetadata, AudioMetadata, AvroMetadata, CodeMetadata, CsvMetadata,
+    DocumentMetadata, EpubMetadata, GgufMetadata, Hdf5Metadata, HtmlMetadata, ImageMetadata,
+    IniMetadata, MatMetadata, MtxMetadata, NetCdfMetadata, OnnxMetadata, OrcMetadata,
+    ParquetMetadata, PdfMetadata, PptxMetadata, SafetensorsMetadata, SqliteMetadata,
+    TfliteMetadata, TomlMetadata, VideoMetadata, XmlMetadata, YamlMetadata, ZipMetadata,
+    create_minimal_fallback,
 };
 use zahirscan::{FileType, OutputMode};
 
@@ -44,6 +47,18 @@ fn parse_result_with_all_metadata() -> ParseResult {
         epub_metadata: Some(create_minimal_fallback::<EpubMetadata>(0)),
         archive_metadata: Some(create_minimal_fallback::<ArchiveMetadata>(0)),
         code_metadata: Some(CodeMetadata::default()),
+        parquet_metadata: Some(ParquetMetadata::default()),
+        arrow_ipc_metadata: Some(ArrowIpcMetadata::default()),
+        avro_metadata: Some(AvroMetadata::default()),
+        orc_metadata: Some(OrcMetadata::default()),
+        hdf5_metadata: Some(Hdf5Metadata::default()),
+        netcdf_metadata: Some(NetCdfMetadata::default()),
+        mtx_metadata: Some(MtxMetadata::default()),
+        mat_metadata: Some(MatMetadata::default()),
+        onnx_metadata: Some(OnnxMetadata::default()),
+        gguf_metadata: Some(GgufMetadata::default()),
+        tflite_metadata: Some(TfliteMetadata::default()),
+        safetensors_metadata: Some(create_minimal_fallback::<SafetensorsMetadata>(0)),
         ..Default::default()
     };
     stats.mining_result = Some(zahirscan::results::MiningResult {
@@ -90,4 +105,46 @@ fn test_all_metadata_copied_to_output() {
         "archive_metadata not copied"
     );
     assert!(output.code_metadata.is_some(), "code_metadata not copied");
+    assert!(
+        output.parquet_metadata.is_some(),
+        "parquet_metadata not copied"
+    );
+    assert!(
+        output.arrow_ipc_metadata.is_some(),
+        "arrow_ipc_metadata not copied"
+    );
+    assert!(output.avro_metadata.is_some(), "avro_metadata not copied");
+    assert!(output.orc_metadata.is_some(), "orc_metadata not copied");
+    assert!(
+        output.hdf5_metadata.is_some(),
+        "hdf5_metadata not copied (add to copy_metadata_fields!)"
+    );
+    assert!(
+        output.netcdf_metadata.is_some(),
+        "netcdf_metadata not copied (add to copy_metadata_fields!)"
+    );
+    assert!(
+        output.mtx_metadata.is_some(),
+        "mtx_metadata not copied (add to copy_metadata_fields!)"
+    );
+    assert!(
+        output.mat_metadata.is_some(),
+        "mat_metadata not copied (add to copy_metadata_fields!)"
+    );
+    assert!(
+        output.onnx_metadata.is_some(),
+        "onnx_metadata not copied (add to copy_metadata_fields!)"
+    );
+    assert!(
+        output.gguf_metadata.is_some(),
+        "gguf_metadata not copied (add to copy_metadata_fields!)"
+    );
+    assert!(
+        output.tflite_metadata.is_some(),
+        "tflite_metadata not copied (add to copy_metadata_fields!)"
+    );
+    assert!(
+        output.safetensors_metadata.is_some(),
+        "safetensors_metadata not copied (add to copy_metadata_fields!)"
+    );
 }

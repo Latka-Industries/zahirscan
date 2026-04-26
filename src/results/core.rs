@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
 
 use crate::engine::chunking::ProcessingTask;
+#[allow(clippy::wildcard_imports)]
+use crate::metadata::*;
 
-use super::metadata::*;
 use super::writing::{CompressionStats, WritingFootprint};
 
 /// Output mode for results
@@ -105,6 +106,36 @@ pub struct Output {
     pub log_metadata: Option<LogMetadata>,
     /// JSON file metadata (Mode 2 only, for JSON files)
     pub json_metadata: Option<JsonMetadata>,
+    /// Parquet metadata (Mode 2 only)
+    pub parquet_metadata: Option<super::metadata::ParquetMetadata>,
+    /// Arrow IPC / Feather metadata (Mode 2 only)
+    pub arrow_ipc_metadata: Option<super::metadata::ArrowIpcMetadata>,
+    /// Avro OCF metadata (Mode 2 only)
+    pub avro_metadata: Option<super::metadata::AvroMetadata>,
+    /// ORC metadata (Mode 2 only)
+    pub orc_metadata: Option<super::metadata::OrcMetadata>,
+    /// `NumPy` `.npy` metadata (Mode 2 only)
+    pub npy_metadata: Option<super::metadata::NpyMetadata>,
+    /// `NumPy` `.npz` metadata (Mode 2 only)
+    pub npz_metadata: Option<super::metadata::NpzMetadata>,
+    /// HDF5 metadata (Mode 2 only)
+    pub hdf5_metadata: Option<super::metadata::Hdf5Metadata>,
+    /// `NetCDF` metadata (Mode 2 only)
+    pub netcdf_metadata: Option<super::metadata::NetCdfMetadata>,
+    /// Matrix Market `.mtx` metadata (Mode 2 only)
+    pub mtx_metadata: Option<super::metadata::MtxMetadata>,
+    /// MATLAB `.mat` metadata (Mode 2 only)
+    pub mat_metadata: Option<super::metadata::MatMetadata>,
+    /// ONNX (`.onnx`) metadata (Mode 2 only)
+    pub onnx_metadata: Option<super::metadata::OnnxMetadata>,
+    /// GGUF (`.gguf`) metadata (Mode 2 only)
+    pub gguf_metadata: Option<super::metadata::GgufMetadata>,
+    /// TensorFlow Lite (`.tflite`) metadata (Mode 2 only)
+    pub tflite_metadata: Option<super::metadata::TfliteMetadata>,
+    /// Safetensors (`.safetensors`) metadata (Mode 2 only)
+    pub safetensors_metadata: Option<super::metadata::SafetensorsMetadata>,
+    /// `Zarr` store (`.zarr/`) metadata (Mode 2 only)
+    pub zarr_metadata: Option<super::metadata::ZarrMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -124,8 +155,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 29 fields: 1 required (templates) + 28 optional fields
-        let mut state = serializer.serialize_struct("Output", 29)?;
+        // Maximum 44 fields: 1 required (templates) + 43 optional fields
+        let mut state = serializer.serialize_struct("Output", 44)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
@@ -140,25 +171,12 @@ impl Serialize for Output {
         crate::serialize_optional!(state, self.is_binary, "is_binary");
         crate::serialize_optional!(state, self.compression, "compression");
         crate::serialize_optional!(state, self.writing_footprint, "writing_footprint");
-        crate::serialize_optional!(state, self.image_metadata, "image_metadata");
-        crate::serialize_optional!(state, self.video_metadata, "video_metadata");
-        crate::serialize_optional!(state, self.audio_metadata, "audio_metadata");
-        crate::serialize_optional!(state, self.csv_metadata, "csv_metadata");
-        crate::serialize_optional!(state, self.pdf_metadata, "pdf_metadata");
-        crate::serialize_optional!(state, self.docx_metadata, "docx_metadata");
-        crate::serialize_optional!(state, self.sqlite_metadata, "sqlite_metadata");
-        crate::serialize_optional!(state, self.toml_metadata, "toml_metadata");
-        crate::serialize_optional!(state, self.zip_metadata, "zip_metadata");
-        crate::serialize_optional!(state, self.xml_metadata, "xml_metadata");
-        crate::serialize_optional!(state, self.html_metadata, "html_metadata");
-        crate::serialize_optional!(state, self.yaml_metadata, "yaml_metadata");
-        crate::serialize_optional!(state, self.ini_metadata, "ini_metadata");
-        crate::serialize_optional!(state, self.pptx_metadata, "pptx_metadata");
-        crate::serialize_optional!(state, self.epub_metadata, "epub_metadata");
-        crate::serialize_optional!(state, self.archive_metadata, "archive_metadata");
-        crate::serialize_optional!(state, self.code_metadata, "code_metadata");
-        crate::serialize_optional!(state, self.log_metadata, "log_metadata");
-        crate::serialize_optional!(state, self.json_metadata, "json_metadata");
+        macro_rules! serialize_metadata_field {
+            ($state:expr, $output:expr, $field:ident, $parse_ty:path, $output_ty:path, $serialized_name:literal) => {
+                crate::serialize_optional!($state, $output.$field, $serialized_name);
+            };
+        }
+        crate::for_each_metadata_field!(serialize_metadata_field, state, self);
 
         state.end()
     }

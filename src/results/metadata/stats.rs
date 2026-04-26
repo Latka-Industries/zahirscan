@@ -4,7 +4,7 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 
 /// Numeric column statistics
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Default)]
 pub struct NumericStats {
     pub min: Option<f64>,
     pub max: Option<f64>,
@@ -33,7 +33,7 @@ impl Serialize for NumericStats {
 }
 
 /// Date column statistics
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Default)]
 pub struct DateStats {
     pub span_days: Option<f64>,
     pub span_minutes: Option<f64>,
@@ -56,8 +56,10 @@ impl Serialize for DateStats {
 }
 
 /// Boolean column statistics
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Default)]
 pub struct BooleanStats {
+    /// Serialized as `true_pct`; JSON key `true_percentage` is also accepted on deserialize.
+    #[serde(default, alias = "true_pct")]
     pub true_percentage: Option<f64>,
 }
 
@@ -67,7 +69,7 @@ impl Serialize for BooleanStats {
         S: Serializer,
     {
         let mut state = serializer.serialize_struct("BooleanStats", 1)?;
-        crate::serialize_optional!(state, self.true_percentage, "true_percentage");
+        crate::serialize_optional!(state, self.true_percentage, "true_pct");
         state.end()
     }
 }

@@ -23,6 +23,15 @@ struct Args {
     #[arg(short = 'o', long)]
     output: Option<String>,
 
+    #[command(flatten)]
+    mode: CliModeArgs,
+
+    #[command(flatten)]
+    processing: CliProcessingArgs,
+}
+
+#[derive(Parser)]
+struct CliModeArgs {
     /// Output mode: full metadata (for development/debugging).
     /// Default is templates-only mode (minimal JSON with templates & writing footprint)
     #[arg(short = 'f', long)]
@@ -37,7 +46,10 @@ struct Args {
     /// Useful for privacy when sharing output JSON
     #[arg(short = 'r', long)]
     redact: bool,
+}
 
+#[derive(Parser)]
+struct CliProcessingArgs {
     /// Skip media metadata extraction (audio, video, image).
     /// Faster processing when metadata is not needed
     #[arg(short = 'n', long)]
@@ -65,17 +77,21 @@ fn main() -> anyhow::Result<()> {
 
     let start = Instant::now();
 
-    setup::build_logger(args.dev);
+    setup::build_logger(args.mode.dev);
 
     let mut config = setup::load_config();
     setup::apply_cli_to_config(
         &mut config,
         setup::CliRuntimeFlags {
-            progress: args.progress,
-            dev: args.dev,
-            full: args.full,
-            redact: args.redact,
-            no_media: args.no_media,
+            mode: setup::CliRuntimeMode {
+                dev: args.mode.dev,
+                full: args.mode.full,
+                redact: args.mode.redact,
+            },
+            processing: setup::CliRuntimeProcessing {
+                progress: args.processing.progress,
+                no_media: args.processing.no_media,
+            },
         },
     )?;
 

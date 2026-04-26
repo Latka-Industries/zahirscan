@@ -1,11 +1,13 @@
-//! Probabilistic template mining and parsing
-//! Main handler that routes to log or text parsers
+//! Top-level parser orchestration for all supported file families.
+//! Routes each detected file type to the corresponding parser module
+//! (text/log, settings, structured data, media, archives, code, models, etc.).
 
 pub mod code;
 mod column_stats;
 pub mod container;
 pub mod media;
 mod media_helpers;
+pub mod models;
 mod office;
 pub mod settings;
 pub mod sqlite;
@@ -14,11 +16,12 @@ pub mod text;
 pub mod traits;
 pub use media_helpers::{BitrateMode, CompressionMode};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use memmap2::Mmap;
 use serde_json;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
+use std::path::Path;
 
 use crate::config::RuntimeConfig;
 use crate::results::{CompressionStats, FileMetadata, MiningResult, Output, OutputMode, Template};
@@ -83,27 +86,16 @@ macro_rules! ok_anyhow {
 /// Usage: `copy_metadata_fields!(from_stats, to_output)`
 /// This ensures all metadata fields are copied without having to manually list them.
 #[macro_export]
+macro_rules! copy_one_metadata_field {
+    ($from:expr, $to:expr, $field:ident, $parse_ty:path, $output_ty:path, $serialized_name:literal) => {
+        $to.$field = $from.$field.clone();
+    };
+}
+
+#[macro_export]
 macro_rules! copy_metadata_fields {
     ($from:expr, $to:expr) => {
-        $to.image_metadata = $from.image_metadata.clone();
-        $to.video_metadata = $from.video_metadata.clone();
-        $to.audio_metadata = $from.audio_metadata.clone();
-        $to.csv_metadata = $from.csv_metadata.clone();
-        $to.pdf_metadata = $from.pdf_metadata.clone();
-        $to.docx_metadata = $from.docx_metadata.clone();
-        $to.sqlite_metadata = $from.sqlite_metadata.clone();
-        $to.toml_metadata = $from.toml_metadata.clone();
-        $to.zip_metadata = $from.zip_metadata.clone();
-        $to.xml_metadata = $from.xml_metadata.clone();
-        $to.html_metadata = $from.html_metadata.clone();
-        $to.yaml_metadata = $from.yaml_metadata.clone();
-        $to.ini_metadata = $from.ini_metadata.clone();
-        $to.pptx_metadata = $from.pptx_metadata.clone();
-        $to.epub_metadata = $from.epub_metadata.clone();
-        $to.archive_metadata = $from.archive_metadata.clone();
-        $to.code_metadata = $from.code_metadata.clone();
-        $to.log_metadata = $from.log_metadata.clone();
-        $to.json_metadata = $from.json_metadata.clone();
+        $crate::for_each_metadata_field!(copy_one_metadata_field, $from, $to);
     };
 }
 
@@ -130,7 +122,8 @@ macro_rules! no_template_mining {
 pub enum ParserCategory {
     Media,      // Image | Video | Audio -> media::process
     Office,     // Docx | Xlsx | Pptx -> office::process
-    Structured, // Csv | Html | Json | Epub | Pdf -> structured::process
+    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | Arrow IPC | Avro | ORC | NPY | NPZ | HDF5 | NetCDF | MTX | Mat | Zarr -> structured::process
+    Models,     // Onnx | Gguf | Tflite | Safetensors -> models::process
     Settings,   // Toml | Yaml | Xml | Ini -> settings::process
     Container,  // Zip | Archive -> container::process
     Sqlite,
@@ -153,6 +146,7 @@ impl ParserCategory {
             ParserCategory::Media => media::process(stats, mmap, config),
             ParserCategory::Office => office::process(stats, mmap, config),
             ParserCategory::Structured => structured::process(stats, mmap, config),
+            ParserCategory::Models => models::process(stats, mmap, config),
             ParserCategory::Settings => settings::process(stats, mmap, config),
             ParserCategory::Container => container::process(stats, mmap, config),
             ParserCategory::Sqlite => sqlite::process(stats, mmap, config),
@@ -187,13 +181,63 @@ pub enum FileType {
     Epub,
     Archive,
     Code,
+    Parquet,
+    ArrowIpc,
+    Avro,
+    Orc,
+    Npy,
+    Npz,
+    Hdf5,
+    NetCdf,
+    Mtx,
+    Mat,
+    Onnx,
+    Gguf,
+    Tflite,
+    Safetensors,
+    Zarr,
     #[default]
     Unknown,
 }
 
-const METADATA_NAMES: [&str; 23] = [
-    "Log", "JSON", "Text", "Markdown", "Image", "Video", "Audio", "CSV", "PDF", "DOCX", "XLSX",
-    "SQLite", "TOML", "ZIP", "XML", "HTML", "YAML", "INI", "PPTX", "EPUB", "Archive", "Code",
+const METADATA_NAMES: [&str; 38] = [
+    "Log",
+    "JSON",
+    "Text",
+    "Markdown",
+    "Image",
+    "Video",
+    "Audio",
+    "CSV",
+    "PDF",
+    "DOCX",
+    "XLSX",
+    "SQLite",
+    "TOML",
+    "ZIP",
+    "XML",
+    "HTML",
+    "YAML",
+    "INI",
+    "PPTX",
+    "EPUB",
+    "Archive",
+    "Code",
+    "Parquet",
+    "Arrow IPC",
+    "Avro",
+    "ORC",
+    "NPY",
+    "NPZ",
+    "HDF5",
+    "NetCDF",
+    "Matrix Market",
+    "MATLAB MAT",
+    "ONNX",
+    "GGUF",
+    "TFLite",
+    "Safetensors",
+    "Zarr",
     "Unknown",
 ];
 
@@ -239,7 +283,22 @@ impl FileType {
                 19 => FileType::Epub,
                 20 => FileType::Archive,
                 21 => FileType::Code,
-                22 => FileType::Unknown,
+                22 => FileType::Parquet,
+                23 => FileType::ArrowIpc,
+                24 => FileType::Avro,
+                25 => FileType::Orc,
+                26 => FileType::Npy,
+                27 => FileType::Npz,
+                28 => FileType::Hdf5,
+                29 => FileType::NetCdf,
+                30 => FileType::Mtx,
+                31 => FileType::Mat,
+                32 => FileType::Onnx,
+                33 => FileType::Gguf,
+                34 => FileType::Tflite,
+                35 => FileType::Safetensors,
+                36 => FileType::Zarr,
+                37 => FileType::Unknown,
                 _ => unreachable!("METADATA_NAMES and match arms must stay in sync"),
             })
     }
@@ -256,8 +315,24 @@ impl FileType {
         match self {
             FileType::Image | FileType::Video | FileType::Audio => Some(ParserCategory::Media),
             FileType::Docx | FileType::Xlsx | FileType::Pptx => Some(ParserCategory::Office),
-            FileType::Csv | FileType::Html | FileType::Json | FileType::Epub | FileType::Pdf => {
-                Some(ParserCategory::Structured)
+            FileType::Csv
+            | FileType::Html
+            | FileType::Json
+            | FileType::Epub
+            | FileType::Pdf
+            | FileType::Parquet
+            | FileType::ArrowIpc
+            | FileType::Avro
+            | FileType::Orc
+            | FileType::Npy
+            | FileType::Npz
+            | FileType::Hdf5
+            | FileType::NetCdf
+            | FileType::Mtx
+            | FileType::Mat
+            | FileType::Zarr => Some(ParserCategory::Structured),
+            FileType::Onnx | FileType::Gguf | FileType::Tflite | FileType::Safetensors => {
+                Some(ParserCategory::Models)
             }
             FileType::Toml | FileType::Yaml | FileType::Xml | FileType::Ini => {
                 Some(ParserCategory::Settings)
@@ -322,6 +397,36 @@ pub struct ParseResult {
     pub log_metadata: Option<crate::results::LogMetadata>,
     /// JSON file metadata (for JSON files)
     pub json_metadata: Option<crate::results::JsonMetadata>,
+    /// Parquet columnar metadata
+    pub parquet_metadata: Option<crate::results::ParquetMetadata>,
+    /// Arrow IPC / Feather metadata
+    pub arrow_ipc_metadata: Option<crate::results::ArrowIpcMetadata>,
+    /// Avro OCF metadata
+    pub avro_metadata: Option<crate::results::AvroMetadata>,
+    /// ORC metadata
+    pub orc_metadata: Option<crate::results::OrcMetadata>,
+    /// `NumPy` `.npy` array header / layout metadata
+    pub npy_metadata: Option<crate::results::NpyMetadata>,
+    /// `NumPy` `.npz` archive (ZIP of `.npy`) metadata
+    pub npz_metadata: Option<crate::results::NpzMetadata>,
+    /// HDF5 (`.h5`, `.hdf5`) hierarchical metadata
+    pub hdf5_metadata: Option<crate::results::Hdf5Metadata>,
+    /// `NetCDF` (`.nc`, `.cdf`) metadata
+    pub netcdf_metadata: Option<crate::results::NetCdfMetadata>,
+    /// Matrix Market (`.mtx`) metadata
+    pub mtx_metadata: Option<crate::results::MtxMetadata>,
+    /// MATLAB `.mat` metadata
+    pub mat_metadata: Option<crate::results::MatMetadata>,
+    /// ONNX (`.onnx`) graph summary metadata
+    pub onnx_metadata: Option<crate::results::OnnxMetadata>,
+    /// GGUF (`.gguf`) key/value and tensor table metadata
+    pub gguf_metadata: Option<crate::results::GgufMetadata>,
+    /// TensorFlow Lite (`.tflite`) `FlatBuffer` summary metadata
+    pub tflite_metadata: Option<crate::results::TfliteMetadata>,
+    /// Safetensors (`.safetensors`) index summary metadata
+    pub safetensors_metadata: Option<crate::results::SafetensorsMetadata>,
+    /// `Zarr` directory store (`.zarr/`) metadata
+    pub zarr_metadata: Option<crate::results::ZarrMetadata>,
 }
 
 impl ParseResult {
@@ -455,6 +560,13 @@ pub(crate) fn open_mmap(path: &str) -> Result<Mmap> {
     Ok(mmap)
 }
 
+/// Zero-length `mmap` for types that have no single-file payload (e.g. a `Zarr` directory).
+fn open_empty_mmap() -> Result<Mmap> {
+    let f = tempfile::tempfile()?;
+    let mmap = unsafe { Mmap::map(&f)? };
+    Ok(mmap)
+}
+
 /// Phase 1: Initial file scan (fast pass to gather file metadata).
 /// Returns stats only; use [`initial_file_scan_with_mmap`] when the mmap should be reused (e.g. Phase 2).
 ///
@@ -468,7 +580,29 @@ pub fn initial_file_scan(path: &str) -> Result<ParseResult> {
 
 /// Phase 1 scan that returns the mmap so Phase 2 can reuse it (avoids double open per path).
 pub(crate) fn initial_file_scan_with_mmap(path: &str) -> Result<(ParseResult, Mmap)> {
+    let p = Path::new(path);
     let file_type = utils::filetypes::detect_file_type(path);
+
+    if file_type == FileType::Zarr {
+        if !p.is_dir() {
+            anyhow::bail!("Zarr path must be a directory: {path}");
+        }
+        let byte_count = utils::zarr_paths::total_file_bytes_under(p)
+            .with_context(|| format!("read Zarr store directory: {path}"))?;
+        let mmap = open_empty_mmap()?;
+        let stats = ParseResult {
+            file_path: path.to_string(),
+            file_type,
+            line_count: 0,
+            byte_count,
+            token_count: 0,
+            duration: std::time::Duration::ZERO,
+            is_binary: true,
+            ..Default::default()
+        };
+        return Ok((stats, mmap));
+    }
+
     let mmap = open_mmap(path)?;
     let byte_count = mmap.len();
 

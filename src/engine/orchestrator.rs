@@ -5,7 +5,7 @@ use anyhow::Result;
 use crate::config::RuntimeConfig;
 use crate::results::Phase2Result;
 use crate::setup::OutputSink;
-use crate::utils::{BATCHED_NO_VALID_FILES_DETAIL_CAP, no_valid_files_error};
+use crate::utils::{BATCHED_NO_VALID_FILES_DETAIL_CAP, no_valid_files_error, zarr_paths};
 
 use super::chunking::{PathBatchMode, calculate_adaptive_chunking, determine_batch_size};
 use super::phases::{mining::phase2_mining, scanning::phase1_scan};
@@ -25,18 +25,20 @@ pub fn run_pipeline(
     config: &RuntimeConfig,
     output_sink: &OutputSink,
 ) -> Result<(Vec<(String, String)>, Phase2Result)> {
+    let input_paths: Vec<String> = zarr_paths::filter_zarr_input_paths(input_paths.iter().cloned());
+    let input_slice = input_paths.as_slice();
     let skip_file_write = output_dir.is_none();
 
-    match determine_batch_size(input_paths) {
+    match determine_batch_size(input_slice) {
         PathBatchMode::Single => run_pipeline_single(
-            input_paths,
+            input_slice,
             output_dir,
             config,
             output_sink,
             skip_file_write,
         ),
         PathBatchMode::Batched { batch_size } => run_pipeline_batched(
-            input_paths,
+            input_slice,
             output_dir,
             config,
             output_sink,

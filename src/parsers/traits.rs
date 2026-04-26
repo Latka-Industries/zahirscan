@@ -104,7 +104,7 @@ pub fn calculate_compression_with_footprint(
 /// Sort templates by count (most common first)
 /// This is shared across all parsers
 pub fn sort_templates_by_count(templates: &mut [Template]) {
-    templates.sort_by(|a, b| b.count.cmp(&a.count));
+    templates.sort_by_key(|item| std::cmp::Reverse(item.count));
 }
 
 // ============================================================================

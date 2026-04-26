@@ -28,6 +28,21 @@ const FILE_EXTENSION_MAP: &[(&str, FileType)] = file_extension_map! {
     Video: "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ogv";
     Audio: "mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma", "ape", "dsd", "dsf", "aif", "aiff", "aifc";
     Csv: "csv", "tsv", "tab", "psv";
+    Parquet: "parquet";
+    ArrowIpc: "arrow", "feather", "ipc";
+    Avro: "avro";
+    Orc: "orc";
+    Npy: "npy";
+    Npz: "npz";
+    Hdf5: "h5", "hdf5";
+    NetCdf: "nc", "cdf";
+    Mtx: "mtx";
+    Mat: "mat";
+    Onnx: "onnx";
+    Gguf: "gguf";
+    Tflite: "tflite";
+    Safetensors: "safetensors";
+    Zarr: "zarr";
     Html: "html", "htm";
     Docx: "docx";
     Xlsx: "xlsx";
@@ -46,7 +61,7 @@ const FILE_EXTENSION_MAP: &[(&str, FileType)] = file_extension_map! {
 /// Get `FileType` from extension using linear search
 /// Returns `FileType::Unknown` if extension is not recognized
 ///
-/// For ~47 extensions, linear search is faster than `HashMap` due to:
+/// For ~49 extensions, linear search is faster than `HashMap` due to:
 /// - No hash computation overhead
 /// - No memory allocation
 /// - Cache-friendly sequential access

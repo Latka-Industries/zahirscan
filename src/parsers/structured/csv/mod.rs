@@ -2,22 +2,178 @@
 //!
 //! Extensions `csv`, `tsv`, `tab`, and `psv` map to this parser; the `csv` crate reads rows using a
 //! detected or path-hinted delimiter.
+//!
+//! **Row count** is a separate streaming pass that only counts records (no per-column stats).
+//!
+//! **Types and column stats** use a **bounded row sample** in memory: [`RuntimeConfig::max_csv_scan_rows`]
+//! is the base cap, scaled down for large files (see byte threshold below) and for many columns.
+//! Stats are computed in **column chunks** to cap memory on wide tables.
+//! [`RuntimeConfig::max_csv_max_distinct_per_column`] bounds distinct strings per column.
+//!
+//! Large-file sample shrink uses the same per-decade rule as other tabular formats (see
+//! [`crate::parsers::structured::columnar::utils::effective_sample_rows_after_file_byte_scaling`]).
+//! When row count is known, **bytes-per-row** (BPR) is applied so skinny, modest-sized files (many rows,
+//! small on-disk size) can use a full-table sample cap instead of shrinking purely by file-size decade.
 
-pub mod utils;
+mod utils;
 
 pub use utils::*;
 
 use anyhow::Result;
 use csv::ReaderBuilder;
-use dashmap::DashMap;
-use rayon::prelude::*;
 use std::io::Cursor;
 
 use crate::config::RuntimeConfig;
-use crate::parsers::ParseResult;
-use crate::parsers::column_stats;
-use crate::parsers::traits::AdaptiveParallel;
-use crate::results::{BooleanStats, CsvMetadata, DateStats, NumericStats};
+use crate::parsers::{
+    ParseResult,
+    structured::{
+        columnar::utils as columnar_utils,
+        constants::{CsvEncodingLabel, limits},
+        table_sample_profile,
+    },
+};
+use crate::results::{
+    BooleanStats, ColumnarCommonFields, CsvMetadata, DateStats, MergeColumnStatsInput,
+    NumericStats, merge_column_stats,
+};
+
+fn csv_reader(content_str: &str, delim_byte: u8) -> csv::Reader<Cursor<&str>> {
+    ReaderBuilder::new()
+        .delimiter(delim_byte)
+        .has_headers(true)
+        .flexible(true)
+        .from_reader(Cursor::new(content_str))
+}
+
+fn count_data_rows(content_str: &str, delim_byte: u8) -> usize {
+    let mut reader = csv_reader(content_str, delim_byte);
+    let _ = reader.headers();
+    reader.records().filter_map(std::result::Result::ok).count()
+}
+
+fn collect_sample_rows(content_str: &str, delim_byte: u8, max_rows: usize) -> Vec<Vec<String>> {
+    let mut reader = csv_reader(content_str, delim_byte);
+    let _ = reader.headers();
+    reader
+        .records()
+        .filter_map(std::result::Result::ok)
+        .take(max_rows)
+        .map(|rec| {
+            rec.iter()
+                .map(|s: &str| s.to_string())
+                .collect::<Vec<String>>()
+        })
+        .collect()
+}
+
+fn csv_encoding_label(content: &[u8]) -> String {
+    if std::str::from_utf8(content).is_ok() {
+        CsvEncodingLabel::UTF8.to_string()
+    } else {
+        CsvEncodingLabel::NON_UTF8.to_string()
+    }
+}
+
+fn non_utf8_csv_metadata(encoding: String) -> CsvMetadata {
+    CsvMetadata {
+        common: ColumnarCommonFields {
+            encoding: Some(encoding),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn read_csv_headers(
+    content_str: &str,
+    delim_byte: u8,
+) -> (Option<Vec<String>>, Option<usize>, Option<bool>) {
+    let mut header_reader = csv_reader(content_str, delim_byte);
+    match header_reader.headers() {
+        Ok(headers) => {
+            let names: Vec<String> = headers.iter().map(|s: &str| s.to_string()).collect();
+            let count = names.len();
+            (Some(names), Some(count), Some(true))
+        }
+        Err(_) => (None, None, Some(false)),
+    }
+}
+
+fn csv_scaled_sample_cap(
+    base_sample: usize,
+    file_bytes: u64,
+    column_count_from_headers: Option<usize>,
+    row_count: usize,
+) -> usize {
+    let cc = column_count_from_headers
+        .filter(|&c| c > 0)
+        .unwrap_or(limits::TABULAR_COL_SCALE_NUMERATOR);
+    let effective_sample =
+        columnar_utils::tabular_effective_sample_rows(base_sample, file_bytes, cc, Some(row_count));
+    effective_sample.max(1).min(row_count)
+}
+
+#[allow(clippy::type_complexity)]
+fn csv_pass2_chunked_column_stats(
+    column_types_vec: Vec<String>,
+    column_count: usize,
+    stats_rows_sampled: usize,
+    max_distinct: usize,
+    config: &RuntimeConfig,
+    sample_rows: &[Vec<String>],
+) -> (
+    Option<Vec<String>>,
+    Option<Vec<f64>>,
+    Option<Vec<usize>>,
+    Option<Vec<Option<NumericStats>>>,
+    Option<Vec<Option<DateStats>>>,
+    Option<Vec<Option<BooleanStats>>>,
+) {
+    if column_count == 0 || column_types_vec.is_empty() || stats_rows_sampled == 0 {
+        return (None, None, None, None, None, None);
+    }
+
+    let mut null_pct = vec![0.0f64; column_count];
+    let mut unique_c = vec![0usize; column_count];
+    let mut numeric_stats_acc = vec![None; column_count];
+    let mut date_stats_acc = vec![None; column_count];
+    let mut boolean_stats_acc = vec![None; column_count];
+
+    for col_start in (0..column_count).step_by(limits::TABULAR_COLUMN_CHUNK) {
+        let col_end = (col_start + limits::TABULAR_COLUMN_CHUNK).min(column_count);
+        let (np, uc, ns, ds, bs, _ru) = table_sample_profile::csv_pass2_stats_range(
+            &column_types_vec,
+            col_start,
+            col_end,
+            stats_rows_sampled,
+            max_distinct,
+            config,
+            sample_rows.iter().cloned(),
+        );
+        if let (Some(np), Some(uc), Some(ns), Some(ds), Some(bs)) = (np, uc, ns, ds, bs) {
+            null_pct[col_start..col_end].copy_from_slice(&np);
+            unique_c[col_start..col_end].copy_from_slice(&uc);
+            for (i, v) in ns.into_iter().enumerate() {
+                numeric_stats_acc[col_start + i] = v;
+            }
+            for (i, v) in ds.into_iter().enumerate() {
+                date_stats_acc[col_start + i] = v;
+            }
+            for (i, v) in bs.into_iter().enumerate() {
+                boolean_stats_acc[col_start + i] = v;
+            }
+        }
+    }
+
+    (
+        Some(column_types_vec),
+        Some(null_pct),
+        Some(unique_c),
+        Some(numeric_stats_acc),
+        Some(date_stats_acc),
+        Some(boolean_stats_acc),
+    )
+}
 
 /// Extract CSV metadata
 ///
@@ -29,43 +185,37 @@ pub fn extract_csv_metadata(
     stats: &ParseResult,
     config: &RuntimeConfig,
 ) -> Result<CsvMetadata> {
-    // Check if content is valid UTF-8
-    let encoding = if std::str::from_utf8(content).is_ok() {
-        Some("UTF-8".to_string())
-    } else {
-        // Try to detect other common encodings (simplified - just mark as non-UTF-8)
-        Some("Non-UTF-8".to_string())
-    };
+    let encoding = csv_encoding_label(content);
 
-    // Try to read as UTF-8 first
     let Ok(content_str) = std::str::from_utf8(content) else {
-        // If not UTF-8, return minimal metadata with encoding info
-        return Ok(CsvMetadata {
-            encoding,
-            ..Default::default()
-        });
+        return Ok(non_utf8_csv_metadata(encoding));
     };
 
-    // Delimiter: content sniffing + path hints (`.tsv`/`.tab` → tab, `.psv` → pipe)
+    let file_bytes = content.len() as u64;
+    let base_sample = config.max_csv_scan_rows.max(1);
     let delim_byte = utils::delimiter_byte_for_reader(content_str, &stats.file_path);
     let field_sep = char::from_u32(u32::from(delim_byte)).unwrap_or(',');
 
-    let mut reader = ReaderBuilder::new()
-        .delimiter(delim_byte)
-        .has_headers(true) // Try to read headers first
-        .flexible(true) // Allow varying number of fields per row
-        .from_reader(Cursor::new(content_str));
+    let (column_names, column_count_from_headers, has_header) =
+        read_csv_headers(content_str, delim_byte);
+    let row_count = count_data_rows(content_str, delim_byte);
+    let effective_sample = csv_scaled_sample_cap(
+        base_sample,
+        file_bytes,
+        column_count_from_headers,
+        row_count,
+    );
 
-    // Try to read headers
-    let headers_result = reader.headers();
-    let (column_names, column_count_from_headers, has_header) = match headers_result {
-        Ok(headers) => {
-            let names: Vec<String> = headers.iter().map(|s: &str| s.to_string()).collect();
-            let count = names.len();
-            (Some(names), Some(count), Some(true))
-        }
-        Err(_) => (None, None, Some(false)),
-    };
+    let sample_rows = collect_sample_rows(content_str, delim_byte, effective_sample);
+    let stats_rows_sampled = sample_rows.len();
+
+    let mut column_count = column_count_from_headers.unwrap_or(0);
+    let (column_types_vec, _) = table_sample_profile::csv_pass1_infer_types(
+        column_count,
+        stats_rows_sampled,
+        sample_rows.iter().cloned(),
+    );
+    column_count = column_types_vec.len();
 
     let delimiter_display = utils::format_delimiter_for_metadata(delim_byte);
     let quote_character = utils::detect_quote_character(content_str, field_sep);
@@ -75,199 +225,45 @@ pub fn extract_csv_metadata(
         quote_character.as_deref(),
     );
 
-    // Sample rows for data type inference
-    let max_sample_rows = config.max_csv_sample_rows;
-    let mut row_count = 0;
-    let mut column_count: usize = column_count_from_headers.unwrap_or(0);
-    let mut sample_data: Vec<Vec<String>> = Vec::new();
-
-    for result in reader.records() {
-        if let Ok(record) = result {
-            row_count += 1;
-            // If we didn't get column count from headers, use first row
-            if column_count == 0 {
-                column_count = record.len();
-            }
-            // Collect samples for type inference
-            if sample_data.len() < max_sample_rows {
-                let row: Vec<String> = record.iter().map(|s: &str| s.to_string()).collect();
-                sample_data.push(row);
-            }
-        } else {
-            // Skip malformed rows
-        }
-    }
-
-    // Infer column types and compute statistics using probabilistic analysis
     let (column_types, null_percentages, unique_counts, numeric_stats, date_stats, boolean_stats) =
-        if !sample_data.is_empty() && column_count > 0 {
-            let types = infer_column_types(&sample_data, column_count, config);
-            let (null_pcts, unique_cts) =
-                compute_column_statistics(&sample_data, column_count, config);
-            let (num_stats, dt_stats, bool_stats) =
-                compute_type_specific_statistics(&sample_data, &types, column_count, config);
-            (
-                Some(types),
-                Some(null_pcts),
-                Some(unique_cts),
-                Some(num_stats),
-                Some(dt_stats),
-                Some(bool_stats),
-            )
-        } else {
-            (None, None, None, None, None, None)
-        };
+        csv_pass2_chunked_column_stats(
+            column_types_vec,
+            column_count,
+            stats_rows_sampled,
+            config.max_csv_max_distinct_per_column,
+            config,
+            &sample_rows,
+        );
+
+    let columns = if column_count > 0 {
+        merge_column_stats(&MergeColumnStatsInput {
+            column_count,
+            column_names: column_names.clone(),
+            column_types,
+            null_percentages,
+            unique_counts,
+            numeric_stats,
+            date_stats,
+            boolean_stats,
+            physical_types: None,
+        })
+    } else {
+        None
+    };
 
     Ok(CsvMetadata {
-        row_count,
-        column_count,
-        column_names,
-        encoding,
-        column_types,
+        common: ColumnarCommonFields {
+            row_count: Some(row_count),
+            column_count: Some(column_count),
+            stats_rows_sampled: Some(stats_rows_sampled),
+            encoding: Some(encoding),
+            columns,
+        },
         delimiter: Some(delimiter_display),
         quote_character,
         escape_character,
         has_header,
-        null_percentages,
-        unique_counts,
-        numeric_stats,
-        date_stats,
-        boolean_stats,
     })
-}
-
-/// Infer data types for each column using probabilistic analysis
-fn infer_column_types(
-    sample_data: &[Vec<String>],
-    column_count: usize,
-    config: &RuntimeConfig,
-) -> Vec<String> {
-    // Use DashMap for thread-safe parallel updates
-    let type_scores: Vec<DashMap<String, usize>> =
-        (0..column_count).map(|_| DashMap::new()).collect();
-
-    // Analyze each row in parallel with adaptive chunking
-    sample_data.par_iter_adaptive(config).for_each(|row| {
-        for (col_idx, value) in row.iter().enumerate() {
-            if col_idx >= column_count {
-                break;
-            }
-            let inferred_type = utils::infer_value_type(value);
-            *type_scores[col_idx].entry(inferred_type).or_insert(0) += 1;
-        }
-    });
-
-    // Determine the most likely type for each column
-    type_scores
-        .into_iter()
-        .map(|scores| {
-            // Find the type with the highest count
-            scores
-                .into_iter()
-                .max_by_key(|(_, count)| *count)
-                .map_or_else(|| "string".to_string(), |(type_name, _)| type_name)
-        })
-        .collect()
-}
-
-/// Compute null percentages and unique value counts per column
-fn compute_column_statistics(
-    sample_data: &[Vec<String>],
-    column_count: usize,
-    config: &RuntimeConfig,
-) -> (Vec<f64>, Vec<usize>) {
-    let total_rows = sample_data.len();
-    if total_rows == 0 {
-        return (vec![0.0; column_count], vec![0; column_count]);
-    }
-
-    // Extract each column's values and compute statistics
-    let mut null_percentages = Vec::with_capacity(column_count);
-    let mut unique_counts = Vec::with_capacity(column_count);
-
-    for col_idx in 0..column_count {
-        let values = column_stats::extract_column_values(sample_data, col_idx);
-        let (null_pct, unique_ct) = column_stats::compute_null_and_unique_stats(&values, config);
-        null_percentages.push(null_pct);
-        unique_counts.push(unique_ct);
-    }
-
-    (null_percentages, unique_counts)
-}
-
-type TypeSpecificStats = (
-    Vec<Option<NumericStats>>,
-    Vec<Option<DateStats>>,
-    Vec<Option<BooleanStats>>,
-);
-
-/// Compute type-specific statistics (numeric, date, boolean) per column
-#[allow(clippy::type_complexity)]
-fn compute_type_specific_statistics(
-    sample_data: &[Vec<String>],
-    column_types: &[String],
-    column_count: usize,
-    config: &RuntimeConfig,
-) -> TypeSpecificStats {
-    let mut numeric_stats: Vec<Option<NumericStats>> = vec![None; column_count];
-    let mut date_stats: Vec<Option<DateStats>> = vec![None; column_count];
-    let mut boolean_stats: Vec<Option<BooleanStats>> = vec![None; column_count];
-
-    // Process each column based on its inferred type
-    for col_idx in 0..column_count {
-        if col_idx >= column_types.len() {
-            break;
-        }
-
-        let col_type = &column_types[col_idx];
-        match col_type.as_str() {
-            "number" => {
-                numeric_stats[col_idx] = compute_numeric_stats(sample_data, col_idx, config);
-            }
-            "timestamp" | "date" => {
-                // Timestamps can be treated as dates for statistics
-                date_stats[col_idx] = compute_date_stats(sample_data, col_idx, config);
-            }
-            "boolean" => {
-                boolean_stats[col_idx] = compute_boolean_stats(sample_data, col_idx, config);
-            }
-            _ => {
-                // No statistics for string/null columns
-            }
-        }
-    }
-
-    (numeric_stats, date_stats, boolean_stats)
-}
-
-/// Compute numeric statistics (min, max, mean, median, range, IQR, stdev) for a column
-fn compute_numeric_stats(
-    sample_data: &[Vec<String>],
-    col_idx: usize,
-    config: &RuntimeConfig,
-) -> Option<NumericStats> {
-    let values = column_stats::extract_column_values(sample_data, col_idx);
-    column_stats::compute_numeric_stats_from_strings(&values, config)
-}
-
-/// Compute date statistics (span in days/minutes, min/max) for a column
-fn compute_date_stats(
-    sample_data: &[Vec<String>],
-    col_idx: usize,
-    _config: &RuntimeConfig,
-) -> Option<DateStats> {
-    let values = column_stats::extract_column_values(sample_data, col_idx);
-    column_stats::compute_date_stats_from_strings(&values)
-}
-
-/// Compute boolean statistics (percentage of true values) for a column
-fn compute_boolean_stats(
-    sample_data: &[Vec<String>],
-    col_idx: usize,
-    config: &RuntimeConfig,
-) -> Option<BooleanStats> {
-    let values = column_stats::extract_column_values(sample_data, col_idx);
-    column_stats::compute_boolean_stats_from_strings(&values, config)
 }
 
 crate::no_template_mining!(

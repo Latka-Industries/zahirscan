@@ -111,10 +111,10 @@ fn count_sld_id_elements(xml: &str) -> usize {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
-                if e.name().as_ref().ends_with(b"sldId") {
-                    count += 1;
-                }
+            Ok(Event::Start(ref e) | Event::Empty(ref e))
+                if e.name().as_ref().ends_with(b"sldId") =>
+            {
+                count += 1;
             }
             Ok(Event::Eof) | Err(_) => break,
             _ => {}

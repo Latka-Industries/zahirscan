@@ -44,7 +44,7 @@ pub fn extract_bit_depth(png_data_ref: &[u8]) -> Option<u32> {
 
     // Bit depth is at byte 24 (8th byte of IHDR data)
     let bit_depth = png_data_ref[24];
-    Some(bit_depth as u32)
+    Some(u32::from(bit_depth))
 }
 
 /// Extract color type from PNG data
