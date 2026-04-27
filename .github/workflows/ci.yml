@@ -19,7 +19,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: 1.95
 
       - name: Install system deps (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -89,7 +89,7 @@ jobs:
       - name: Install Rust (MSRV)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.93
+          toolchain: 1.95
 
       - name: Install NetCDF (Ubuntu)
         run: |
@@ -122,7 +122,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: 1.95
 
       - name: Install system deps (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
