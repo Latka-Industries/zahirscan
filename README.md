@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/zahirscan.svg)](https://crates.io/crates/zahirscan)
 [![docs.rs](https://img.shields.io/docsrs/zahirscan)](https://docs.rs/zahirscan)
 ![Build](https://github.com/thicclatka/zahirscan/workflows/Build/badge.svg)
-![Rust](https://img.shields.io/badge/rust-1.93-orange.svg)
+![Rust](https://img.shields.io/badge/rust-1.95-orange.svg)
 
 > _"Others will dream that I am mad, while I dream of the Zahir."_ — [JL Borges, Labyrinths](https://bookshop.org/p/books/labyrinths-jorge-luis-borges/f14b472a366ed106?ean=9780811216999&next=t&)
 
@@ -64,7 +64,10 @@ cargo install zahirscan    # CLI
 **Optional system tools / libraries**:
 
 - **`ffprobe`** (FFmpeg): needed for rich video/audio metadata
-- **`libnetcdf`** (NetCDF C): the `netcdf` crate links it at build time
+- **NetCDF** (`.nc`, `.cdf`): the crate enables the **`netcdf` feature by default** and links **`libnetcdf`** (NetCDF C) when that feature is on. If the library is not installed, build or install with **`--no-default-features`** and optionally re-enable other defaults you need, for example:  
+  `cargo install zahirscan --no-default-features`  
+  or  
+  `cargo add zahirscan --no-default-features`.
 
 ## Usage
 
