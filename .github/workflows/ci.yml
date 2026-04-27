@@ -20,6 +20,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.95
+          components: rustfmt, clippy
 
       - name: Install system deps (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
