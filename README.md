@@ -64,10 +64,7 @@ cargo install zahirscan    # CLI
 **Optional system tools / libraries**:
 
 - **`ffprobe`** (FFmpeg): needed for rich video/audio metadata
-- **NetCDF** (`.nc`, `.cdf`): the crate enables the **`netcdf` feature by default** and links **`libnetcdf`** (NetCDF C) when that feature is on. If the library is not installed, build or install with **`--no-default-features`** and optionally re-enable other defaults you need, for example:  
-  `cargo install zahirscan --no-default-features`  
-  or  
-  `cargo add zahirscan --no-default-features`.
+- **NetCDF** (`.nc`, `.cdf`): the crate enables the **`netcdf` feature by default** and links **`libnetcdf`** (NetCDF C) when that feature is on. If the library is not installed, build or install with **`--no-default-features`**
 
 ## Usage
 
