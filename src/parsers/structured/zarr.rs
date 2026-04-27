@@ -27,7 +27,7 @@ const MAX_ZARR_ARRAYS: usize = 128;
 fn zarr_array_entry_error(name: String, e: impl std::fmt::Debug) -> ZarrArrayEntrySummary {
     ZarrArrayEntrySummary {
         name,
-        entry_parse_error: Some(format!("{:#?}", e)),
+        entry_parse_error: Some(format!("{e:#?}")),
         ..Default::default()
     }
 }
@@ -145,7 +145,7 @@ where
     l.data_offset = Some(0);
     l.data_region_bytes = Some(buf.len());
     l.fortran_order = Some(false);
-    if l.shape.as_ref().map_or(0, |s| s.len()) == 3 {
+    if l.shape.as_ref().map_or(0, std::vec::Vec::len) == 3 {
         let t3 = tensor3d_plane_stats_for_npy_bytes(&buf, &l);
         let c = if numpy::numpy_descr_element_nbytes(numpy).is_some() {
             numpy::column_common_from_npy_bytes(&buf, &l, config)
