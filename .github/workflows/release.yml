@@ -13,26 +13,19 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Build changelog
-        id: build_changelog
-        uses: mikepenz/release-changelog-builder-action@main
+
+      # Tag pushes only: workflow_dispatch from a branch has no tag to release.
+      - name: Create draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
         with:
-          configuration: 'release-changelog-builder-config.json'
-          commitMode: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Create release
-        id: create_release
-        uses: actions/create-release@latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
+          name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
-          body: ${{ steps.build_changelog.outputs.changelog }}
-          draft: false
-          prerelease: false
+          draft: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

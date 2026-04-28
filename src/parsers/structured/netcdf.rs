@@ -13,6 +13,11 @@ mod not_linked {
     use crate::parsers::ParseResult;
     use crate::results::NetCdfMetadata;
 
+    /// Returns an error because the `netcdf` feature is disabled; rebuild with that feature and `libnetcdf`.
+    ///
+    /// # Errors
+    ///
+    /// Always: NetCDF support was not compiled in.
     pub fn extract_netcdf_metadata(
         _mmap: &Mmap,
         _stats: &ParseResult,
@@ -175,6 +180,10 @@ mod linked {
 
     /// Extract `NetCDF` metadata (attributes, variable names, shapes, types). Uses [`ParseResult::file_path`];
     /// `mmap` is unused because `netcdf` opens by path.
+    ///
+    /// # Errors
+    ///
+    /// When NetCDF runtime helpers are unavailable, the file cannot be opened, or walking NetCDF-4 groups fails.
     pub fn extract_netcdf_metadata(
         _mmap: &Mmap,
         stats: &ParseResult,

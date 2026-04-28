@@ -43,23 +43,15 @@ jobs:
           channels: conda-forge
           channel-priority: strict
 
-      - name: Install system deps (Windows via conda)
+      - name: Install and configure netcdf-rs build (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash -el {0}
-        run: |
-          conda install -y -c conda-forge libnetcdf ffmpeg pkg-config
+        run: ./.github/scripts/configure-netcdf-env.sh
 
-      - name: Configure netcdf-rs build (Windows)
+      - name: Install ffmpeg (Windows via conda)
         if: matrix.os == 'windows-latest'
         shell: bash -el {0}
-        run: |
-          {
-            echo "NETCDF_DIR=${CONDA_PREFIX}/Library"
-            echo "PKG_CONFIG_PATH=${CONDA_PREFIX}/Library/lib/pkgconfig"
-            echo "RUSTFLAGS=-L native=${CONDA_PREFIX}/Library/lib"
-            echo "INCLUDE=${CONDA_PREFIX}/Library/include"
-            echo "LIB=${CONDA_PREFIX}/Library/lib"
-          } >> "${GITHUB_ENV}"
+        run: conda install -y -c conda-forge ffmpeg
 
       - name: Cache Cargo dependencies
         uses: actions/cache@v4
@@ -146,23 +138,10 @@ jobs:
           channels: conda-forge
           channel-priority: strict
 
-      - name: Install system deps (Windows via conda)
+      - name: Install and configure netcdf-rs build (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash -el {0}
-        run: |
-          conda install -y -c conda-forge libnetcdf pkg-config
-
-      - name: Configure netcdf-rs build (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: bash -el {0}
-        run: |
-          {
-            echo "NETCDF_DIR=${CONDA_PREFIX}/Library"
-            echo "PKG_CONFIG_PATH=${CONDA_PREFIX}/Library/lib/pkgconfig"
-            echo "RUSTFLAGS=-L native=${CONDA_PREFIX}/Library/lib"
-            echo "INCLUDE=${CONDA_PREFIX}/Library/include"
-            echo "LIB=${CONDA_PREFIX}/Library/lib"
-          } >> "${GITHUB_ENV}"
+        run: ./.github/scripts/configure-netcdf-env.sh
 
       - name: Build
         run: cargo build --release
