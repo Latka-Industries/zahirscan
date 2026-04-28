@@ -61,10 +61,17 @@ cargo add zahirscan        # library
 cargo install zahirscan    # CLI
 ```
 
+Disable default features (for environments without `libnetcdf`):
+
+```bash
+cargo add zahirscan --no-default-features
+cargo install zahirscan --no-default-features
+```
+
 **Optional system tools / libraries**:
 
 - **`ffprobe`** (FFmpeg): needed for rich video/audio metadata
-- **NetCDF** (`.nc`, `.cdf`): the crate enables the **`netcdf` feature by default** and links **`libnetcdf`** (NetCDF C) when that feature is on. If the library is not installed, build or install with **`--no-default-features`**
+- **NetCDF** (`.nc`, `.cdf`): enabled by default via the `netcdf` feature, which links **`libnetcdf`** (NetCDF C). If unavailable, use **`--no-default-features`** to build/install without NetCDF parsing
 
 ## Usage
 
