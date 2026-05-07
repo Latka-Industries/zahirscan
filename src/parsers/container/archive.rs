@@ -48,6 +48,7 @@ fn should_omit_tar_entry_path(path: &str) -> bool {
 }
 
 /// Detect archive format from file path (lowercased). Check compound extensions first.
+#[allow(clippy::case_sensitive_file_extension_comparisons)]
 fn detect_archive_format(path: &str) -> TarFormat {
     let lo = path.to_lowercase();
     match () {

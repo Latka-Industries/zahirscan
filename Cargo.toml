@@ -1,6 +1,6 @@
 [package]
 name = "zahirscan"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 rust-version = "1.95"
 authors = ["AHurowitz <thicclatka@users.noreply.github.com>"]
@@ -30,10 +30,10 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.100"
 apache-avro = { version = "0.21.0", features = ["snappy"] }
-arrow-array = "58.1.0"
-arrow-cast = { version = "58.1.0", default-features = false }
-arrow-ipc = "58.1.0"
-arrow-schema = "58.1.0"
+arrow-array = "58.2.0"
+arrow-cast = { version = "58.2.0", default-features = false }
+arrow-ipc = "58.2.0"
+arrow-schema = "58.2.0"
 bytes = "1.10.1"
 calamine = "0.34.0"
 chrono = { version = "0.4.43", features = ["serde"] }
@@ -45,7 +45,7 @@ env_logger = "0.11.8"
 ffprobe = "0.4.0"
 flatbuffers = "25.12.19"
 gguf-rs = "0.1.7"
-hdf5-pure-rust = "0.3.0"
+hdf5-pure-rust = "0.3.2"
 image = "0.25.10"
 kdam = "0.6.4"
 linguist = "0.1.6"
@@ -60,9 +60,9 @@ num_cpus = "1.17.0"
 onnx-ir = "0.20.1"
 orc-rust = { version = "0.8.0", default-features = false }
 oxionnx-proto = "0.1.2"
-parquet = "58.1.0"
+parquet = "58.2.0"
 png = "0.18.0"
-quick-xml = { version = "0.39.2", features = ["serialize"] }
+quick-xml = { version = "0.39.3", features = ["serialize"] }
 rayon = "1.12.0"
 regex = "1.12.2"
 rlimit = "0.11"

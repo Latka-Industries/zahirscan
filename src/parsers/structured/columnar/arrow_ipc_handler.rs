@@ -19,6 +19,7 @@ use crate::results::{ArrowIpcMetadata, ColumnarCommonFields};
 
 use super::utils;
 
+#[allow(clippy::case_sensitive_file_extension_comparisons)]
 fn feather_hint(path: &str, mmap: &[u8]) -> bool {
     path.to_lowercase().ends_with(".feather")
         || (mmap.len() >= 4 && mmap.get(0..4) == Some(b"FEA1"))

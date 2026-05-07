@@ -183,7 +183,7 @@ mod linked {
     ///
     /// # Errors
     ///
-    /// When NetCDF runtime helpers are unavailable, the file cannot be opened, or walking NetCDF-4 groups fails.
+    /// When `NetCDF` runtime helpers are unavailable, the file cannot be opened, or walking NetCDF-4 groups fails.
     pub fn extract_netcdf_metadata(
         _mmap: &Mmap,
         stats: &ParseResult,
