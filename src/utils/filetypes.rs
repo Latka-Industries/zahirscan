@@ -109,6 +109,7 @@ pub fn is_codec_for_file_type(codec: &str, file_type: FileType) -> bool {
 #[must_use]
 pub fn detect_file_type(path: &str) -> FileType {
     let lo = path.to_lowercase();
+    #[allow(clippy::case_sensitive_file_extension_comparisons)]
     if lo.ends_with(".tar.xz")
         || lo.ends_with(".tar.bz2")
         || lo.ends_with(".tar.gz")

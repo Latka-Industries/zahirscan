@@ -137,6 +137,7 @@ pub fn extract_npz_metadata(
         };
 
         let name = zf.name().to_string();
+        #[allow(clippy::case_sensitive_file_extension_comparisons)]
         if !name.to_ascii_lowercase().ends_with(".npy") {
             continue;
         }
