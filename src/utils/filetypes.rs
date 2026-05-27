@@ -43,6 +43,7 @@ const FILE_EXTENSION_MAP: &[(&str, FileType)] = file_extension_map! {
     Tflite: "tflite";
     Safetensors: "safetensors";
     Zarr: "zarr";
+    Tetration: "tet";
     Html: "html", "htm";
     Docx: "docx";
     Xlsx: "xlsx";

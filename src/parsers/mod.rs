@@ -196,11 +196,12 @@ pub enum FileType {
     Tflite,
     Safetensors,
     Zarr,
+    Tetration,
     #[default]
     Unknown,
 }
 
-const METADATA_NAMES: [&str; 38] = [
+const METADATA_NAMES: [&str; 39] = [
     "Log",
     "JSON",
     "Text",
@@ -238,6 +239,7 @@ const METADATA_NAMES: [&str; 38] = [
     "TFLite",
     "Safetensors",
     "Zarr",
+    "Tetration",
     "Unknown",
 ];
 
@@ -298,7 +300,8 @@ impl FileType {
                 34 => FileType::Tflite,
                 35 => FileType::Safetensors,
                 36 => FileType::Zarr,
-                37 => FileType::Unknown,
+                37 => FileType::Tetration,
+                38 => FileType::Unknown,
                 _ => unreachable!("METADATA_NAMES and match arms must stay in sync"),
             })
     }
@@ -330,7 +333,8 @@ impl FileType {
             | FileType::NetCdf
             | FileType::Mtx
             | FileType::Mat
-            | FileType::Zarr => Some(ParserCategory::Structured),
+            | FileType::Zarr
+            | FileType::Tetration => Some(ParserCategory::Structured),
             FileType::Onnx | FileType::Gguf | FileType::Tflite | FileType::Safetensors => {
                 Some(ParserCategory::Models)
             }
@@ -427,6 +431,8 @@ pub struct ParseResult {
     pub safetensors_metadata: Option<crate::results::SafetensorsMetadata>,
     /// `Zarr` directory store (`.zarr/`) metadata
     pub zarr_metadata: Option<crate::results::ZarrMetadata>,
+    /// Tetration `.tet` chunked tensor container metadata
+    pub tetration_metadata: Option<crate::results::TetrationMetadata>,
 }
 
 impl ParseResult {

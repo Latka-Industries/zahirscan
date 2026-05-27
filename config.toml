@@ -91,6 +91,8 @@ max_common_pivots = 10
 markdown_preview_length = 100
 # Parquet / Arrow / Avro / ORC / .npy — base max rows for tabular sample (same default as CSV; column scaling applies)
 max_tabular_sample_rows = 10000
+# Tetration .tet: query concurrency follows [concurrency].max_workers and logical payload size
+# (see README → Configuration → Tetration). Not capped by max_tabular_sample_rows.
 # CSV only: base max rows for type inference + stats (scaled down for large files / many columns)
 max_csv_scan_rows = 10000
 # CSV only: cap distinct non-null strings per column for unique counts (memory bound)
