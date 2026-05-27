@@ -13,6 +13,7 @@ pub mod netcdf;
 pub mod numpy;
 pub mod pdf;
 pub mod tensor3d;
+pub mod tetration;
 pub mod zarr;
 
 pub use array::{ArrayLayoutSummary, NpyLayoutSummary};
@@ -30,4 +31,5 @@ pub use netcdf::{NetCdfAttributeEntry, NetCdfMetadata, NetCdfVariableSummary};
 pub use numpy::{NpyMetadata, NpzMetadata, NpzNpyEntrySummary};
 pub use pdf::PdfMetadata;
 pub use tensor3d::{Tensor3DGlobalStats, Tensor3DPlaneStatEntry, Tensor3DPlaneStats};
+pub use tetration::{TetDatasetSummary, TetrationMetadata};
 pub use zarr::{ZarrArrayEntrySummary, ZarrMetadata};

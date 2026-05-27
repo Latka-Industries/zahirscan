@@ -201,14 +201,17 @@ pub fn extract_onnx_metadata(
 
 fn argtype_summary(ty: &ArgType) -> String {
     match ty {
-        ArgType::Scalar(d) => format!("scalar({d:?})"),
+        ArgType::ScalarTensor(d) => format!("scalar_tensor({d:?})"),
+        ArgType::ScalarNative(d) => format!("scalar_native({d:?})"),
         ArgType::Shape(r) => format!("shape(rank={r})"),
         ArgType::Tensor(t) => {
             let shape = t.static_shape.as_ref().map_or_else(
                 || "?".to_string(),
                 |s| {
                     s.iter()
-                        .map(ToString::to_string)
+                        .map(|dim| {
+                            dim.map_or_else(|| "?".to_string(), |d| d.to_string())
+                        })
                         .collect::<Vec<_>>()
                         .join("×")
                 },

@@ -17,6 +17,7 @@ mod numpy;
 mod pdf;
 mod table_sample_profile;
 pub mod tensor3d;
+mod tetration;
 mod zarr;
 
 pub use columnar::*;
@@ -33,6 +34,7 @@ pub use netcdf::{extract_netcdf_metadata, extract_netcdf_templates};
 pub use numpy::*;
 pub use pdf::{extract_pdf_metadata, extract_pdf_templates};
 pub use table_sample_profile::*;
+pub use tetration::{extract_tetration_metadata, extract_tetration_templates};
 pub use zarr::extract_zarr_metadata;
 
 use anyhow::Result;
@@ -69,6 +71,7 @@ pub fn process(
         FileType::Mtx => structured_mtx(stats, mmap, config),
         FileType::Mat => structured_mat(stats, mmap, config),
         FileType::Zarr => structured_zarr(stats, mmap, config),
+        FileType::Tetration => structured_tetration(stats, mmap, config),
         _ => unreachable!("structured::process called with {:?}", stats.file_type),
     }
 }
@@ -267,6 +270,23 @@ fn structured_zarr(
         crate::results::ZarrMetadata,
         FileType::Zarr,
         zarr::extract_zarr_templates(mmap, stats, config)
+    )
+}
+
+fn structured_tetration(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &RuntimeConfig,
+) -> Result<MiningResult> {
+    crate::process_with_metadata!(
+        stats,
+        mmap,
+        config,
+        tetration_metadata,
+        extract_tetration_metadata(mmap, stats, config),
+        crate::results::TetrationMetadata,
+        FileType::Tetration,
+        extract_tetration_templates(mmap, stats, config)
     )
 }
 

@@ -4,7 +4,7 @@ use zahirscan::FileType;
 use zahirscan::utils::filetypes::detect_file_type;
 
 /// Every `FileType` variant in `repr(u8)` order (must match `parsers/mod.rs`).
-fn all_file_types() -> [FileType; 38] {
+fn all_file_types() -> [FileType; 39] {
     [
         FileType::Log,
         FileType::Json,
@@ -43,6 +43,7 @@ fn all_file_types() -> [FileType; 38] {
         FileType::Tflite,
         FileType::Safetensors,
         FileType::Zarr,
+        FileType::Tetration,
         FileType::Unknown,
     ]
 }
@@ -83,8 +84,9 @@ fn file_type_discriminant_range_matches_variant_count() {
     assert_eq!(FileType::Tflite as u8, 34);
     assert_eq!(FileType::Safetensors as u8, 35);
     assert_eq!(FileType::Zarr as u8, 36);
-    assert_eq!(FileType::Unknown as u8, 37);
-    assert_eq!(all_file_types().len(), 38);
+    assert_eq!(FileType::Tetration as u8, 37);
+    assert_eq!(FileType::Unknown as u8, 38);
+    assert_eq!(all_file_types().len(), 39);
 }
 
 #[test]
@@ -107,4 +109,5 @@ fn detect_file_type_columnar_extensions() {
     assert_eq!(detect_file_type("m.tflite"), FileType::Tflite);
     assert_eq!(detect_file_type("x.safetensors"), FileType::Safetensors);
     assert_eq!(detect_file_type("ds.zarr"), FileType::Zarr);
+    assert_eq!(detect_file_type("volume.tet"), FileType::Tetration);
 }

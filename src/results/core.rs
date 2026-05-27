@@ -136,6 +136,8 @@ pub struct Output {
     pub safetensors_metadata: Option<super::metadata::SafetensorsMetadata>,
     /// `Zarr` store (`.zarr/`) metadata (Mode 2 only)
     pub zarr_metadata: Option<super::metadata::ZarrMetadata>,
+    /// Tetration `.tet` metadata (Mode 2 only)
+    pub tetration_metadata: Option<super::metadata::TetrationMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -155,8 +157,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 44 fields: 1 required (templates) + 43 optional fields
-        let mut state = serializer.serialize_struct("Output", 44)?;
+        // Maximum 45 fields: 1 required (templates) + 44 optional fields
+        let mut state = serializer.serialize_struct("Output", 45)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;
