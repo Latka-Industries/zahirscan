@@ -25,6 +25,10 @@ const MAX_DATASETS_LISTED: usize = 10_000;
 /// Cap datasets that run query-engine stats (each may issue several fold passes).
 const MAX_DATASETS_STATS: usize = 32;
 const QUERY_ENCODING: &str = "tetration-query";
+const REDUCTION_OPS: [&str; 4] = ["mean", "min", "max", "std"];
+const TET_HOST_RAM_BPS: u16 = 8500;
+const TET_SMALL_LOGICAL_BYTES: u64 = 8 * 1024 * 1024;
+const TET_LARGE_LOGICAL_BYTES: u64 = 512 * 1024 * 1024;
 
 fn dtype_label(tag: u32) -> String {
     let tags = DATASET_DTYPE_TAG_V1;
@@ -104,12 +108,87 @@ fn layout_from_record(ds: &DatasetRecordV1) -> ArrayLayoutSummary {
     layout
 }
 
-fn query_json(dataset: &str, op: &str, axes: &serde_json::Value) -> String {
-    serde_json::json!({
-        "dataset": dataset,
-        op: axes,
-    })
-    .to_string()
+fn query_json(
+    dataset: &str,
+    op: &str,
+    axes: &serde_json::Value,
+    execution: Option<&serde_json::Value>,
+) -> String {
+    let mut obj = serde_json::Map::new();
+    obj.insert(
+        "dataset".into(),
+        serde_json::Value::String(dataset.to_owned()),
+    );
+    obj.insert(op.into(), axes.clone());
+    if let Some(ex) = execution
+        && let Some(map) = ex.as_object()
+        && !map.is_empty()
+    {
+        obj.insert("execution".into(), ex.clone());
+    }
+    serde_json::Value::Object(obj).to_string()
+}
+
+fn dataset_logical_data_bytes(ds: &DatasetRecordV1) -> u64 {
+    let elems = ds.shape.iter().try_fold(1u64, |acc, &d| acc.checked_mul(d));
+    let Some(elems) = elems.filter(|&n| n > 0) else {
+        return 0;
+    };
+    tetration_dtype_to_numpy_descr(ds.dtype)
+        .and_then(numpy_descr_element_nbytes)
+        .map_or(0, |b| elems.saturating_mul(b as u64))
+}
+
+fn reduction_query_concurrency(config: &RuntimeConfig, logical_bytes: u64) -> usize {
+    if logical_bytes == 0 {
+        return 1;
+    }
+    let workers = config.max_workers.max(1);
+    if logical_bytes <= TET_SMALL_LOGICAL_BYTES {
+        return REDUCTION_OPS.len();
+    }
+    if logical_bytes >= TET_LARGE_LOGICAL_BYTES {
+        return 2.min(REDUCTION_OPS.len());
+    }
+    (workers / 2).clamp(2, REDUCTION_OPS.len())
+}
+
+fn query_execution_hints(
+    logical_bytes: u64,
+    chunk_count: usize,
+    concurrent_reductions: usize,
+) -> serde_json::Value {
+    let mut exec = serde_json::Map::new();
+    let div = u16::try_from(concurrent_reductions.max(1)).unwrap_or(1);
+    exec.insert(
+        "memory_budget_percent_bps".into(),
+        serde_json::json!(TET_HOST_RAM_BPS / div),
+    );
+    if chunk_count > 1 {
+        let fold_parallel = concurrent_reductions == 1 || logical_bytes < TET_LARGE_LOGICAL_BYTES;
+        exec.insert("fold_parallel".into(), serde_json::json!(fold_parallel));
+    }
+    serde_json::Value::Object(exec)
+}
+
+struct DatasetQueryContext<'a> {
+    config: &'a RuntimeConfig,
+    logical_bytes: u64,
+    chunk_count: usize,
+}
+
+impl DatasetQueryContext<'_> {
+    fn concurrent_reductions(&self) -> usize {
+        reduction_query_concurrency(self.config, self.logical_bytes)
+    }
+
+    fn execution_hints(&self) -> serde_json::Value {
+        query_execution_hints(
+            self.logical_bytes,
+            self.chunk_count,
+            self.concurrent_reductions(),
+        )
+    }
 }
 
 fn run_query(
@@ -149,12 +228,47 @@ fn fetch_reduction_previews(
     path: &Path,
     dataset: &str,
     axes: &serde_json::Value,
+    ctx: &DatasetQueryContext<'_>,
 ) -> Result<ReductionPreviews, String> {
+    let concurrency = ctx.concurrent_reductions();
+    let execution = ctx.execution_hints();
+    let mut slots: [Option<QueryExecutionPreview>; REDUCTION_OPS.len()] = [None, None, None, None];
+
+    for batch_start in (0..REDUCTION_OPS.len()).step_by(concurrency) {
+        let batch_end = (batch_start + concurrency).min(REDUCTION_OPS.len());
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = (batch_start..batch_end)
+                .map(|idx| {
+                    let op = REDUCTION_OPS[idx];
+                    let json = query_json(dataset, op, axes, Some(&execution));
+                    scope.spawn(move || {
+                        execution_preview(mmap, path, &json).map(|preview| (idx, preview))
+                    })
+                })
+                .collect();
+            for handle in handles {
+                let (idx, preview) = handle
+                    .join()
+                    .map_err(|_| "tetration query worker panicked".to_string())??;
+                slots[idx] = Some(preview);
+            }
+            Ok::<(), String>(())
+        })?;
+    }
+
     Ok(ReductionPreviews {
-        mean: execution_preview(mmap, path, &query_json(dataset, "mean", axes))?,
-        min: execution_preview(mmap, path, &query_json(dataset, "min", axes))?,
-        max: execution_preview(mmap, path, &query_json(dataset, "max", axes))?,
-        std: execution_preview(mmap, path, &query_json(dataset, "std", axes))?,
+        mean: slots[0]
+            .take()
+            .ok_or_else(|| "mean query missing".to_string())?,
+        min: slots[1]
+            .take()
+            .ok_or_else(|| "min query missing".to_string())?,
+        max: slots[2]
+            .take()
+            .ok_or_else(|| "max query missing".to_string())?,
+        std: slots[3]
+            .take()
+            .ok_or_else(|| "std query missing".to_string())?,
     })
 }
 
@@ -199,8 +313,8 @@ fn column_names_for_table(
     shape: &[u64],
 ) -> Option<Vec<String>> {
     let ncol = match rank {
-        1 => shape.first().copied().unwrap_or(0) as usize,
-        2 => shape.get(1).copied().unwrap_or(0) as usize,
+        1 => usize::try_from(shape.first().copied().unwrap_or(0)).unwrap_or(usize::MAX),
+        2 => usize::try_from(shape.get(1).copied().unwrap_or(0)).unwrap_or(usize::MAX),
         _ => return None,
     };
     if ncol == 0 {
@@ -274,9 +388,14 @@ fn columns_from_axis0(
     Some(out)
 }
 
-fn fetch_scalar_stats(mmap: &[u8], path: &Path, dataset: &str) -> Result<NumericStats, String> {
+fn fetch_scalar_stats(
+    mmap: &[u8],
+    path: &Path,
+    dataset: &str,
+    ctx: &DatasetQueryContext<'_>,
+) -> Result<NumericStats, String> {
     Ok(numeric_stats_from_scalar_previews(
-        &fetch_reduction_previews(mmap, path, dataset, &serde_json::json!([]))?,
+        &fetch_reduction_previews(mmap, path, dataset, &serde_json::json!([]), ctx)?,
     ))
 }
 
@@ -286,8 +405,9 @@ fn fetch_axis0_column_stats(
     dataset: &str,
     dtype: &str,
     names: Option<&Vec<String>>,
+    ctx: &DatasetQueryContext<'_>,
 ) -> Result<ColumnarCommonFields, String> {
-    let p = fetch_reduction_previews(mmap, path, dataset, &serde_json::json!(0))?;
+    let p = fetch_reduction_previews(mmap, path, dataset, &serde_json::json!(0), ctx)?;
     let cols = columns_from_axis0(
         p.min.operation_reduced_min.as_ref(),
         p.max.operation_reduced_max.as_ref(),
@@ -309,8 +429,9 @@ fn global_tensor3d_from_scalar_queries(
     path: &Path,
     dataset: &str,
     shape: &[usize],
+    ctx: &DatasetQueryContext<'_>,
 ) -> Result<Tensor3DPlaneStats, String> {
-    let p = fetch_reduction_previews(mmap, path, dataset, &serde_json::json!([]))?;
+    let p = fetch_reduction_previews(mmap, path, dataset, &serde_json::json!([]), ctx)?;
     let along_axis = shape
         .iter()
         .enumerate()
@@ -343,12 +464,19 @@ fn enrich_dataset_with_queries(
     file_meta: &TetMetadataV1,
     mmap: &[u8],
     path: &Path,
+    config: &RuntimeConfig,
+    chunk_count: u64,
 ) {
     let layout = layout_from_record(ds);
     entry.layout = layout.clone();
     let dtype = entry.dtype.as_deref().unwrap_or("unknown");
     let rank = ds.shape.len();
     let shape_usize: Vec<usize> = ds.shape.iter().map(|&d| d as usize).collect();
+    let query_ctx = DatasetQueryContext {
+        config,
+        logical_bytes: dataset_logical_data_bytes(ds),
+        chunk_count: chunk_count.max(1) as usize,
+    };
 
     let result = (|| -> Result<(), String> {
         match rank {
@@ -357,7 +485,7 @@ fn enrich_dataset_with_queries(
                     None,
                     None,
                     dtype,
-                    fetch_scalar_stats(mmap, path, &ds.name)?,
+                    fetch_scalar_stats(mmap, path, &ds.name, &query_ctx)?,
                 );
             }
             1 => {
@@ -370,20 +498,33 @@ fn enrich_dataset_with_queries(
                     Some(shape_usize[0]),
                     col_name,
                     dtype,
-                    fetch_scalar_stats(mmap, path, &ds.name)?,
+                    fetch_scalar_stats(mmap, path, &ds.name, &query_ctx)?,
                 );
             }
             2 => {
                 let rows = shape_usize.first().copied().unwrap_or(0);
                 let names = column_names_for_table(file_meta, &ds.name, 2, &ds.shape);
-                let common = fetch_axis0_column_stats(mmap, path, &ds.name, dtype, names.as_ref())?;
+                let common = fetch_axis0_column_stats(
+                    mmap,
+                    path,
+                    &ds.name,
+                    dtype,
+                    names.as_ref(),
+                    &query_ctx,
+                )?;
                 entry.common = ColumnarCommonFields {
                     row_count: Some(rows),
                     ..common
                 };
             }
             _ => {
-                let t3 = global_tensor3d_from_scalar_queries(mmap, path, &ds.name, &shape_usize)?;
+                let t3 = global_tensor3d_from_scalar_queries(
+                    mmap,
+                    path,
+                    &ds.name,
+                    &shape_usize,
+                    &query_ctx,
+                )?;
                 let num = t3.global.as_ref().map(|g| NumericStats {
                     min: Some(g.min),
                     max: Some(g.max),
@@ -429,7 +570,7 @@ fn enrich_dataset_with_queries(
 pub fn extract_tetration_metadata(
     mmap: &Mmap,
     stats: &ParseResult,
-    _config: &RuntimeConfig,
+    config: &RuntimeConfig,
 ) -> anyhow::Result<TetrationMetadata> {
     let path = Path::new(&stats.file_path);
     match read_tet_summary_v1(mmap) {
@@ -465,7 +606,15 @@ pub fn extract_tetration_metadata(
                         ..Default::default()
                     };
                     if i < MAX_DATASETS_STATS {
-                        enrich_dataset_with_queries(&mut entry, ds, &summary.metadata, mmap, path);
+                        enrich_dataset_with_queries(
+                            &mut entry,
+                            ds,
+                            &summary.metadata,
+                            mmap,
+                            path,
+                            config,
+                            per_ds.get(i).copied().unwrap_or(0),
+                        );
                     } else {
                         entry.layout = layout_from_record(ds);
                     }
@@ -505,3 +654,44 @@ crate::no_template_mining!(
     extract_tetration_templates,
     "Tetration .tet is a binary tensor container; no text template mining."
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::RuntimeConfig;
+
+    fn config_with_workers(workers: usize) -> RuntimeConfig {
+        let mut c = RuntimeConfig::default();
+        c.max_workers = workers;
+        c
+    }
+
+    #[test]
+    fn reduction_concurrency_scales_with_payload_and_workers() {
+        let cfg = config_with_workers(8);
+        assert_eq!(reduction_query_concurrency(&cfg, 1024), REDUCTION_OPS.len());
+        assert_eq!(
+            reduction_query_concurrency(&cfg, TET_SMALL_LOGICAL_BYTES),
+            REDUCTION_OPS.len()
+        );
+        assert_eq!(
+            reduction_query_concurrency(&cfg, TET_SMALL_LOGICAL_BYTES + 1),
+            4
+        );
+        assert_eq!(
+            reduction_query_concurrency(&cfg, TET_LARGE_LOGICAL_BYTES),
+            2
+        );
+    }
+
+    #[test]
+    fn execution_hints_split_memory_budget_and_gate_fold_parallel() {
+        let small = query_execution_hints(TET_SMALL_LOGICAL_BYTES, 4, 4);
+        assert_eq!(small["memory_budget_percent_bps"], 2125);
+        assert_eq!(small["fold_parallel"], true);
+
+        let large = query_execution_hints(TET_LARGE_LOGICAL_BYTES, 8, 2);
+        assert_eq!(large["memory_budget_percent_bps"], 4250);
+        assert_eq!(large["fold_parallel"], false);
+    }
+}

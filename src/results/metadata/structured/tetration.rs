@@ -1,4 +1,7 @@
 //! Tetration `.tet` mmap-friendly chunked tensor container (layout v1).
+//!
+//! Output field: `tetration_metadata` — catalog plus optional query-derived column/tensor stats
+//! (`query_error` per dataset when reductions fail).
 
 use serde::{Deserialize, Serialize};
 

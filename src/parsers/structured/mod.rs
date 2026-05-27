@@ -1,6 +1,6 @@
 //! Structured formats: CSV, HTML, JSON, EPUB, PDF, columnar binaries
 //! (Parquet, Arrow IPC, Avro, ORC), `NumPy` (NPY/NPZ), MATLAB (`.mat`),
-//! HDF5, `NetCDF`, Matrix Market (`.mtx`), and Zarr.
+//! HDF5, `NetCDF`, Matrix Market (`.mtx`), Zarr, and Tetration (`.tet`).
 
 pub mod constants;
 
