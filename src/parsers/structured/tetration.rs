@@ -24,6 +24,7 @@ use crate::results::{
 const MAX_DATASETS_LISTED: usize = 10_000;
 /// Cap datasets that run query-engine stats (each may issue several fold passes).
 const MAX_DATASETS_STATS: usize = 32;
+const QUERY_ENCODING: &str = "tetration-query";
 
 fn dtype_label(tag: u32) -> String {
     let tags = DATASET_DTYPE_TAG_V1;
@@ -136,6 +137,61 @@ fn execution_preview(
         .ok_or_else(|| "query accepted but execution block missing".to_string())
 }
 
+struct ReductionPreviews {
+    mean: QueryExecutionPreview,
+    min: QueryExecutionPreview,
+    max: QueryExecutionPreview,
+    std: QueryExecutionPreview,
+}
+
+fn fetch_reduction_previews(
+    mmap: &[u8],
+    path: &Path,
+    dataset: &str,
+    axes: &serde_json::Value,
+) -> Result<ReductionPreviews, String> {
+    Ok(ReductionPreviews {
+        mean: execution_preview(mmap, path, &query_json(dataset, "mean", axes))?,
+        min: execution_preview(mmap, path, &query_json(dataset, "min", axes))?,
+        max: execution_preview(mmap, path, &query_json(dataset, "max", axes))?,
+        std: execution_preview(mmap, path, &query_json(dataset, "std", axes))?,
+    })
+}
+
+fn numeric_range(min: Option<f64>, max: Option<f64>) -> Option<f64> {
+    match (min, max) {
+        (Some(a), Some(b)) => Some(b - a),
+        _ => None,
+    }
+}
+
+fn numeric_stats_from_scalar_previews(p: &ReductionPreviews) -> NumericStats {
+    NumericStats {
+        min: p.min.operation_min,
+        max: p.max.operation_max,
+        mean: p.mean.operation_mean,
+        median: p.mean.operation_median,
+        range: numeric_range(p.min.operation_min, p.max.operation_max),
+        stdev: p.std.operation_std,
+        ..NumericStats::default()
+    }
+}
+
+fn single_column_common(
+    row_count: Option<usize>,
+    name: Option<String>,
+    dtype: &str,
+    num: NumericStats,
+) -> ColumnarCommonFields {
+    ColumnarCommonFields {
+        row_count,
+        column_count: Some(1),
+        encoding: Some(QUERY_ENCODING.into()),
+        columns: Some(vec![column_stat_number(0, name, dtype, num)]),
+        ..Default::default()
+    }
+}
+
 fn column_names_for_table(
     meta: &TetMetadataV1,
     dataset: &str,
@@ -193,11 +249,7 @@ fn columns_from_axis0(
     dtype: &str,
     names: Option<&Vec<String>>,
 ) -> Option<Vec<ColumnStat>> {
-    let n = mins
-        .or(maxs)
-        .or(means)
-        .or(stds)?
-        .len();
+    let n = mins.or(maxs).or(means).or(stds)?.len();
     if n == 0 {
         return None;
     }
@@ -213,10 +265,7 @@ fn columns_from_axis0(
                 min,
                 max,
                 mean: means.and_then(|v| v.get(i).copied()),
-                range: match (min, max) {
-                    (Some(a), Some(b)) => Some(b - a),
-                    _ => None,
-                },
+                range: numeric_range(min, max),
                 stdev: stds.and_then(|v| v.get(i).copied()),
                 ..NumericStats::default()
             },
@@ -226,38 +275,9 @@ fn columns_from_axis0(
 }
 
 fn fetch_scalar_stats(mmap: &[u8], path: &Path, dataset: &str) -> Result<NumericStats, String> {
-    let mean_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "mean", &serde_json::json!([])),
-    )?;
-    let min_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "min", &serde_json::json!([])),
-    )?;
-    let max_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "max", &serde_json::json!([])),
-    )?;
-    let std_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "std", &serde_json::json!([])),
-    )?;
-    Ok(NumericStats {
-        min: min_ex.operation_min,
-        max: max_ex.operation_max,
-        mean: mean_ex.operation_mean,
-        median: mean_ex.operation_median,
-        range: match (min_ex.operation_min, max_ex.operation_max) {
-            (Some(a), Some(b)) => Some(b - a),
-            _ => None,
-        },
-        stdev: std_ex.operation_std,
-        ..NumericStats::default()
-    })
+    Ok(numeric_stats_from_scalar_previews(
+        &fetch_reduction_previews(mmap, path, dataset, &serde_json::json!([]))?,
+    ))
 }
 
 fn fetch_axis0_column_stats(
@@ -266,45 +286,22 @@ fn fetch_axis0_column_stats(
     dataset: &str,
     dtype: &str,
     names: Option<&Vec<String>>,
-) -> Result<(ColumnarCommonFields, Option<Vec<ColumnStat>>), String> {
-    let min_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "min", &serde_json::json!(0)),
-    )?;
-    let max_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "max", &serde_json::json!(0)),
-    )?;
-    let mean_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "mean", &serde_json::json!(0)),
-    )?;
-    let std_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "std", &serde_json::json!(0)),
-    )?;
+) -> Result<ColumnarCommonFields, String> {
+    let p = fetch_reduction_previews(mmap, path, dataset, &serde_json::json!(0))?;
     let cols = columns_from_axis0(
-        min_ex.operation_reduced_min.as_ref(),
-        max_ex.operation_reduced_max.as_ref(),
-        mean_ex.operation_reduced_mean.as_ref(),
-        std_ex.operation_reduced_std.as_ref(),
+        p.min.operation_reduced_min.as_ref(),
+        p.max.operation_reduced_max.as_ref(),
+        p.mean.operation_reduced_mean.as_ref(),
+        p.std.operation_reduced_std.as_ref(),
         dtype,
         names,
     );
-    let column_count = cols.as_ref().map(Vec::len);
-    Ok((
-        ColumnarCommonFields {
-            column_count,
-            encoding: Some("tetration-query".into()),
-            columns: cols.clone(),
-            ..Default::default()
-        },
-        cols,
-    ))
+    Ok(ColumnarCommonFields {
+        column_count: cols.as_ref().map(Vec::len),
+        encoding: Some(QUERY_ENCODING.into()),
+        columns: cols,
+        ..Default::default()
+    })
 }
 
 fn global_tensor3d_from_scalar_queries(
@@ -313,50 +310,28 @@ fn global_tensor3d_from_scalar_queries(
     dataset: &str,
     shape: &[usize],
 ) -> Result<Tensor3DPlaneStats, String> {
-    let mean_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "mean", &serde_json::json!([])),
-    )?;
-    let min_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "min", &serde_json::json!([])),
-    )?;
-    let max_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "max", &serde_json::json!([])),
-    )?;
-    let std_ex = execution_preview(
-        mmap,
-        path,
-        &query_json(dataset, "std", &serde_json::json!([])),
-    )?;
+    let p = fetch_reduction_previews(mmap, path, dataset, &serde_json::json!([]))?;
     let along_axis = shape
         .iter()
         .enumerate()
         .min_by_key(|(_, d)| *d)
         .map_or(0, |(i, _)| i as u8);
-    let n_pos = mean_ex
+    let n_pos = p
+        .mean
         .operation_element_count
-        .or(min_ex.operation_element_count)
+        .or(p.min.operation_element_count)
         .unwrap_or(0);
     Ok(Tensor3DPlaneStats {
         along_axis,
         elements_sampled: n_pos,
         global: Some(Tensor3DGlobalStats {
             n_pos,
-            n_nan: mean_ex
-                .operation_nan_count
-                .map_or(0, |n| n.round() as usize),
-            n_inf: mean_ex
-                .operation_inf_count
-                .map_or(0, |n| n.round() as usize),
-            min: min_ex.operation_min.unwrap_or(0.0),
-            max: max_ex.operation_max.unwrap_or(0.0),
-            mean: mean_ex.operation_mean.unwrap_or(0.0),
-            stdev: std_ex.operation_std,
+            n_nan: p.mean.operation_nan_count.map_or(0, |n| n.round() as usize),
+            n_inf: p.mean.operation_inf_count.map_or(0, |n| n.round() as usize),
+            min: p.min.operation_min.unwrap_or(0.0),
+            max: p.max.operation_max.unwrap_or(0.0),
+            mean: p.mean.operation_mean.unwrap_or(0.0),
+            stdev: p.std.operation_std,
         }),
         planes: Vec::new(),
     })
@@ -378,40 +353,30 @@ fn enrich_dataset_with_queries(
     let result = (|| -> Result<(), String> {
         match rank {
             0 => {
-                let num = fetch_scalar_stats(mmap, path, &ds.name)?;
-                entry.common = ColumnarCommonFields {
-                    column_count: Some(1),
-                    encoding: Some("tetration-query".into()),
-                    columns: Some(vec![column_stat_number(0, None, dtype, num)]),
-                    ..Default::default()
-                };
+                entry.common = single_column_common(
+                    None,
+                    None,
+                    dtype,
+                    fetch_scalar_stats(mmap, path, &ds.name)?,
+                );
             }
             1 => {
-                let rows = shape_usize[0];
-                let num = fetch_scalar_stats(mmap, path, &ds.name)?;
                 let col_name = file_meta
                     .datasets
                     .get(&ds.name)
                     .and_then(|dm| dm.dim_names.as_ref())
                     .and_then(|names| names.first().cloned());
-                entry.common = ColumnarCommonFields {
-                    row_count: Some(rows),
-                    column_count: Some(1),
-                    encoding: Some("tetration-query".into()),
-                    columns: Some(vec![column_stat_number(0, col_name, dtype, num)]),
-                    ..Default::default()
-                };
+                entry.common = single_column_common(
+                    Some(shape_usize[0]),
+                    col_name,
+                    dtype,
+                    fetch_scalar_stats(mmap, path, &ds.name)?,
+                );
             }
             2 => {
                 let rows = shape_usize.first().copied().unwrap_or(0);
-                let names =
-                    column_names_for_table(file_meta, &ds.name, 2, &ds.shape).or_else(|| {
-                        shape_usize
-                            .get(1)
-                            .map(|&c| (0..c).map(|i| format!("col{i}")).collect())
-                    });
-                let (common, _) =
-                    fetch_axis0_column_stats(mmap, path, &ds.name, dtype, names.as_ref())?;
+                let names = column_names_for_table(file_meta, &ds.name, 2, &ds.shape);
+                let common = fetch_axis0_column_stats(mmap, path, &ds.name, dtype, names.as_ref())?;
                 entry.common = ColumnarCommonFields {
                     row_count: Some(rows),
                     ..common
@@ -431,7 +396,7 @@ fn enrich_dataset_with_queries(
                 entry.common = ColumnarCommonFields {
                     row_count: Some(shape_usize.iter().product()),
                     column_count: Some(0),
-                    encoding: Some("tetration-query".into()),
+                    encoding: Some(QUERY_ENCODING.into()),
                     columns: num.map(|n| vec![column_stat_number(0, None, dtype, n)]),
                     ..Default::default()
                 };

@@ -209,9 +209,7 @@ fn argtype_summary(ty: &ArgType) -> String {
                 || "?".to_string(),
                 |s| {
                     s.iter()
-                        .map(|dim| {
-                            dim.map_or_else(|| "?".to_string(), |d| d.to_string())
-                        })
+                        .map(|dim| dim.map_or_else(|| "?".to_string(), |d| d.to_string()))
                         .collect::<Vec<_>>()
                         .join("×")
                 },
