@@ -43,5 +43,6 @@ macro_rules! for_each_metadata_field {
         $callback!($($args,)* safetensors_metadata, $crate::results::SafetensorsMetadata, super::metadata::SafetensorsMetadata, "safetensors_metadata");
         $callback!($($args,)* zarr_metadata, $crate::results::ZarrMetadata, super::metadata::ZarrMetadata, "zarr_metadata");
         $callback!($($args,)* tetration_metadata, $crate::results::TetrationMetadata, super::metadata::TetrationMetadata, "tetration_metadata");
+        $callback!($($args,)* pickle_metadata, $crate::results::PickleMetadata, super::metadata::PickleMetadata, "pickle_metadata");
     };
 }

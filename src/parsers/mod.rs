@@ -122,7 +122,7 @@ macro_rules! no_template_mining {
 pub enum ParserCategory {
     Media,      // Image | Video | Audio -> media::process
     Office,     // Docx | Xlsx | Pptx -> office::process
-    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | Arrow IPC | Avro | ORC | NPY | NPZ | HDF5 | NetCDF | MTX | Mat | Zarr -> structured::process
+    Structured, // Csv | Html | Json | Epub | Pdf | Parquet | … | Zarr | Tetration | Pickle -> structured::process
     Models,     // Onnx | Gguf | Tflite | Safetensors -> models::process
     Settings,   // Toml | Yaml | Xml | Ini -> settings::process
     Container,  // Zip | Archive -> container::process
@@ -197,11 +197,13 @@ pub enum FileType {
     Safetensors,
     Zarr,
     Tetration,
+    /// Python pickle (`.pickle`, or `.pkl` after byte sniff). Apple Pkl source `.pkl` → [`FileType::Code`].
+    Pickle,
     #[default]
     Unknown,
 }
 
-const METADATA_NAMES: [&str; 39] = [
+const METADATA_NAMES: [&str; 40] = [
     "Log",
     "JSON",
     "Text",
@@ -240,6 +242,7 @@ const METADATA_NAMES: [&str; 39] = [
     "Safetensors",
     "Zarr",
     "Tetration",
+    "Pickle",
     "Unknown",
 ];
 
@@ -301,7 +304,8 @@ impl FileType {
                 35 => FileType::Safetensors,
                 36 => FileType::Zarr,
                 37 => FileType::Tetration,
-                38 => FileType::Unknown,
+                38 => FileType::Pickle,
+                39 => FileType::Unknown,
                 _ => unreachable!("METADATA_NAMES and match arms must stay in sync"),
             })
     }
@@ -334,7 +338,8 @@ impl FileType {
             | FileType::Mtx
             | FileType::Mat
             | FileType::Zarr
-            | FileType::Tetration => Some(ParserCategory::Structured),
+            | FileType::Tetration
+            | FileType::Pickle => Some(ParserCategory::Structured),
             FileType::Onnx | FileType::Gguf | FileType::Tflite | FileType::Safetensors => {
                 Some(ParserCategory::Models)
             }
@@ -433,6 +438,8 @@ pub struct ParseResult {
     pub zarr_metadata: Option<crate::results::ZarrMetadata>,
     /// Tetration `.tet` chunked tensor container metadata
     pub tetration_metadata: Option<crate::results::TetrationMetadata>,
+    /// Python pickle (`.pkl`, `.pickle`) opcode-scan metadata (no unpickling).
+    pub pickle_metadata: Option<crate::results::PickleMetadata>,
 }
 
 impl ParseResult {

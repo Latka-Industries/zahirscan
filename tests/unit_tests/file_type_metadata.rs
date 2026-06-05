@@ -4,7 +4,7 @@ use zahirscan::FileType;
 use zahirscan::utils::filetypes::detect_file_type;
 
 /// Every `FileType` variant in `repr(u8)` order (must match `parsers/mod.rs`).
-fn all_file_types() -> [FileType; 39] {
+fn all_file_types() -> [FileType; 40] {
     [
         FileType::Log,
         FileType::Json,
@@ -44,6 +44,7 @@ fn all_file_types() -> [FileType; 39] {
         FileType::Safetensors,
         FileType::Zarr,
         FileType::Tetration,
+        FileType::Pickle,
         FileType::Unknown,
     ]
 }
@@ -85,8 +86,9 @@ fn file_type_discriminant_range_matches_variant_count() {
     assert_eq!(FileType::Safetensors as u8, 35);
     assert_eq!(FileType::Zarr as u8, 36);
     assert_eq!(FileType::Tetration as u8, 37);
-    assert_eq!(FileType::Unknown as u8, 38);
-    assert_eq!(all_file_types().len(), 39);
+    assert_eq!(FileType::Pickle as u8, 38);
+    assert_eq!(FileType::Unknown as u8, 39);
+    assert_eq!(all_file_types().len(), 40);
 }
 
 #[test]
@@ -110,4 +112,27 @@ fn detect_file_type_columnar_extensions() {
     assert_eq!(detect_file_type("x.safetensors"), FileType::Safetensors);
     assert_eq!(detect_file_type("ds.zarr"), FileType::Zarr);
     assert_eq!(detect_file_type("volume.tet"), FileType::Tetration);
+    assert_eq!(detect_file_type("model.pickle"), FileType::Pickle);
+}
+
+/// `.pickle` is always Python pickle; `.pkl` sniffs bytes vs Apple Pkl source.
+#[test]
+fn detect_file_type_pkl_sniffs_python_pickle_vs_apple_pkl() {
+    use std::io::Write;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let bin_path = dir.path().join("model.pkl");
+    let mut bin = std::fs::File::create(&bin_path).expect("create");
+    bin.write_all(&[0x80, 0x05, 0x95, 0x0a, 0x00, 0x00, 0x00, 0x00])
+        .expect("write");
+    drop(bin);
+
+    let src_path = dir.path().join("config.pkl");
+    std::fs::write(&src_path, "module example\n\nfoo = 1\n").expect("write");
+
+    assert_eq!(
+        detect_file_type(bin_path.to_str().unwrap()),
+        FileType::Pickle
+    );
+    assert_eq!(detect_file_type(src_path.to_str().unwrap()), FileType::Code);
 }
