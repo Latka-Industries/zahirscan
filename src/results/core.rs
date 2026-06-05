@@ -138,6 +138,8 @@ pub struct Output {
     pub zarr_metadata: Option<super::metadata::ZarrMetadata>,
     /// Tetration `.tet` metadata (Mode 2 only)
     pub tetration_metadata: Option<super::metadata::TetrationMetadata>,
+    /// Python pickle (`.pkl`, `.pickle`) opcode-scan metadata (no unpickling).
+    pub pickle_metadata: Option<super::metadata::PickleMetadata>,
 }
 
 /// File metadata for Mode 2 output
@@ -157,8 +159,8 @@ impl Serialize for Output {
     where
         S: Serializer,
     {
-        // Maximum 45 fields: 1 required (templates) + 44 optional fields
-        let mut state = serializer.serialize_struct("Output", 45)?;
+        // Maximum 46 fields: 1 required (templates) + 45 optional fields
+        let mut state = serializer.serialize_struct("Output", 46)?;
 
         // Always serialize templates
         state.serialize_field("templates", &self.templates)?;

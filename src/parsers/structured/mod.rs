@@ -15,6 +15,7 @@ mod mtx;
 mod netcdf;
 mod numpy;
 mod pdf;
+mod pickle;
 mod table_sample_profile;
 pub mod tensor3d;
 mod tetration;
@@ -33,6 +34,7 @@ pub use mtx::{extract_mtx_metadata, extract_mtx_templates};
 pub use netcdf::{extract_netcdf_metadata, extract_netcdf_templates};
 pub use numpy::*;
 pub use pdf::{extract_pdf_metadata, extract_pdf_templates};
+pub use pickle::{extract_pickle_metadata, extract_pickle_templates};
 pub use table_sample_profile::*;
 pub use tetration::{extract_tetration_metadata, extract_tetration_templates};
 pub use zarr::extract_zarr_metadata;
@@ -72,6 +74,7 @@ pub fn process(
         FileType::Mat => structured_mat(stats, mmap, config),
         FileType::Zarr => structured_zarr(stats, mmap, config),
         FileType::Tetration => structured_tetration(stats, mmap, config),
+        FileType::Pickle => structured_pickle(stats, mmap, config),
         _ => unreachable!("structured::process called with {:?}", stats.file_type),
     }
 }
@@ -355,5 +358,23 @@ fn structured_mat(
         crate::results::MatMetadata,
         FileType::Mat,
         extract_mat_templates(mmap, stats, config)
+    )
+}
+
+fn structured_pickle(
+    stats: &mut ParseResult,
+    mmap: &Mmap,
+    config: &RuntimeConfig,
+) -> Result<MiningResult> {
+    // Metadata-only: opcode walk extracts globals and content hints; no template mining.
+    crate::process_with_metadata!(
+        stats,
+        mmap,
+        config,
+        pickle_metadata,
+        extract_pickle_metadata(mmap, stats),
+        crate::results::PickleMetadata,
+        FileType::Pickle,
+        extract_pickle_templates(mmap, stats, config)
     )
 }

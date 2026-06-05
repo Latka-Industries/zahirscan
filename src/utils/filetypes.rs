@@ -1,7 +1,11 @@
 use linguist;
+use std::io::Read;
 use std::path::Path;
 
 use crate::parsers::FileType;
+
+/// Bytes read when disambiguating `.pkl` (Python pickle vs Apple Pkl source).
+const PKL_HEAD_BYTES: usize = 4096;
 
 /// Expands to the full `[(ext, FileType), ...]` array. Each `Variant: "a", "b"` becomes
 /// `("a", FileType::Variant), ("b", FileType::Variant)`. Macros must expand to a complete
@@ -44,6 +48,7 @@ const FILE_EXTENSION_MAP: &[(&str, FileType)] = file_extension_map! {
     Safetensors: "safetensors";
     Zarr: "zarr";
     Tetration: "tet";
+    Pickle: "pickle";
     Html: "html", "htm";
     Docx: "docx";
     Xlsx: "xlsx";
@@ -125,6 +130,18 @@ pub fn detect_file_type(path: &str) -> FileType {
         .map(str::to_lowercase)
         .unwrap_or_default();
 
+    if extension == "pkl" {
+        // `.pkl` is shared by Python pickle bytes and Apple Pkl source text — sniff before routing.
+        let p = Path::new(path);
+        if p.exists()
+            && let Ok(head) = read_pkl_head(p)
+            && is_python_pickle_bytes(&head)
+        {
+            return FileType::Pickle;
+        }
+        // Apple Pkl (or unknown `.pkl`) falls through to linguist → Code when recognized.
+    }
+
     let file_type = get_file_type_from_extension(&extension);
     if file_type == FileType::Unknown {
         let p = Path::new(path);
@@ -144,4 +161,73 @@ pub fn detect_file_type(path: &str) -> FileType {
         }
     }
     file_type
+}
+
+/// Read the first [`PKL_HEAD_BYTES`] of a path for `.pkl` extension sniffing.
+fn read_pkl_head(path: &Path) -> std::io::Result<Vec<u8>> {
+    let mut file = std::fs::File::open(path)?;
+    let mut buf = vec![0_u8; PKL_HEAD_BYTES];
+    let n = file.read(&mut buf)?;
+    buf.truncate(n);
+    Ok(buf)
+}
+
+/// True when bytes look like Python pickle serialization (not Apple Pkl source text).
+///
+/// Binary pickles: `\x80` + protocol 2–5, or non‑UTF‑8 bytes.
+/// Text protocol 0/1: printable stream starting with `(`, `]`, `}`, or `.`.
+/// Apple Pkl configs are UTF‑8 source and rejected via [`looks_like_apple_pkl_source`].
+fn is_python_pickle_bytes(bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return false;
+    }
+    if bytes.len() >= 2 && bytes[0] == 0x80 && (2..=5).contains(&bytes[1]) {
+        return true;
+    }
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return true;
+    };
+    !looks_like_apple_pkl_source(text)
+        && (looks_like_text_pickle(text) || text.bytes().any(|b| b == 0))
+}
+
+/// Apple Pkl (https://pkl-lang.org) source keywords at the start of a `.pkl` file.
+fn looks_like_apple_pkl_source(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    trimmed.starts_with("module")
+        || trimmed.starts_with("import ")
+        || trimmed.starts_with("amends ")
+        || trimmed.starts_with("extends ")
+        || trimmed.starts_with("local ")
+        || trimmed.starts_with("const ")
+        || trimmed.starts_with("fixed ")
+        || trimmed.starts_with("abstract ")
+        || trimmed.starts_with("open ")
+        || trimmed.starts_with("class ")
+        || trimmed.starts_with("typealias ")
+        || trimmed.starts_with('@')
+}
+
+/// Protocol 0/1 pickles are line-oriented ASCII; first opcode is often `(` (MARK) or `.` (STOP).
+fn looks_like_text_pickle(text: &str) -> bool {
+    matches!(
+        text.trim_start().as_bytes().first(),
+        Some(b'(' | b']' | b'}' | b'.')
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn protocol5_header_is_pickle() {
+        assert!(is_python_pickle_bytes(&[0x80, 0x05, 0x95, 0x0a]));
+    }
+
+    #[test]
+    fn apple_pkl_source_is_not_pickle() {
+        let src = "module example\n\nfoo = 1\n";
+        assert!(!is_python_pickle_bytes(src.as_bytes()));
+    }
 }
