@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://ublx.dev/zahirscan/
+    about: Install, CLI, formats, metadata, and configuration
+  - name: docs.rs API
+    url: https://docs.rs/zahirscan
+    about: Rust library types and functions

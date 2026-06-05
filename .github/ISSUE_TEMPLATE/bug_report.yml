@@ -1,0 +1,111 @@
+name: Bug report
+description: Wrong metadata, mis-detected format, crash, bad templates, or unexpected JSON output
+title: "[bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Include enough detail to reproduce — ideally a minimal sample file or redacted JSON snippet.
+
+        Docs: [ublx.dev/zahirscan](https://ublx.dev/zahirscan/) · [Supported formats](https://ublx.dev/zahirscan/formats)
+
+  - type: input
+    id: version
+    attributes:
+      label: ZahirScan version
+      description: Output of `zahirscan --version`, or the `version` in `Cargo.toml` if using the library
+      placeholder: "0.3.5"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: What went wrong?
+      options:
+        - File type detection (wrong `file_type`)
+        - Metadata extraction (`*_metadata` fields)
+        - Column statistics / tabular profiling
+        - Template mining / compression
+        - Writing footprint
+        - CLI / output / streaming
+        - Library API (`extract_zahir`, sinks)
+        - Performance / memory on large files
+        - Build / install / CI
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: format
+    attributes:
+      label: File format
+      description: Extension or detected type (e.g. `.parquet`, `Pickle`, `.log`)
+      placeholder: ".csv"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: output_mode
+    attributes:
+      label: Output mode
+      options:
+        - Templates-only (default)
+        - Full metadata (`-f` / `--full`)
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "macOS 15, Ubuntu 24.04, Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact command or minimal Rust snippet
+      placeholder: |
+        zahirscan -i sample.pkl -o ./out -f
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Error message, wrong JSON fields, or attach a redacted excerpt
+    validations:
+      required: true
+
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample input (optional)
+      description: Link to a gist, minimal fixture, or describe how to generate one. Do not paste secrets or huge payloads.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues for duplicates
+          required: true
+        - label: I can share a minimal reproducer if asked (file, command, or fixture)
+          required: false

@@ -1,0 +1,68 @@
+name: Feature request
+description: New format support, metadata fields, CLI flags, or library behavior
+title: "[feat]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem and the outcome you want. Format/parser work often needs a spec or sample file.
+
+  - type: input
+    id: version
+    attributes:
+      label: ZahirScan version (if relevant)
+      placeholder: "0.3.5"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - New file format or extension
+        - More metadata for an existing format
+        - Column statistics / sampling
+        - Template mining / placeholders
+        - Writing footprint
+        - CLI / output format
+        - Library API
+        - Configuration (`zahirscan.toml`)
+        - Performance
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what is missing today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Expected JSON shape, CLI flag, or API surface
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Sample files, links to format specs, UBLX integration notes, etc.
+    validations:
+      required: false
