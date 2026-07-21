@@ -1,6 +1,49 @@
 //! Tests for image metadata extraction
 
+use zahirscan::config::RuntimeConfig;
+use zahirscan::parsers::FileType;
+use zahirscan::parsers::ParseResult;
+use zahirscan::parsers::media::image::extract_image_metadata;
 use zahirscan::parsers::media::image::metadata::{FormatMetadata, ImageFormat, format_from_string};
+
+#[test]
+fn test_svg_extracts_dimensions_from_view_box() {
+    let svg = br#"<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 64"/>"#;
+    let stats = ParseResult {
+        file_path: "icon.svg".into(),
+        file_type: FileType::Image,
+        byte_count: svg.len(),
+        is_binary: false,
+        ..Default::default()
+    };
+    let meta = extract_image_metadata(svg, &stats, &RuntimeConfig::default()).unwrap();
+    assert_eq!(meta.width, 128);
+    assert_eq!(meta.height, 64);
+    assert_eq!(meta.format.as_deref(), Some("Svg"));
+    let json = serde_json::to_string(&meta).unwrap();
+    assert!(json.contains("\"width\":128"));
+    assert!(json.contains("\"height\":64"));
+}
+
+#[test]
+fn test_svg_omits_unknown_dimensions_in_json() {
+    let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"/>"#;
+    let stats = ParseResult {
+        file_path: "fluid.svg".into(),
+        file_type: FileType::Image,
+        byte_count: svg.len(),
+        is_binary: false,
+        ..Default::default()
+    };
+    let meta = extract_image_metadata(svg, &stats, &RuntimeConfig::default()).unwrap();
+    assert_eq!(meta.width, 0);
+    assert_eq!(meta.height, 0);
+    let json = serde_json::to_string(&meta).unwrap();
+    assert!(!json.contains("\"width\""));
+    assert!(!json.contains("\"height\""));
+    assert!(json.contains("\"format\":\"Svg\""));
+}
 
 #[test]
 fn test_format_from_string_jpeg() {

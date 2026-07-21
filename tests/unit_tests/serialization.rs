@@ -8,9 +8,9 @@ fn test_image_metadata_serialize_all_none() {
     let metadata = ImageMetadata::default();
     let json = serde_json::to_string(&metadata).unwrap();
 
-    // Should serialize without errors
-    assert!(json.contains("\"width\":0"));
-    assert!(json.contains("\"height\":0"));
+    // Unknown dimensions (0) are omitted — not reported as real 0×0 size
+    assert!(!json.contains("\"width\""));
+    assert!(!json.contains("\"height\""));
 }
 
 #[test]
@@ -89,6 +89,21 @@ fn test_serialization_round_trip() {
 }
 
 #[test]
+fn test_serialization_round_trip_omitted_dimensions() {
+    let metadata = ImageMetadata {
+        format: Some("Svg".to_string()),
+        stream_size: Some(42),
+        ..Default::default()
+    };
+    let json = serde_json::to_string(&metadata).unwrap();
+    assert!(!json.contains("\"width\""));
+    let deserialized: ImageMetadata = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized.width, 0);
+    assert_eq!(deserialized.height, 0);
+    assert_eq!(deserialized.format.as_deref(), Some("Svg"));
+}
+
+#[test]
 fn test_serialization_optional_fields_omitted() {
     let metadata = ImageMetadata::default();
     let json = serde_json::to_string(&metadata).unwrap();
@@ -97,7 +112,7 @@ fn test_serialization_optional_fields_omitted() {
     // (This depends on serde's skip_serializing_if behavior)
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-    // Required fields should be present
-    assert!(parsed["width"].is_number());
-    assert!(parsed["height"].is_number());
+    // Unknown dimensions are omitted (not serialized as 0)
+    assert!(parsed.get("width").is_none());
+    assert!(parsed.get("height").is_none());
 }
