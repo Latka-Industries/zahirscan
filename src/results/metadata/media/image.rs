@@ -6,11 +6,15 @@ use serde::{Deserialize, Serialize, Serializer};
 use crate::results::MinimalFallback;
 
 /// Image metadata (Mode 2 only, for image files)
+///
+/// Unknown dimensions stay `0` in-memory and are **omitted from JSON** (not serialized as
+/// `0×0`). SVG uses root `width`/`height`/`viewBox` when absolute; percentages stay unknown.
 #[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
 pub struct ImageMetadata {
-    /// Image width in pixels
+    /// Image width in pixels (`0` = unknown; omitted from JSON)
     pub width: usize,
-    /// Image height in pixels
+    /// Image height in pixels (`0` = unknown; omitted from JSON)
     pub height: usize,
     /// Aspect ratio (width/height)
     pub aspect_ratio: Option<f64>,
@@ -33,9 +37,14 @@ impl Serialize for ImageMetadata {
     where
         S: Serializer,
     {
+        // Omit unknown dimensions (0) so SVG / failed header reads do not report 0×0 as real size.
         let mut state = serializer.serialize_struct("ImageMetadata", 9)?;
-        state.serialize_field("width", &self.width)?;
-        state.serialize_field("height", &self.height)?;
+        if self.width > 0 {
+            state.serialize_field("width", &self.width)?;
+        }
+        if self.height > 0 {
+            state.serialize_field("height", &self.height)?;
+        }
         crate::serialize_optional!(state, self.aspect_ratio, "aspect_ratio");
         crate::serialize_optional!(state, self.stream_size, "stream_size");
         crate::serialize_optional!(state, self.color_type, "color_type");

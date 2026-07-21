@@ -5,6 +5,7 @@ mod constants;
 mod gif;
 mod jpeg;
 mod png;
+mod svg;
 mod tiff;
 mod webp;
 
@@ -30,8 +31,24 @@ pub fn extract_image_metadata(
     stats_ref: &ParseResult,
     _config_ref: &RuntimeConfig,
 ) -> Result<ImageMetadata> {
-    let reader = ImageReader::new(Cursor::new(content_ref));
     let stream_size = Some(stats_ref.byte_count);
+
+    // SVG is classified as Image but is not supported by the `image` crate's dimension API.
+    // Parse root width/height/viewBox instead of writing 0×0 placeholders (THI-163).
+    if svg::looks_like_svg(content_ref) {
+        let (width, height) = svg::extract_dimensions(content_ref).unwrap_or((0, 0));
+        let aspect_ratio = (height > 0).then(|| width as f64 / height as f64);
+        return Ok(ImageMetadata {
+            width,
+            height,
+            aspect_ratio,
+            stream_size,
+            format: Some("Svg".to_string()),
+            ..Default::default()
+        });
+    }
+
+    let reader = ImageReader::new(Cursor::new(content_ref));
 
     match reader.with_guessed_format() {
         Ok(reader) => {
@@ -78,10 +95,8 @@ pub fn extract_image_metadata(
                     })
                 }
                 Err(_) => {
-                    // Failed to read dimensions, but we can still return format-specific metadata
+                    // Failed to read dimensions — leave width/height at 0 so Serialize omits them
                     Ok(ImageMetadata {
-                        width: 0,
-                        height: 0,
                         stream_size,
                         color_type,
                         format,
