@@ -1,6 +1,6 @@
 [package]
 name = "zahirscan"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 rust-version = "1.95"
 authors = ["AHurowitz <latkaindustries@gmail.com>"]
@@ -31,11 +31,11 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.104"
 apache-avro = { version = "0.21.0", features = ["snappy"] }
-# Keep on 58.x until orc-rust publishes an arrow-59 release (orc-rust 0.8 pins arrow = "58.0").
-arrow-array = "58.2.0"
-arrow-cast = { version = "58.2.0", default-features = false }
-arrow-ipc = "58.2.0"
-arrow-schema = "58.2.0"
+# Aligned with orc-rust 0.9 (arrow = "59.0") and parquet 59.
+arrow-array = "59.0.0"
+arrow-cast = { version = "59.0.0", default-features = false }
+arrow-ipc = "59.0.0"
+arrow-schema = "59.0.0"
 bytes = "1.10.1"
 calamine = "0.36.0"
 chrono = { version = "0.4.43", features = ["serde"] }
@@ -60,9 +60,9 @@ memmap2 = "0.9.9"
 netcdf = { version = "0.12.0", optional = true }
 num_cpus = "1.17.0"
 onnx-ir = "0.21.0"
-orc-rust = { version = "0.8.0", default-features = false }
+orc-rust = { version = "0.9.0", default-features = false }
 oxionnx-proto = "0.1.2"
-parquet = "58.2.0"
+parquet = "59.0.0"
 png = "0.18.0"
 quick-xml = { version = "0.41.0", features = ["serialize"] }
 rayon = "1.12.0"
