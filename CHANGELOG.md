@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-15
+
+### Changed
+
+- **Cargo update** — refresh `Cargo.lock` to latest compatible crates
+- **Arrow / Parquet / ORC**: `arrow-*` + `parquet` **58 → 59.3**, `orc-rust` **0.8 → 0.9** (orc-rust 0.9 requires Arrow 59)
+
+### Notes
+
+- Patch release; no intentional JSON schema changes. Rebuild dependents that pin Arrow types transitively via zahirscan.
+
 ## [0.4.0] - 2026-11-15
 
 Semver **minor**: dependents must move off yanked tetration `0.1.x`, and `tetration_metadata` gains new optional JSON fields (additive for readers that ignore unknown keys).
@@ -238,7 +249,8 @@ Semver **minor**: dependents must move off yanked tetration `0.1.x`, and `tetrat
 
 - Installation docs: remove git-clone path from README
 
-[Unreleased]: https://github.com/Latka-Industries/zahirscan/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Latka-Industries/zahirscan/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Latka-Industries/zahirscan/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Latka-Industries/zahirscan/compare/v0.3.6...v0.4.0
 [0.3.6]: https://github.com/Latka-Industries/zahirscan/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/Latka-Industries/zahirscan/compare/v0.3.4...v0.3.5

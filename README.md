@@ -30,6 +30,7 @@ Without NetCDF: `cargo install zahirscan --no-default-features` (also the recomm
 | [Configuration](https://ublx.dev/zahirscan/configuration) · [Architecture](https://ublx.dev/zahirscan/architecture) | Tuning, phases, batching            |
 | [Library](https://ublx.dev/zahirscan/library)                                                                       | `extract_zahir`, sinks, streaming   |
 | **[API (docs.rs)](https://docs.rs/zahirscan)**                                                                      | Rust types and functions            |
+| [CHANGELOG](CHANGELOG.md)                                                                                           | Released versions                   |
 | [config.toml](config.toml)                                                                                          | Full config schema (repo)           |
 
 ## License
