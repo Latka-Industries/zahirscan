@@ -1,18 +1,64 @@
-name: Build
+name: CI
 
+# Prefer `paths` (allowlist) over `paths-ignore`: run only when Rust build inputs change.
+# Docs-only / LICENSE PRs skip the suite (required checks stay pending — merge with admin
+# bypass or drop the required-check gate for docs PRs).
+# Markdown under matching trees is excluded with `!**/*.md` (GitHub forbids pairing `paths`
+# with `paths-ignore` on the same event — use `!` negation instead).
 on:
   push:
     branches: [main, master]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "config.toml"
+      - ".github/workflows/ci.yml"
+      - ".github/scripts/**"
+      - "!**/*.md"
   pull_request:
     branches: [main, master]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "config.toml"
+      - ".github/workflows/ci.yml"
+      - ".github/scripts/**"
+      - "!**/*.md"
 
 jobs:
   test:
-    name: Test Suite
+    name: Test (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          # Default features (NetCDF) — full OS matrix
+          - os: ubuntu-latest
+            label: ubuntu + netcdf
+            cargo_flags: ""
+            need_netcdf: true
+            need_ffmpeg: true
+          - os: macos-latest
+            label: macos + netcdf
+            cargo_flags: ""
+            need_netcdf: true
+            need_ffmpeg: true
+          - os: windows-latest
+            label: windows + netcdf
+            cargo_flags: ""
+            need_netcdf: true
+            need_ffmpeg: true
+          # Tesscriptor / Hostinger path: no libnetcdf (Ubuntu only — matrix cost)
+          - os: ubuntu-latest
+            label: ubuntu no-default-features
+            cargo_flags: "--no-default-features"
+            need_netcdf: false
+            need_ffmpeg: true
     steps:
       - uses: actions/checkout@v6
 
@@ -26,12 +72,19 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libnetcdf-dev pkg-config
+          pkgs=(ffmpeg pkg-config)
+          if [ "${{ matrix.need_netcdf }}" = "true" ]; then
+            pkgs+=(libnetcdf-dev)
+          fi
+          sudo apt-get install -y "${pkgs[@]}"
 
       - name: Install system deps (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install ffmpeg netcdf
+          brew install ffmpeg
+          if [ "${{ matrix.need_netcdf }}" = "true" ]; then
+            brew install netcdf
+          fi
 
       - name: Install system deps (Windows)
         if: matrix.os == 'windows-latest'
@@ -44,31 +97,43 @@ jobs:
           channel-priority: strict
 
       - name: Install and configure netcdf-rs build (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && matrix.need_netcdf
         shell: bash -el {0}
         run: ./.github/scripts/configure-netcdf-env.sh
 
       - name: Install ffmpeg (Windows via conda)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && matrix.need_ffmpeg
         shell: bash -el {0}
         run: conda install -y -c conda-forge ffmpeg
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "ci-${{ matrix.os }}"
+          shared-key: "ci-${{ matrix.os }}-${{ matrix.label }}"
 
       - name: Check formatting
         run: cargo fmt -- --check
 
       - name: Run clippy
-        run: cargo clippy -- -D warnings
+        shell: bash
+        run: cargo clippy ${{ matrix.cargo_flags }} -- -D warnings
 
       - name: Run tests
-        run: cargo test --verbose
+        shell: bash
+        run: cargo test ${{ matrix.cargo_flags }} --verbose
 
   msrv:
-    name: MSRV Check
+    name: MSRV (${{ matrix.label }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: default
+            cargo_flags: ""
+            need_netcdf: true
+          - label: no-default-features
+            cargo_flags: "--no-default-features"
+            need_netcdf: false
     steps:
       - uses: actions/checkout@v6
 
@@ -77,14 +142,19 @@ jobs:
         with:
           toolchain: 1.95
 
-      - name: Install NetCDF (Ubuntu)
+      - name: Install system deps (Ubuntu)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libnetcdf-dev pkg-config
+          pkgs=(pkg-config)
+          if [ "${{ matrix.need_netcdf }}" = "true" ]; then
+            pkgs+=(libnetcdf-dev)
+          fi
+          sudo apt-get install -y "${pkgs[@]}"
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "ci-ubuntu-latest"
+          shared-key: "ci-msrv-${{ matrix.label }}"
 
       - name: Check MSRV
-        run: cargo check --all-targets
+        shell: bash
+        run: cargo check --all-targets ${{ matrix.cargo_flags }}
