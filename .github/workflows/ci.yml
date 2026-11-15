@@ -74,7 +74,8 @@ jobs:
           sudo apt-get update
           pkgs=(ffmpeg pkg-config)
           if [ "${{ matrix.need_netcdf }}" = "true" ]; then
-            pkgs+=(libnetcdf-dev)
+            # libhdf5-dev: netcdf-sys → hdf5-metno-sys (not covered by libnetcdf-dev alone on all images)
+            pkgs+=(libnetcdf-dev libhdf5-dev)
           fi
           sudo apt-get install -y "${pkgs[@]}"
 
@@ -83,7 +84,8 @@ jobs:
         run: |
           brew install ffmpeg
           if [ "${{ matrix.need_netcdf }}" = "true" ]; then
-            brew install netcdf
+            # hdf5: netcdf formula no longer always exposes headers hdf5-metno-sys needs
+            brew install netcdf hdf5
           fi
 
       - name: Install system deps (Windows)
@@ -115,11 +117,11 @@ jobs:
 
       - name: Run clippy
         shell: bash
-        run: cargo clippy ${{ matrix.cargo_flags }} -- -D warnings
+        run: cargo clippy --locked ${{ matrix.cargo_flags }} -- -D warnings
 
       - name: Run tests
         shell: bash
-        run: cargo test ${{ matrix.cargo_flags }} --verbose
+        run: cargo test --locked ${{ matrix.cargo_flags }} --verbose
 
   msrv:
     name: MSRV (${{ matrix.label }})
@@ -147,7 +149,7 @@ jobs:
           sudo apt-get update
           pkgs=(pkg-config)
           if [ "${{ matrix.need_netcdf }}" = "true" ]; then
-            pkgs+=(libnetcdf-dev)
+            pkgs+=(libnetcdf-dev libhdf5-dev)
           fi
           sudo apt-get install -y "${pkgs[@]}"
 
@@ -157,4 +159,4 @@ jobs:
 
       - name: Check MSRV
         shell: bash
-        run: cargo check --all-targets ${{ matrix.cargo_flags }}
+        run: cargo check --locked --all-targets ${{ matrix.cargo_flags }}

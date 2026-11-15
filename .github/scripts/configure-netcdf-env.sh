@@ -14,12 +14,16 @@ if ! command -v conda >/dev/null 2>&1; then
   exit 127
 fi
 
-conda install -y -c conda-forge libnetcdf pkg-config
+# Pin hdf5 to 1.x: hdf5-metno-sys (via netcdf-sys) rejects H5_VERSION 2.x
+# (same pin as Latka-Industries/UBLX ci-deps-windows-conda.sh).
+conda install -y -c conda-forge "hdf5>=1.14,<2" libnetcdf pkg-config
 
 {
-  echo "NETCDF_DIR=${CONDA_PREFIX}/Library"
-  echo "PKG_CONFIG_PATH=${CONDA_PREFIX}/Library/lib/pkgconfig"
-  echo "RUSTFLAGS=-L native=${CONDA_PREFIX}/Library/lib"
-  echo "INCLUDE=${CONDA_PREFIX}/Library/include"
-  echo "LIB=${CONDA_PREFIX}/Library/lib"
+    echo "NETCDF_DIR=${CONDA_PREFIX}/Library"
+    echo "PKG_CONFIG_PATH=${CONDA_PREFIX}/Library/lib/pkgconfig"
+    echo "RUSTFLAGS=-L native=${CONDA_PREFIX}/Library/lib"
+    echo "INCLUDE=${CONDA_PREFIX}/Library/include"
+    echo "LIB=${CONDA_PREFIX}/Library/lib"
+    # hdf5-metno-sys looks for HDF5_DIR on Windows when pkg-config is thin.
+    echo "HDF5_DIR=${CONDA_PREFIX}/Library"
 } >> "${GITHUB_ENV}"
