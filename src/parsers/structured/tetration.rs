@@ -7,18 +7,22 @@ use std::path::Path;
 
 use memmap2::Mmap;
 use rayon::prelude::*;
-use tetration::catalog::metadata::TetMetadataV1;
+use tetration::catalog::metadata::{DatasetMetadataV1, TetMetadataV1};
 use tetration::catalog::{
-    CHUNK_PAYLOAD_CODEC_V1, DATASET_DTYPE_TAG_V1, DatasetRecordV1, read_tet_summary_v1,
+    CHUNK_PAYLOAD_CODEC_V1, DATASET_DTYPE_TAG_V1, DatasetRecordV1, FileExecutionSettingsV1,
+    HistoryEventV1, read_tet_summary_v1,
 };
 use tetration::query::{ExecuteQueryOptions, QueryExecutionPreview, execute_query_json};
+use tetration::verify::{VerifyOptions, verify_tet_bytes};
 
 use crate::config::RuntimeConfig;
 use crate::parsers::ParseResult;
 use crate::parsers::structured::numpy::{self, numpy_descr_element_nbytes};
 use crate::results::{
-    ArrayLayoutSummary, ColumnStat, ColumnarCommonFields, NumericStats, Tensor3DGlobalStats,
-    Tensor3DPlaneStats, TetDatasetSummary, TetrationMetadata,
+    ArrayLayoutSummary, ColumnStat, ColumnarCommonFields, MAX_HISTORY_EVENTS_EMITTED, NumericStats,
+    Tensor3DGlobalStats, Tensor3DPlaneStats, TetCoordAxisSummary, TetDatasetDeclareMeta,
+    TetDatasetSummary, TetFileExecutionMeta, TetFileFooterMeta, TetHistoryEventSummary,
+    TetVerifySummary, TetrationMetadata,
 };
 
 const MAX_DATASETS_LISTED: usize = 10_000;
@@ -85,6 +89,90 @@ fn chunk_counts_by_dataset(chunks: &[tetration::catalog::ChunkIndexEntryV1], n: 
         }
     }
     counts
+}
+
+fn file_footer_meta(meta: &TetMetadataV1) -> Option<TetFileFooterMeta> {
+    let f = meta.file.as_ref()?;
+    if f.tool.is_none() && f.library_version.is_none() && f.created_at.is_none() {
+        return None;
+    }
+    Some(TetFileFooterMeta {
+        tool: f.tool.clone(),
+        library_version: f.library_version.clone(),
+        created_at: f.created_at.clone(),
+    })
+}
+
+fn file_execution_meta(settings: FileExecutionSettingsV1) -> Option<TetFileExecutionMeta> {
+    if settings.memory_budget_percent_bps == 0 && settings.memory_budget_bytes == 0 {
+        return None;
+    }
+    Some(TetFileExecutionMeta {
+        memory_budget_percent_bps: settings.memory_budget_percent_bps,
+        memory_budget_bytes: settings.memory_budget_bytes,
+    })
+}
+
+fn history_summaries(
+    events: &[HistoryEventV1],
+) -> (Option<Vec<TetHistoryEventSummary>>, Option<usize>) {
+    if events.is_empty() {
+        return (None, None);
+    }
+    let truncated = events.len().saturating_sub(MAX_HISTORY_EVENTS_EMITTED);
+    let rows: Vec<TetHistoryEventSummary> = events
+        .iter()
+        .take(MAX_HISTORY_EVENTS_EMITTED)
+        .map(|e| TetHistoryEventSummary {
+            op: e.op.clone(),
+            source: e.source.clone(),
+            at: e.at.clone(),
+            agent: e.agent.clone(),
+            activity: e.activity.clone(),
+            entity: e.entity.clone(),
+        })
+        .collect();
+    (Some(rows), (truncated > 0).then_some(truncated))
+}
+
+fn declare_meta_for_dataset(dm: &DatasetMetadataV1) -> Option<TetDatasetDeclareMeta> {
+    let coords: std::collections::BTreeMap<String, TetCoordAxisSummary> = dm
+        .coords
+        .as_ref()
+        .map(|m| {
+            m.iter()
+                .map(|(axis, c)| {
+                    let label_count = c.labels.len();
+                    (
+                        axis.clone(),
+                        TetCoordAxisSummary {
+                            label_count,
+                            first: c.labels.first().cloned(),
+                            last: c.labels.last().cloned(),
+                        },
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if dm.dim_names.is_none() && dm.attrs.is_empty() && coords.is_empty() {
+        return None;
+    }
+    Some(TetDatasetDeclareMeta {
+        dim_names: dm.dim_names.clone(),
+        attrs: dm.attrs.clone(),
+        coords,
+    })
+}
+
+fn shallow_verify(mmap: &[u8], path: &Path) -> TetVerifySummary {
+    let report = verify_tet_bytes(mmap, Some(path), VerifyOptions::default());
+    let failed_finding_count = report.findings.iter().filter(|f| !f.ok).count();
+    TetVerifySummary {
+        ok: report.ok,
+        finding_count: report.findings.len(),
+        failed_finding_count,
+    }
 }
 
 fn layout_from_record(ds: &DatasetRecordV1) -> ArrayLayoutSummary {
@@ -591,18 +679,26 @@ pub fn extract_tetration_metadata(
                 .len()
                 .saturating_sub(MAX_DATASETS_STATS.min(MAX_DATASETS_LISTED));
 
+            let (history, history_truncated) = history_summaries(&summary.history);
+
             let datasets: Vec<TetDatasetSummary> = summary
                 .datasets
                 .par_iter()
                 .enumerate()
                 .take(MAX_DATASETS_LISTED)
                 .map(|(i, ds)| {
+                    let declare = summary
+                        .metadata
+                        .datasets
+                        .get(&ds.name)
+                        .and_then(declare_meta_for_dataset);
                     let mut entry = TetDatasetSummary {
                         name: ds.name.clone(),
                         dtype: Some(dtype_label(ds.dtype)),
                         shape: ds.shape.clone(),
                         chunk_shape: ds.chunk_shape.clone(),
                         chunk_count: Some(per_ds.get(i).copied().unwrap_or(0)),
+                        declare,
                         ..Default::default()
                     };
                     if i < MAX_DATASETS_STATS {
@@ -630,6 +726,11 @@ pub fn extract_tetration_metadata(
                 raw_chunk_count: Some(raw_chunk_count),
                 zstd_chunk_count: Some(zstd_chunk_count),
                 history_event_count: Some(summary.history.len()),
+                file: file_footer_meta(&summary.metadata),
+                file_execution: file_execution_meta(summary.file_execution),
+                history,
+                history_truncated,
+                verify: Some(shallow_verify(mmap, path)),
                 datasets: Some(datasets),
                 datasets_stats_skipped: (datasets_stats_skipped > 0)
                     .then_some(datasets_stats_skipped),

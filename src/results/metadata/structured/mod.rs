@@ -33,5 +33,9 @@ pub use numpy::{NpyMetadata, NpzMetadata, NpzNpyEntrySummary};
 pub use pdf::PdfMetadata;
 pub use pickle::PickleMetadata;
 pub use tensor3d::{Tensor3DGlobalStats, Tensor3DPlaneStatEntry, Tensor3DPlaneStats};
-pub use tetration::{TetDatasetSummary, TetrationMetadata};
+pub use tetration::{
+    MAX_HISTORY_EVENTS_EMITTED, TetCoordAxisSummary, TetDatasetDeclareMeta, TetDatasetSummary,
+    TetFileExecutionMeta, TetFileFooterMeta, TetHistoryEventSummary, TetVerifySummary,
+    TetrationMetadata,
+};
 pub use zarr::{ZarrArrayEntrySummary, ZarrMetadata};
