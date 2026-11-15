@@ -1,6 +1,6 @@
 //! Python pickle (`.pkl`, `.pickle`) — read-only opcode scan; no unpickling.
 //!
-//! Walks pickle opcodes like CPython's `pickletools.genops`, but never reconstructs
+//! Walks pickle opcodes like `CPython`'s `pickletools.genops`, but never reconstructs
 //! objects or executes import hooks. Large binary payloads (`BYTEARRAY8`, `BINBYTES8`, …)
 //! are skipped by length so multi‑GB array dumps stay cheap to scan.
 //!
@@ -99,7 +99,7 @@ impl PickleStack {
         }
     }
 
-    /// Protocol 4+ `MEMOIZE`: append stack top to memo; does **not** pop (CPython behavior).
+    /// Protocol 4+ `MEMOIZE`: append stack top to memo; does **not** pop (`CPython` behavior).
     fn memoize_top(&mut self) {
         let Some(top) = self.stack.last().cloned() else {
             return;

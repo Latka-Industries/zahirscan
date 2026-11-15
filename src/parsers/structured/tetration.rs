@@ -1,7 +1,10 @@
 //! Tetration `.tet` — mmap-friendly chunked tensor container (layout v1).
 //!
-//! Catalog via [`tetration::catalog::read_tet_summary_v1`]; per-dataset numeric / column stats via
-//! the Tetration query engine (streaming fold, same path as `tet query -x`).
+//! Catalog via [`tetration::catalog::read_tet_summary_v1`] (tetration **0.8+**): superblock,
+//! datasets, chunk codecs, footer file meta, declare attrs / `dim_names` / coord summaries,
+//! capped PROV history, and a shallow [`tetration::verify::verify_tet_bytes`] pass.
+//! Per-dataset numeric / column stats still come from the query engine (streaming fold, same
+//! path as `tet query -x`), capped to a small number of datasets.
 
 use std::path::Path;
 

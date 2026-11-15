@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/zahirscan.svg)](https://crates.io/crates/zahirscan)
 [![docs.rs](https://img.shields.io/docsrs/zahirscan)](https://docs.rs/zahirscan)
-![Build](https://github.com/Latka-Industries/zahirscan/workflows/Build/badge.svg)
+![CI](https://github.com/Latka-Industries/zahirscan/workflows/CI/badge.svg)
 ![Rust](https://img.shields.io/badge/rust-1.95-orange.svg)
 
 > _"Others will dream that I am mad, while I dream of the Zahir."_ — [JL Borges, Labyrinths](https://bookshop.org/p/books/labyrinths-jorge-luis-borges/f14b472a366ed106?ean=9780811216999&next=t&)
@@ -17,7 +17,7 @@ zahirscan init   # optional: write ~/.config/zahirscan/zahirscan.toml
 zahirscan -i application.log -o ./out
 ```
 
-Without NetCDF: `cargo install zahirscan --no-default-features`. Optional **`ffprobe`** for rich A/V metadata.
+Without NetCDF: `cargo install zahirscan --no-default-features` (also the recommended library pin when linking from servers without `libnetcdf`). Optional **`ffprobe`** for rich A/V metadata. `.tet` metadata uses [tetration](https://crates.io/crates/tetration) **0.8.x**.
 
 ## Documentation
 

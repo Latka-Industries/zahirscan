@@ -191,7 +191,7 @@ fn is_python_pickle_bytes(bytes: &[u8]) -> bool {
         && (looks_like_text_pickle(text) || text.bytes().any(|b| b == 0))
 }
 
-/// Apple Pkl (https://pkl-lang.org) source keywords at the start of a `.pkl` file.
+/// Apple Pkl (<https://pkl-lang.org>) source keywords at the start of a `.pkl` file.
 fn looks_like_apple_pkl_source(text: &str) -> bool {
     let trimmed = text.trim_start();
     trimmed.starts_with("module")
