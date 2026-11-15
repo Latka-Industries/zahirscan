@@ -17,7 +17,7 @@ mod not_linked {
     ///
     /// # Errors
     ///
-    /// Always: NetCDF support was not compiled in.
+    /// Always: `NetCDF` support was not compiled in.
     pub fn extract_netcdf_metadata(
         _mmap: &Mmap,
         _stats: &ParseResult,

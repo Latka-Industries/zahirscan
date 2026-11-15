@@ -1,9 +1,14 @@
 //! Tetration `.tet` mmap-friendly chunked tensor container (layout v1).
 //!
 //! Output field: `tetration_metadata` — catalog plus optional query-derived column/tensor stats
-//! (`query_error` per dataset when reductions fail). Against tetration 0.8+: footer file meta,
-//! per-dataset declare fields (`dim_names` / `attrs` / coord summary), capped history, and a
-//! shallow verify summary.
+//! (`query_error` per dataset when reductions fail).
+//!
+//! Against tetration **0.8+** this also carries:
+//! - file footer (`tool` / `library_version` / `created_at`)
+//! - per-dataset declare (`dim_names` / `attrs` / coord label summary)
+//! - capped history rows (PROV `agent` / `activity` / `entity`)
+//! - non-default `file_execution` prefs
+//! - shallow verify (`ok` + finding counts; no deep decode)
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

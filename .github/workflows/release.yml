@@ -46,7 +46,8 @@ jobs:
       - name: Install system deps (Ubuntu)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libnetcdf-dev pkg-config
+          # libhdf5-dev: netcdf-sys → hdf5-metno-sys (same as CI)
+          sudo apt-get install -y ffmpeg libnetcdf-dev libhdf5-dev pkg-config
 
       - name: Authenticate with crates.io (OIDC)
         id: auth
